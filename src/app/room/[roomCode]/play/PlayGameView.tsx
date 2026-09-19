@@ -84,8 +84,9 @@ export default function PlayGameView() {
 
   return (
     <PlayWrapper>
-      <div className="mx-auto max-w-md p-4 pt-8">
+      <div className="mx-auto max-w-md p-4 pt-8 sm:p-6">
         <header className="mb-6 text-center">
+          <p className="eyebrow mb-2">Live round</p>
           <p className="mb-1 text-sm text-white/40">
             <span aria-hidden="true">{game?.icon}</span> {game?.name}
           </p>
@@ -105,7 +106,7 @@ export default function PlayGameView() {
           <div className="mb-6 flex justify-center">
             <p
               className={cn(
-                "flex h-32 w-32 items-center justify-center rounded-full text-5xl font-bold tabular-nums transition-all duration-300",
+                "flex size-32 items-center justify-center rounded-full text-5xl font-bold tabular-nums transition-all duration-300",
                 critical ? "bg-red-500" : timeLeft <= 5 ? "bg-orange-500" : "bg-white/10",
               )}
               style={{ boxShadow: critical ? "0 0 60px rgba(239,68,68,0.6)" : "none" }}
@@ -147,7 +148,7 @@ export default function PlayGameView() {
               </span>
               <span className="block text-lg font-bold">{state.challenge.question}</span>
             </h2>
-            <div className="space-y-2">
+            <div className="flex flex-col gap-3">
               {state.challenge.options.map((option) => (
                 <Button
                   key={option}
@@ -183,7 +184,7 @@ export default function PlayGameView() {
         )}
 
         {state && (
-          <p className="glass fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/10 px-4 py-2 text-sm font-medium">
+          <p             className="glass safe-bottom fixed bottom-0 left-1/2 -translate-x-1/2 rounded-full border border-white/10 px-4 py-2 text-sm font-medium">
             得分：{state.currentScores?.[player.id] ?? 0}
           </p>
         )}

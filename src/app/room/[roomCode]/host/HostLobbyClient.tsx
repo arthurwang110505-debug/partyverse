@@ -77,14 +77,15 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
     <main className="min-h-screen bg-ink p-4 text-white md:p-8">
       <div className="mx-auto max-w-4xl">
         <header className="mb-8 text-center">
+          <p className="eyebrow mb-4">Host control room</p>
           <p className="glass mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm text-white/50">
             <span aria-hidden="true">{game?.icon}</span> {game?.name}
           </p>
           <h1 className="mb-2 text-4xl font-bold md:text-5xl">遊戲大廳</h1>
-          <p className="text-sm text-white/40">把代碼或 QR code 分享給朋友</p>
+          <p className="text-sm text-white/40">分享房間，等大家準備好就開始。</p>
         </header>
 
-        <section className="glass-card mb-6 rounded-2xl p-6 text-center" aria-labelledby="room-code-heading">
+        <section className="glass-card mb-6 rounded-2xl p-6 text-center md:p-8" aria-labelledby="room-code-heading">
           <h2 id="room-code-heading" className="mb-2 text-xs uppercase tracking-wider text-white/40">
             房間代碼
           </h2>

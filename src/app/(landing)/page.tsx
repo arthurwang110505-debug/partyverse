@@ -29,7 +29,7 @@ export default function Home() {
       <section className="relative flex min-h-screen items-center justify-center overflow-hidden">
         {/* Decorative only — hidden from assistive tech. */}
         <div className="absolute inset-0" aria-hidden="true">
-          <div className="absolute left-1/4 top-0 h-[600px] w-[600px] rounded-full bg-violet-600/15 blur-[120px]" />
+          <div className="ambient-glow absolute left-1/4 top-0 h-[600px] w-[600px] rounded-full bg-violet-600/15 blur-[120px]" />
           <div className="absolute bottom-0 right-1/4 h-[500px] w-[500px] rounded-full bg-pink-600/10 blur-[100px]" />
           <div className="absolute left-1/2 top-1/2 h-[800px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-600/5 blur-[120px]" />
           <div
