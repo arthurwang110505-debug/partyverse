@@ -86,6 +86,10 @@ export default function PlayGameView() {
     <PlayWrapper>
       <div className="mx-auto max-w-md p-4 pt-8 sm:p-6">
         <header className="mb-6 text-center">
+          <div className="mb-3 flex items-center justify-center gap-2 text-xs text-white/50" role="status" aria-live="polite">
+            <span className={cn("size-2 rounded-full", hostStale ? "bg-amber-400" : "bg-emerald-400")} aria-hidden="true" />
+            {hostStale ? "等待房主恢復連線" : "已連線"}
+          </div>
           <p className="eyebrow mb-2">Live round</p>
           <p className="mb-1 text-sm text-white/40">
             <span aria-hidden="true">{game?.icon}</span> {game?.name}

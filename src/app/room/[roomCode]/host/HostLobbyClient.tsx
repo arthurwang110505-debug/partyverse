@@ -176,7 +176,7 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
 
         <ErrorNote className="mb-4">{error}</ErrorNote>
 
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div className="sticky bottom-4 z-10 -mx-1 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-ink/90 p-2 shadow-2xl backdrop-blur-md md:static md:mx-0 md:grid-cols-4 md:border-0 md:bg-transparent md:p-0 md:shadow-none">
           <Button
             variant="ghost"
             size="md"
