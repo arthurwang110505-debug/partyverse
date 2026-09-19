@@ -114,21 +114,10 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
         </section>
 
         <section className="glass mb-6 rounded-2xl border border-white/10 p-5" aria-labelledby="players-heading">
-          <div className="mb-4 flex items-start justify-between gap-4">
-            <h2 id="players-heading" className="flex items-center gap-2 text-base font-semibold">
-              <Users className="h-4 w-4 text-violet-400" aria-hidden="true" />
-              玩家（{onlineCount}/{playerList.length}）
-            </h2>
-            <span className="text-right text-xs text-white/40">
-              {canStart ? "可以開始" : `還差 ${Math.max(0, minPlayers - onlineCount)} 位`}
-            </span>
-          </div>
-          <div className="mb-4 h-2 overflow-hidden rounded-full bg-white/10" aria-label={`開始進度 ${onlineCount} / ${minPlayers}`}>
-            <div
-              className="h-full rounded-full bg-emerald-400 transition-[width] duration-500"
-              style={{ width: `${Math.min(100, (onlineCount / minPlayers) * 100)}%` }}
-            />
-          </div>
+          <h2 id="players-heading" className="mb-4 flex items-center gap-2 text-base font-semibold">
+            <Users className="h-4 w-4 text-violet-400" aria-hidden="true" />
+            玩家（{onlineCount}/{playerList.length}）
+          </h2>
           <ul className="space-y-2">
             {playerList.map((p) => (
               <li
