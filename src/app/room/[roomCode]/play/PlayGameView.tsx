@@ -8,19 +8,31 @@ import type { BombGameState } from "@/engine/bombCountdown";
 import { Button } from "@/components/ui/Button";
 import { ErrorNote } from "@/components/ui/ErrorNote";
 import { cn } from "@/lib/utils";
+import { sfx, vibrate } from "@/lib/sound";
+
+import PlayEverybodyKnows from "./views/PlayEverybodyKnows";
+import PlayAiBullshit from "./views/PlayAiBullshit";
+import PlayUndercover from "./views/PlayUndercover";
+import PlaySong3Seconds from "./views/PlaySong3Seconds";
+import PlayKingTonight from "./views/PlayKingTonight";
+import PlayFireworkMaster from "./views/PlayFireworkMaster";
+import PlayDrawAndGuess from "./views/PlayDrawAndGuess";
+import PlayRealBattle from "./views/PlayRealBattle";
+import PlayMysteryRoom from "./views/PlayMysteryRoom";
 
 /**
- * The phone-in-hand view.
- *
- * State comes from the room context (one shared listener) rather than a second
- * `onValue` subscription, and answers are submitted through `submitAction`,
- * which runs the engine inside a transaction on the room node.
+ * Mobile Controller View Dispatcher.
+ * Automatically loads the game-specific interactive controller.
  */
 export default function PlayGameView() {
   const { room, player, isHost, submitAction, claimHost } = useRoom();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
+  const gameId = room?.gameId;
+  const isBombGame = !gameId || gameId === "bombcountdown";
+
+  // Default: Bomb Countdown Controller
   const state = room?.gameState as BombGameState | undefined;
   const game = GAMES.find((g) => g.id === room?.gameId);
 
@@ -30,17 +42,35 @@ export default function PlayGameView() {
     room?.status === "PLAYING" && room.lastTickAt && Date.now() - room.lastTickAt > HOST_STALE_MS && !isHost,
   );
 
-  // Clear the pending flag once the server state actually moves on.
+  // Vibration on my turn or critical bomb
+  useEffect(() => {
+    if (isBombGame && isMyTurn) {
+      vibrate([100, 50, 100]);
+    }
+  }, [isBombGame, isMyTurn]);
+
   useEffect(() => {
     if (pending) setPending(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.bombHolderId, state?.bombTimeLeft]);
+
+  // Specific game views
+  if (gameId === "everybodyknows") return <PlayWrapper><PlayEverybodyKnows /></PlayWrapper>;
+  if (gameId === "aibullshit") return <PlayWrapper><PlayAiBullshit /></PlayWrapper>;
+  if (gameId === "whoisundercoveragent") return <PlayWrapper><PlayUndercover /></PlayWrapper>;
+  if (gameId === "song3seconds") return <PlayWrapper><PlaySong3Seconds /></PlayWrapper>;
+  if (gameId === "kingtonight") return <PlayWrapper><PlayKingTonight /></PlayWrapper>;
+  if (gameId === "fireworkmaster") return <PlayWrapper><PlayFireworkMaster /></PlayWrapper>;
+  if (gameId === "drawandguess") return <PlayWrapper><PlayDrawAndGuess /></PlayWrapper>;
+  if (gameId === "realbattle") return <PlayWrapper><PlayRealBattle /></PlayWrapper>;
+  if (gameId === "mysteryroom") return <PlayWrapper><PlayMysteryRoom /></PlayWrapper>;
 
   const answer = async (value: string) => {
     setPending(true);
     setError("");
     try {
       await submitAction({ type: "answer", answer: value });
+      sfx.playSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : "送出失敗，請再試一次");
       setPending(false);
@@ -53,7 +83,7 @@ export default function PlayGameView() {
   const critical = timeLeft <= 3;
 
   return (
-    <main className="min-h-screen bg-ink pb-24 text-white">
+    <PlayWrapper>
       <div className="mx-auto max-w-md p-4 pt-8">
         <header className="mb-6 text-center">
           <p className="mb-1 text-sm text-white/40">
@@ -113,7 +143,7 @@ export default function PlayGameView() {
           <section aria-labelledby="turn-heading">
             <h2 id="turn-heading" className="mb-4 text-center">
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-emerald-400">
-                換你了
+                換你了！快拆彈！
               </span>
               <span className="block text-lg font-bold">{state.challenge.question}</span>
             </h2>
@@ -158,6 +188,14 @@ export default function PlayGameView() {
           </p>
         )}
       </div>
+    </PlayWrapper>
+  );
+}
+
+function PlayWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="min-h-screen bg-ink pb-24 text-white">
+      {children}
     </main>
   );
 }
