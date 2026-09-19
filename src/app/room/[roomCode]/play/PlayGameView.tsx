@@ -104,6 +104,9 @@ export default function PlayGameView() {
 
         {state && state.phase === "challenge" && (
           <div className="mb-6 flex justify-center">
+            <span className="sr-only" role="status" aria-live="polite">
+              {critical ? "時間非常緊迫" : `剩餘 ${timeLeft} 秒`}
+            </span>
             <p
               className={cn(
                 "flex size-32 items-center justify-center rounded-full text-5xl font-bold tabular-nums transition-all duration-300",
