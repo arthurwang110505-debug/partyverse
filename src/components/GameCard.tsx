@@ -33,7 +33,7 @@ export default function GameCard({ game, compact = false }: GameCardProps) {
       href={`/games/${game.id}`}
       className="group block h-full rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
     >
-      <article className="interactive-surface relative h-full rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm transition-all duration-300 group-hover:-translate-y-1 group-hover:border-white/20">
+      <article className="relative h-full rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm transition-all duration-300 group-hover:-translate-y-1 group-hover:border-white/20">
         <div className="mb-4 flex items-start justify-between gap-2">
           <span
             className="flex h-14 w-14 items-center justify-center rounded-xl text-2xl"

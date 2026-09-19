@@ -33,14 +33,13 @@ export default function GamesPage() {
   return (
     <div className="min-h-screen bg-ink text-white">
       <div className="mx-auto max-w-7xl px-4 pb-24 pt-32">
-        <header className="mb-10 max-w-2xl">
-          <p className="eyebrow mb-3">PartyVerse Arcade</p>
-          <h1 className="section-heading mb-3 text-4xl md:text-5xl">今晚玩哪一款？</h1>
-          <p className="text-base leading-relaxed text-white/50">從快速破冰到高壓對抗，挑一款遊戲，開房後把手機交給朋友。</p>
+        <header className="mb-10">
+          <h1 className="mb-3 text-4xl font-bold md:text-5xl">全部遊戲</h1>
+          <p className="text-base text-white/40">挑一款遊戲，和朋友開房同樂</p>
         </header>
 
         <div className="mb-8 flex flex-col gap-3 sm:flex-row">
-          <div className="glass relative flex-1 rounded-xl">
+          <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" aria-hidden="true" />
             <label htmlFor="game-search" className="sr-only">
               搜尋遊戲
@@ -113,8 +112,10 @@ export default function GamesPage() {
 
         {filtered.length === 0 && (
           <div className="py-24 text-center">
-            <Search className="mx-auto mb-4 h-8 w-8 text-white/25" aria-hidden="true" />
-            <p className="text-lg text-white/40">找不到符合條件的遊戲</p>
+            <p className="mb-4 text-4xl" aria-hidden="true">
+              🔍
+            </p>
+            <p className="text-lg text-white/40">找不到遊戲</p>
             <p className="mt-1 text-sm text-white/25">換個關鍵字或分類試試</p>
           </div>
         )}
