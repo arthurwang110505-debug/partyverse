@@ -7,21 +7,30 @@ import type { BombGameState } from "@/engine/bombCountdown";
 import { Button } from "@/components/ui/Button";
 import { ErrorNote } from "@/components/ui/ErrorNote";
 import { cn } from "@/lib/utils";
+import { sfx } from "@/lib/sound";
+
+import HostEverybodyKnows from "./views/HostEverybodyKnows";
+import HostAiBullshit from "./views/HostAiBullshit";
+import HostUndercover from "./views/HostUndercover";
+import HostSong3Seconds from "./views/HostSong3Seconds";
+import HostKingTonight from "./views/HostKingTonight";
+import HostFireworkMaster from "./views/HostFireworkMaster";
+import HostDrawAndGuess from "./views/HostDrawAndGuess";
+import HostRealBattle from "./views/HostRealBattle";
+import HostMysteryRoom from "./views/HostMysteryRoom";
 
 /**
- * The big-screen view.
- *
- * It reads state straight from the room context. It used to open its own second
- * `onValue` listener on the same path *and* run a local `setInterval` that only
- * ever called `setDisplayState` — so the countdown advanced on the host's screen
- * and nowhere else. The tick now lives in `RoomProvider` and publishes to the
- * database, which every client already listens to.
+ * The TV Big-Screen View Dispatcher.
+ * Automatically displays the dedicated game board based on room.gameId.
  */
 export default function HostGameView() {
   const { room, endRound, endGame } = useRoom();
   const [error, setError] = useState("");
   const [flash, setFlash] = useState<string | null>(null);
   const lastEliminated = useRef<string | null>(null);
+
+  const gameId = room?.gameId;
+  const isBombGame = !gameId || gameId === "bombcountdown";
 
   const state = room?.gameState as BombGameState | undefined;
   const game = GAMES.find((g) => g.id === room?.gameId);
@@ -32,23 +41,42 @@ export default function HostGameView() {
   const eliminatedPlayers = Object.entries(players).filter(([id]) => eliminated.has(id));
   const holder = state?.bombHolderId ? players[state.bombHolderId] : undefined;
 
-  // Brief "boom" flash when someone new is knocked out.
+  // Sound triggers on ticks & changes
   useEffect(() => {
+    if (room?.status === "PLAYING") {
+      sfx.playTick(500, 0.04);
+    }
+  }, [room?.status, room?.gameState]);
+
+  useEffect(() => {
+    if (!isBombGame) return;
     const id = state?.lastEliminatedId ?? null;
     if (id && id !== lastEliminated.current) {
+      sfx.playBoom();
       setFlash(room?.players?.[id]?.nickname ?? null);
       const t = setTimeout(() => setFlash(null), 1400);
       lastEliminated.current = id;
       return () => clearTimeout(t);
     }
     lastEliminated.current = id;
-  }, [state?.lastEliminatedId, room?.players]);
+  }, [isBombGame, state?.lastEliminatedId, room?.players]);
+
+  // If running another game, delegate to dedicated views
+  if (gameId === "everybodyknows") return <HostWrapper><HostEverybodyKnows /></HostWrapper>;
+  if (gameId === "aibullshit") return <HostWrapper><HostAiBullshit /></HostWrapper>;
+  if (gameId === "whoisundercoveragent") return <HostWrapper><HostUndercover /></HostWrapper>;
+  if (gameId === "song3seconds") return <HostWrapper><HostSong3Seconds /></HostWrapper>;
+  if (gameId === "kingtonight") return <HostWrapper><HostKingTonight /></HostWrapper>;
+  if (gameId === "fireworkmaster") return <HostWrapper><HostFireworkMaster /></HostWrapper>;
+  if (gameId === "drawandguess") return <HostWrapper><HostDrawAndGuess /></HostWrapper>;
+  if (gameId === "realbattle") return <HostWrapper><HostRealBattle /></HostWrapper>;
+  if (gameId === "mysteryroom") return <HostWrapper><HostMysteryRoom /></HostWrapper>;
 
   const timeLeft = state?.bombTimeLeft ?? 0;
   const critical = timeLeft <= 3;
 
   return (
-    <main className="min-h-screen bg-ink p-4 text-white md:p-8">
+    <HostWrapper>
       <div className="mx-auto max-w-5xl">
         <header className="mb-8 text-center">
           <p className="mb-2 text-sm text-white/40">
@@ -152,6 +180,14 @@ export default function HostGameView() {
           </Button>
         </div>
       </div>
+    </HostWrapper>
+  );
+}
+
+function HostWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="min-h-screen bg-ink p-4 text-white md:p-8">
+      {children}
     </main>
   );
 }
