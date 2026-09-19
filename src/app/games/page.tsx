@@ -1,75 +1,122 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Gamepad2 } from "lucide-react";
+import { Search } from "lucide-react";
 import { GAMES } from "@/constants/games";
 import GameCard from "@/components/GameCard";
 import { CATEGORIES, type Category } from "@/types";
+import { isPlayable } from "@/engine";
+import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 
 export default function GamesPage() {
   const [filter, setFilter] = useState<Category | "ALL">("ALL");
   const [search, setSearch] = useState("");
+  const [showPlayableOnly, setShowPlayableOnly] = useState(false);
+  const debouncedSearch = useDebounce(search, 150);
 
-  const filtered = GAMES.filter((g) => {
-    const matchCategory = filter === "ALL" || g.category === filter;
-    const matchSearch = g.name.includes(search) || g.nameEn.toLowerCase().includes(search.toLowerCase()) || g.tags.some((t) => t.toLowerCase().includes(search.toLowerCase()));
-    return matchCategory && matchSearch;
-  });
+  const filtered = useMemo(() => {
+    const needle = debouncedSearch.trim().toLowerCase();
+    return GAMES.filter((g) => {
+      if (filter !== "ALL" && g.category !== filter) return false;
+      if (showPlayableOnly && !isPlayable(g.id)) return false;
+      if (!needle) return true;
+      return (
+        g.name.toLowerCase().includes(needle) ||
+        g.nameEn.toLowerCase().includes(needle) ||
+        g.tags.some((t) => t.toLowerCase().includes(needle))
+      );
+    });
+  }, [filter, debouncedSearch, showPlayableOnly]);
 
   return (
-    <div className="min-h-screen bg-[#050508] text-white">
-      <div className="max-w-7xl mx-auto px-4 py-24">
-        {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
-          <h1 className="font-bold text-4xl md:text-5xl mb-3">All Games</h1>
-          <p className="text-white/40 text-base">Choose a game and start playing with your friends</p>
-        </motion.div>
+    <div className="min-h-screen bg-ink text-white">
+      <div className="mx-auto max-w-7xl px-4 pb-24 pt-32">
+        <header className="mb-10">
+          <h1 className="mb-3 text-4xl font-bold md:text-5xl">全部遊戲</h1>
+          <p className="text-base text-white/40">挑一款遊戲，和朋友開房同樂</p>
+        </header>
 
-        {/* Search and filters */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="flex flex-col sm:flex-row gap-3 mb-8">
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
-            <Gamepad2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" aria-hidden="true" />
+            <label htmlFor="game-search" className="sr-only">
+              搜尋遊戲
+            </label>
             <input
-              type="text"
-              placeholder="Search games..."
+              id="game-search"
+              type="search"
+              placeholder="搜尋遊戲名稱或標籤…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-white/20 focus:bg-white/8 transition-all"
+              className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-10 pr-4 text-sm text-white placeholder-white/30 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             />
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            <button onClick={() => setFilter("ALL")} className={cn("px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all", filter === "ALL" ? "bg-white text-black" : "bg-white/5 text-white/60 hover:text-white hover:bg-white/10 border border-white/10")}>
-              All
+
+          <button
+            type="button"
+            onClick={() => setShowPlayableOnly((v) => !v)}
+            aria-pressed={showPlayableOnly}
+            className={cn(
+              "whitespace-nowrap rounded-xl border px-4 py-2.5 text-sm font-medium transition-all",
+              showPlayableOnly
+                ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-300"
+                : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white",
+            )}
+          >
+            只看可玩
+          </button>
+        </div>
+
+        <div
+          className="mb-8 flex gap-2 overflow-x-auto pb-1"
+          role="group"
+          aria-label="依分類篩選"
+        >
+          {(["ALL", ...Object.values(CATEGORIES)] as const).map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setFilter(cat)}
+              aria-pressed={filter === cat}
+              className={cn(
+                "whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium transition-all",
+                filter === cat
+                  ? "bg-white text-black"
+                  : "border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white",
+              )}
+            >
+              {cat === "ALL" ? "全部" : cat}
             </button>
-            {Object.values(CATEGORIES).map((cat) => (
-              <button key={cat} onClick={() => setFilter(cat)} className={cn("px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all", filter === cat ? "bg-white text-black" : "bg-white/5 text-white/60 hover:text-white hover:bg-white/10 border border-white/10")}>
-                {cat}
-              </button>
-            ))}
-          </div>
-        </motion.div>
+          ))}
+        </div>
 
-        {/* Results count */}
-        <p className="text-white/30 text-sm mb-6">{filtered.length} game{filtered.length !== 1 ? "s" : ""}</p>
+        <p className="mb-6 text-sm text-white/40" role="status" aria-live="polite">
+          共 {filtered.length} 款遊戲
+        </p>
 
-        {/* Games grid */}
         <AnimatePresence mode="wait">
-          <motion.div key={filter + search} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map((game, i) => (
-              <motion.div key={game.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04, duration: 0.3 }}>
-                <GameCard game={game} />
-              </motion.div>
+          <motion.div
+            key={`${filter}-${debouncedSearch}-${showPlayableOnly}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          >
+            {filtered.map((game) => (
+              <GameCard key={game.id} game={game} />
             ))}
           </motion.div>
         </AnimatePresence>
 
         {filtered.length === 0 && (
-          <div className="text-center py-24">
-            <div className="text-4xl mb-4">🔍</div>
-            <p className="text-white/40 text-lg">No games found</p>
-            <p className="text-white/20 text-sm mt-1">Try a different search or filter</p>
+          <div className="py-24 text-center">
+            <p className="mb-4 text-4xl" aria-hidden="true">
+              🔍
+            </p>
+            <p className="text-lg text-white/40">找不到遊戲</p>
+            <p className="mt-1 text-sm text-white/25">換個關鍵字或分類試試</p>
           </div>
         )}
       </div>

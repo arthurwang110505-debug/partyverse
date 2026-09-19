@@ -1,132 +1,222 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Trophy, ArrowLeft, RotateCcw, Gamepad2, Home } from "lucide-react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { Home, RotateCcw } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
 import { GAMES } from "@/constants/games";
-import { cn } from "@/lib/utils";
+import type { Achievement } from "@/types";
+import type { BombGameState } from "@/engine/bombCountdown";
+import { Button, LinkButton } from "@/components/ui/Button";
+import { ErrorNote } from "@/components/ui/ErrorNote";
+import { cn, formatTime } from "@/lib/utils";
 
 interface Props {
   roomCode: string;
 }
 
-const ACHIEVEMENTS = [
-  { id: "fastest", name: "Fastest", icon: "⚡", desc: "Quickest response" },
-  { id: "luckiest", name: "Luckiest", icon: "🍀", desc: "Lucky survivor" },
-  { id: "chaotic", name: "Most Chaotic", icon: "🌪️", desc: "Pure chaos agent" },
-  { id: "bluffer", name: "Best Bluffer", icon: "🎭", desc: "Master of deception" },
-  { id: "legend", name: "Legend", icon: "👑", desc: "True champion" },
-  { id: "novice", name: "Novice", icon: "🌱", desc: "Just getting started" },
-];
+interface RankedPlayer {
+  id: string;
+  nickname: string;
+  avatar: string;
+  isHost: boolean;
+  isMe: boolean;
+  /** Read from `gameState.currentScores` — the one canonical scoreboard. */
+  score: number;
+}
+
+const MEDALS = ["🥇", "🥈", "🥉"];
+const PODIUM_ORDER = [1, 0, 2];
 
 export default function ResultsClient({ roomCode }: Props) {
-  const router = useRouter();
-  const { room, player: currentPlayer } = useRoom();
-  const [sortedPlayers, setSortedPlayers] = useState<Array<{ id: string; player: (typeof currentPlayer) & { id: string } }> | null>(null);
-
-  useEffect(() => {
-    if (!room?.players) return;
-    const entries = Object.entries(room.players).map(([id, p]) => ({
-      id,
-      player: p,
-      score: (room.gameState as Record<string, unknown>)?.[`score_${id}`] as number || 0,
-    }));
-    const gs = room.gameState as Record<string, unknown>;
-    const scores = (gs.currentScores as Record<string, number>) || {};
-    const sorted = entries.sort((a, b) => (scores[b.id] || 0) - (scores[a.id] || 0));
-    setSortedPlayers(sorted);
-  }, [room]);
+  const { room, player, isHost, endRound, endRoom } = useRoom();
+  const [error, setError] = useState("");
 
   const game = GAMES.find((g) => g.id === room?.gameId);
-  const winner = sortedPlayers?.[0];
+  const state = room?.gameState as (BombGameState & { achievements?: Achievement[] }) | undefined;
+
+  /**
+   * The old version built this list with a `score` field read from
+   * `gameState['score_' + id]` — a key nothing ever wrote — so the podium and
+   * the full ranking both rendered "0 pts" every single time, while the sort
+   * order quietly used a different map. One source of truth now.
+   */
+  const ranked = useMemo<RankedPlayer[]>(() => {
+    if (!room) return [];
+    const scores = state?.currentScores ?? {};
+    return Object.entries(room.players)
+      .map(([id, p]) => ({
+        id,
+        nickname: p.nickname,
+        avatar: p.avatar,
+        isHost: p.isHost,
+        isMe: id === player?.id,
+        score: scores[id] ?? 0,
+      }))
+      .sort((a, b) => b.score - a.score || a.nickname.localeCompare(b.nickname));
+  }, [room, state?.currentScores, player?.id]);
+
+  const podium = PODIUM_ORDER.map((i) => ranked[i]).filter(Boolean) as RankedPlayer[];
+  const achievements = state?.achievements ?? [];
+  const elapsed = room?.startedAt ? Math.round((Date.now() - room.startedAt) / 1000) : null;
+
+  if (!room) return null;
 
   return (
-    <div className="min-h-screen bg-[#050508] text-white p-4">
-      <div className="max-w-lg mx-auto pt-8">
-        <div className="text-center mb-8">
-          <div className="text-5xl mb-4">🏆</div>
-          <h1 className="font-bold text-3xl mb-2">Results</h1>
-          {game && <p className="text-white/40 text-sm">{game.icon} {game.name}</p>}
-        </div>
+    <main className="min-h-screen bg-ink p-4 text-white">
+      <div className="mx-auto max-w-lg pt-8">
+        <header className="mb-8 text-center">
+          <p className="mb-4 text-5xl" aria-hidden="true">
+            🏆
+          </p>
+          <h1 className="mb-2 text-3xl font-bold">遊戲結果</h1>
+          {game && (
+            <p className="text-sm text-white/40">
+              <span aria-hidden="true">{game.icon}</span> {game.name}
+              {elapsed !== null && <span> · 進行 {formatTime(elapsed)}</span>}
+            </p>
+          )}
+        </header>
 
-        {/* Podium */}
-        {sortedPlayers && sortedPlayers.length > 0 && (
-          <div className="flex items-end justify-center gap-3 mb-8 h-48">
-            {sortedPlayers[1] && (
-              <div className="flex flex-col items-center">
-                <div className="text-2xl mb-1">🥈</div>
-                <div className="text-2xl mb-1">{sortedPlayers[1].player?.avatar}</div>
-                <div className="text-xs font-medium text-center max-w-[80px] truncate">{sortedPlayers[1].player?.nickname}</div>
-                <div className="text-cyan-400 text-sm font-bold">{sortedPlayers[1].score} pts</div>
-                <div className="w-16 h-12 bg-white/5 rounded-t-lg flex items-end justify-center pb-2 font-bold text-lg border border-white/5">2</div>
-              </div>
-            )}
-            {winner && (
-              <div className="flex flex-col items-center">
-                <div className="text-3xl mb-1">🥇</div>
-                <div className="text-3xl mb-1">{winner.player?.avatar}</div>
-                <div className="text-sm font-medium text-center max-w-[100px] truncate">{winner.player?.nickname}</div>
-                <div className="text-yellow-400 text-base font-bold">{winner.score} pts</div>
-                <div className="w-20 h-16 bg-gradient-to-t from-yellow-500/20 to-yellow-500/5 rounded-t-lg flex items-end justify-center pb-2 font-bold text-xl border border-yellow-500/20">1</div>
-              </div>
-            )}
-            {sortedPlayers[2] && (
-              <div className="flex flex-col items-center">
-                <div className="text-2xl mb-1">🥉</div>
-                <div className="text-2xl mb-1">{sortedPlayers[2].player?.avatar}</div>
-                <div className="text-xs font-medium text-center max-w-[80px] truncate">{sortedPlayers[2].player?.nickname}</div>
-                <div className="text-orange-400 text-sm font-bold">{sortedPlayers[2].score} pts</div>
-                <div className="w-16 h-8 bg-white/5 rounded-t-lg flex items-end justify-center pb-2 font-bold text-lg border border-white/5">3</div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Rankings */}
-        {sortedPlayers && sortedPlayers.length > 0 && (
-          <div className="glass rounded-2xl p-4 mb-6 border border-white/10">
-            <h3 className="font-semibold text-base mb-3 flex items-center gap-2">⭐ Full Rankings</h3>
-            <div className="space-y-2">
-              {sortedPlayers.map((entry, i) => (
-                <div key={entry.id} className={cn("flex items-center gap-3 p-3 rounded-xl transition-all", entry.id === currentPlayer?.id ? "bg-violet-500/10 border border-violet-500/20" : "bg-white/5 border border-white/5")}>
-                  <span className="font-bold text-sm w-6 text-white/30">#{i + 1}</span>
-                  <span className="text-xl">{entry.player?.avatar}</span>
-                  <span className="flex-1 font-medium text-sm">{entry.player?.nickname}{entry.player?.isHost && " 👑"}</span>
-                  <span className="font-bold text-sm text-cyan-400">{entry.score} pts</span>
+        {ranked.length > 0 && (
+          <section className="mb-8 flex h-48 items-end justify-center gap-3" aria-label="前三名">
+            {podium.map((entry, visualIndex) => {
+              const place = PODIUM_ORDER[visualIndex];
+              const podiumStyles = [
+                "h-16 w-20 border-yellow-500/20 bg-gradient-to-t from-yellow-500/20 to-yellow-500/5",
+                "h-12 w-16 border-white/5 bg-white/5",
+                "h-8 w-16 border-white/5 bg-white/5",
+              ];
+              return (
+                <div key={entry.id} className="flex flex-col items-center">
+                  <p className="mb-1 text-2xl" aria-hidden="true">
+                    {MEDALS[place]}
+                  </p>
+                  <p className={cn("mb-1", place === 0 ? "text-3xl" : "text-2xl")} aria-hidden="true">
+                    {entry.avatar}
+                  </p>
+                  <p
+                    className={cn(
+                      "max-w-[100px] truncate text-center font-medium",
+                      place === 0 ? "text-sm" : "text-xs",
+                    )}
+                  >
+                    {entry.nickname}
+                  </p>
+                  <p
+                    className={cn(
+                      "text-sm font-bold tabular-nums",
+                      place === 0 ? "text-yellow-400" : place === 1 ? "text-cyan-400" : "text-orange-400",
+                    )}
+                  >
+                    {entry.score} 分
+                  </p>
+                  <p
+                    className={cn(
+                      "flex items-end justify-center rounded-t-lg border pb-2 text-lg font-bold",
+                      podiumStyles[place],
+                    )}
+                  >
+                    {place + 1}
+                  </p>
                 </div>
-              ))}
-            </div>
-          </div>
+              );
+            })}
+          </section>
         )}
 
-        {/* Achievements */}
-        <div className="glass rounded-2xl p-4 mb-6 border border-white/10">
-          <h3 className="font-semibold text-base mb-3">🎖️ Achievements</h3>
-          <div className="grid grid-cols-3 gap-2">
-            {ACHIEVEMENTS.map((a) => (
-              <div key={a.id} className="text-center p-3 rounded-xl bg-white/5 border border-white/5">
-                <div className="text-xl mb-1">{a.icon}</div>
-                <div className="text-xs font-medium text-white/60">{a.name}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {ranked.length > 0 && (
+          <section className="glass mb-6 rounded-2xl border border-white/10 p-4" aria-labelledby="rankings-heading">
+            <h2 id="rankings-heading" className="mb-3 flex items-center gap-2 text-base font-semibold">
+              <span aria-hidden="true">⭐</span> 完整排行
+            </h2>
+            <ol className="space-y-2">
+              {ranked.map((entry, i) => (
+                <li
+                  key={entry.id}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl border p-3 transition-all",
+                    entry.isMe ? "border-violet-500/20 bg-violet-500/10" : "border-white/5 bg-white/5",
+                  )}
+                >
+                  <span className="w-6 text-sm font-bold text-white/30 tabular-nums">#{i + 1}</span>
+                  <span className="text-xl" aria-hidden="true">
+                    {entry.avatar}
+                  </span>
+                  <span className="flex-1 text-sm font-medium">
+                    {entry.nickname}
+                    {entry.isHost && <span aria-hidden="true"> 👑</span>}
+                    {entry.isMe && <span className="sr-only">（你）</span>}
+                  </span>
+                  <span className="text-sm font-bold text-cyan-400 tabular-nums">{entry.score} 分</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
 
-        {/* Actions */}
+        {achievements.length > 0 && (
+          <section className="glass mb-6 rounded-2xl border border-white/10 p-4" aria-labelledby="achievements-heading">
+            <h2 id="achievements-heading" className="mb-3 text-base font-semibold">
+              <span aria-hidden="true">🎖️</span> 本局成就
+            </h2>
+            <ul className="grid grid-cols-2 gap-2">
+              {achievements.map((a) => {
+                const owner = room.players[a.playerId];
+                return (
+                  <li key={`${a.id}-${a.playerId}`} className="rounded-xl border border-white/5 bg-white/5 p-3 text-center">
+                    <p className="mb-1 text-xl" aria-hidden="true">
+                      {a.icon}
+                    </p>
+                    <p className="text-xs font-medium text-white/70">{a.name}</p>
+                    <p className="mt-0.5 truncate text-[10px] text-white/40">{owner?.nickname ?? ""}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        <ErrorNote className="mb-4">{error}</ErrorNote>
+
         <div className="space-y-2">
-          <Link href={`/room/${roomCode}/host`} prefetch className="block w-full py-3.5 rounded-xl font-semibold text-sm text-center bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-all border border-emerald-500/20">
-            <RotateCcw className="w-4 h-4 inline mr-2" /> Play Again
-          </Link>
-          <Link href="/games" prefetch className="block w-full py-3.5 rounded-xl font-semibold text-sm text-center glass hover:bg-white/10 transition-all border border-white/10">
-            <Gamepad2 className="w-4 h-4 inline mr-2" /> Choose Another Game
-          </Link>
-          <Link href="/" prefetch className="block w-full py-3 rounded-xl font-medium text-sm text-center text-white/40 hover:text-white/60 transition-all">
-            <Home className="w-4 h-4 inline mr-2" /> Return Home
+          {isHost ? (
+            <>
+              <Button
+                variant="ghost"
+                size="md"
+                className="w-full border border-emerald-500/20 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                onClick={() => endRound().catch((e) => setError(e instanceof Error ? e.message : "無法重新開始"))}
+              >
+                <RotateCcw className="h-4 w-4" aria-hidden="true" /> 再玩一次
+              </Button>
+              <Button
+                variant="danger"
+                size="md"
+                className="w-full"
+                onClick={() =>
+                  endRoom()
+                    .then(() => window.location.assign("/"))
+                    .catch((e) => setError(e instanceof Error ? e.message : "無法結束房間"))
+                }
+              >
+                結束並解散房間
+              </Button>
+            </>
+          ) : (
+            <LinkButton href="/" variant="ghost" size="md" className="w-full">
+              <Home className="h-4 w-4" aria-hidden="true" /> 返回首頁
+            </LinkButton>
+          )}
+
+          <Link
+            href={`/room/${roomCode}/${isHost ? "host" : "play"}`}
+            className="block w-full rounded-xl py-3 text-center text-sm font-medium text-white/40 transition-all hover:text-white/60"
+          >
+            回到{isHost ? "大廳" : "房間"}
           </Link>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

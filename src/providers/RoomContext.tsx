@@ -1,27 +1,126 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
-import { db, auth } from "@/lib/firebase";
-import { ref, onValue, off, set, get, update, remove, onDisconnect } from "firebase/database";
-import { signInAnonymously, onAuthStateChanged, type User } from "firebase/auth";
-import type { Room, Player } from "@/types";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  get,
+  onDisconnect,
+  onValue,
+  ref,
+  remove,
+  runTransaction,
+  serverTimestamp,
+  update,
+  type DatabaseReference,
+  type Database,
+} from "firebase/database";
+import { getAuth, onAuthStateChanged, signInAnonymously, type User } from "firebase/auth";
+import type { GameSummary, Player, Room, RoomSettings } from "@/types";
 import { GAMES } from "@/constants/games";
-import { generateRoomCode } from "@/lib/utils";
+import { NICKNAME_KEY, ROOM_TTL_MS, SESSION_KEY } from "@/constants/room";
+import { db } from "@/lib/firebase";
+import { generateRoomCode, pickAvatar, sanitizeNickname } from "@/lib/utils";
+import { getGameEngine } from "@/engine";
 
-interface RoomContextType {
+/** How often the host advances the game clock. */
+const TICK_MS = 1000;
+
+const NOT_CONFIGURED = "Firebase 尚未設定：請複製 .env.example 為 .env.local 並填入金鑰";
+
+interface RoomContextValue {
   room: Room | null;
   player: Player | null;
   user: User | null;
+  /** True until Firebase auth has resolved and any stored session has been checked. */
   loading: boolean;
+  isHost: boolean;
+  createRoom: (gameId: string, nickname: string, settings?: RoomSettings) => Promise<string>;
   joinRoom: (roomCode: string, nickname: string) => Promise<void>;
-  createRoom: (gameId: string, nickname: string, settings: Room["settings"]) => Promise<string>;
+  leaveRoom: () => Promise<void>;
+  endRoom: () => Promise<void>;
   kickPlayer: (playerId: string) => Promise<void>;
+  claimHost: () => Promise<void>;
   startGame: () => Promise<void>;
+  endRound: () => Promise<void>;
   endGame: () => Promise<void>;
   switchGame: (newGameId: string) => Promise<void>;
+  updateSettings: (patch: Partial<RoomSettings>) => Promise<void>;
+  submitAction: (action: unknown) => Promise<void>;
 }
 
-const RoomContext = createContext<RoomContextType | null>(null);
+const RoomContext = createContext<RoomContextValue | null>(null);
+
+/** What a host-only write needs, produced after the host check has passed. */
+interface HostContext {
+  database: Database;
+  roomRef: DatabaseReference;
+  current: Room;
+  uid: string;
+}
+
+interface StoredSession {
+  userId: string;
+  roomCode: string;
+  nickname: string;
+}
+
+function readSession(): StoredSession | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredSession>;
+    if (!parsed?.userId || !parsed?.roomCode) return null;
+    return { userId: parsed.userId, roomCode: parsed.roomCode, nickname: parsed.nickname ?? "" };
+  } catch {
+    return null;
+  }
+}
+
+function writeSession(session: StoredSession | null) {
+  try {
+    if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // Private mode / quota — the room still works, it just won't survive a reload.
+  }
+}
+
+function rememberNickname(nickname: string) {
+  try {
+    localStorage.setItem(NICKNAME_KEY, nickname);
+  } catch {
+    /* ignore */
+  }
+}
+
+const FALLBACK_SETTINGS: RoomSettings = {
+  timer: 15,
+  difficulty: "easy",
+  rounds: 3,
+  soundEnabled: true,
+  ageMode: "family",
+};
+
+/** Normalise whatever the database hands back so a half-written room can't crash the UI. */
+function parseRoom(data: Record<string, unknown> | null, roomCode: string): Room | null {
+  if (!data) return null;
+  return {
+    id: (data.id as string) || roomCode,
+    gameId: (data.gameId as string) || "",
+    hostPlayerId: (data.hostPlayerId as string) || "",
+    status: (data.status as Room["status"]) || "LOBBY",
+    createdAt: (data.createdAt as number) || Date.now(),
+    expiresAt: data.expiresAt as number | undefined,
+    settings: (data.settings as RoomSettings) ?? FALLBACK_SETTINGS,
+    players: (data.players as Record<string, Player>) ?? {},
+    gameState: (data.gameState as Record<string, unknown>) ?? {},
+    lastTickAt: data.lastTickAt as number | undefined,
+    startedAt: data.startedAt as number | undefined,
+  };
+}
+
+function maxPlayersFor(gameId: string): number {
+  return GAMES.find((g) => g.id === gameId)?.maxPlayers ?? 20;
+}
 
 export function RoomProvider({ children }: { children: ReactNode }) {
   const [room, setRoom] = useState<Room | null>(null);
@@ -29,228 +128,434 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Check for existing session
-  useEffect(() => {
-    const stored = sessionStorage.getItem("partyverse_session");
-    if (stored) {
-      try {
-        const { userId, roomCode, nickname } = JSON.parse(stored);
-        if (db && userId) {
-          get(ref(db, `rooms/${roomCode}/players/${userId}`)).then((snap) => {
-            if (snap.exists()) {
-              get(ref(db, `rooms/${roomCode}`)).then((roomSnap) => {
-                if (roomSnap.exists()) {
-                  const data = roomSnap.val();
-                  setRoom({
-                    id: data.id,
-                    gameId: data.gameId,
-                    hostPlayerId: data.hostPlayerId,
-                    status: data.status,
-                    createdAt: data.createdAt,
-                    settings: data.settings,
-                    players: data.players || {},
-                    gameState: data.gameState || {},
-                  });
-                  setPlayer(data.players[userId] || null);
-                }
-              });
-            }
-          });
-        }
-      } catch (e) {
-        console.error("Session restore error:", e);
-      }
-    }
-    setLoading(false);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+
+  const stopListening = useCallback(() => {
+    unsubscribeRef.current?.();
+    unsubscribeRef.current = null;
   }, []);
 
-  const createRoom = useCallback(async (gameId: string, nickname: string, settings: NonNullable<Room["settings"]>): Promise<string> => {
-    if (!db || !auth) throw new Error("Firebase not configured");
+  /**
+   * One live listener per room. `onValue` returns an unsubscribe *function* —
+   * the old code passed it to `off(ref, "value", unsub)`, which detaches
+   * nothing, so every navigation stacked another listener on the same path.
+   */
+  const subscribe = useCallback(
+    (roomCode: string, userId: string) => {
+      if (!db) return;
+      stopListening();
+      unsubscribeRef.current = onValue(
+        ref(db, `rooms/${roomCode}`),
+        (snap) => {
+          const next = parseRoom(snap.val() as Record<string, unknown> | null, roomCode);
+          if (!next) {
+            // Room deleted — host ended it, or it was swept.
+            setRoom(null);
+            setPlayer(null);
+            writeSession(null);
+            stopListening();
+            return;
+          }
+          setRoom(next);
+          setPlayer(next.players[userId] ?? null);
+        },
+        (error) => console.error("[partyverse] Room listener failed:", error),
+      );
+    },
+    [stopListening],
+  );
 
-    let user: User;
-    try {
-      const cred = await signInAnonymously(auth);
-      user = cred.user;
-    } catch (e) {
-      console.error("SignInAnonymously error:", e);
-      throw new Error(`Auth failed: ${e instanceof Error ? e.message : String(e)}`);
+  useEffect(() => stopListening, [stopListening]);
+
+  // Auth + session restore. Re-attaches the live listener, so a mid-game reload
+  // lands back in the room instead of on a frozen one-shot snapshot.
+  useEffect(() => {
+    // Capture the module binding in a const: TypeScript only narrows `db` for
+    // the local, not across the async boundary below.
+    const database = db;
+    if (!database) {
+      setLoading(false);
+      return;
     }
+    const stored = readSession();
+    let cancelled = false;
 
-    const userId = user.uid;
+    const unsubscribeAuth = onAuthStateChanged(getAuth(), async (authUser) => {
+      if (cancelled) return;
+      setUser(authUser);
 
-    // Generate unique room code
-    let roomCode: string;
-    let exists = true;
-    while (exists) {
-      roomCode = generateRoomCode();
-      const snap = await get(ref(db, `rooms/${roomCode}`));
-      exists = snap.exists();
-    }
-
-    const gameDef = GAMES.find((g) => g.id === gameId);
-    const hostPlayer: Player = {
-      id: userId,
-      nickname: nickname.trim(),
-      avatar: gameDef?.icon || "🎮",
-      isHost: true,
-      isConnected: true,
-      score: 0,
-    };
-
-    await set(ref(db, `rooms/${roomCode}`), {
-      id: roomCode,
-      gameId,
-      hostPlayerId: userId,
-      status: "LOBBY",
-      createdAt: Date.now(),
-      settings,
-      players: { [userId]: hostPlayer },
-      gameState: {},
-    });
-
-    // Set presence
-    const playerRef = ref(db, `rooms/${roomCode}/players/${userId}`);
-    onDisconnect(playerRef).update({ isConnected: false });
-
-    // Store session
-    sessionStorage.setItem("partyverse_session", JSON.stringify({ userId, roomCode, nickname: hostPlayer.nickname }));
-
-    // Listen to room
-    onValue(ref(db, `rooms/${roomCode}`), (snap) => {
-      const data = snap.val();
-      if (!data) return;
-      setRoom({
-        id: data.id,
-        gameId: data.gameId,
-        hostPlayerId: data.hostPlayerId,
-        status: data.status,
-        createdAt: data.createdAt,
-        settings: data.settings,
-        players: data.players || {},
-        gameState: data.gameState || {},
-      });
-      if (data.players?.[userId]) {
-        setPlayer(data.players[userId]);
+      if (!authUser || !stored || stored.userId !== authUser.uid) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const snap = await get(ref(database, `rooms/${stored.roomCode}/players/${stored.userId}`));
+        if (cancelled) return;
+        if (snap.exists()) subscribe(stored.roomCode, stored.userId);
+        else writeSession(null);
+      } catch (error) {
+        console.error("[partyverse] Session restore failed:", error);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     });
 
-    return roomCode;
-  }, [db, auth]);
-
-  const joinRoom = useCallback(async (roomCode: string, nickname: string) => {
-    if (!db || !auth) throw new Error("Firebase not configured");
-
-    let user: User;
-    try {
-      const cred = await signInAnonymously(auth);
-      user = cred.user;
-    } catch (e) {
-      console.error("SignInAnonymously error:", e);
-      throw new Error(`Auth failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-
-    const userId = user.uid;
-
-    // Check room exists
-    const roomSnap = await get(ref(db, `rooms/${roomCode}`));
-    if (!roomSnap.exists()) throw new Error("Room not found");
-
-    const data = roomSnap.val();
-    const playerCount = Object.keys(data.players || {}).length;
-    const maxPlayers = data.settings?.maxPlayers || 20;
-    if (playerCount >= maxPlayers) throw new Error("Room is full");
-
-    const gameDef = GAMES.find((g) => g.id === data.gameId);
-    const newPlayer: Player = {
-      id: userId,
-      nickname: nickname.trim() || `Player ${playerCount + 1}`,
-      avatar: gameDef?.icon || "🎮",
-      isHost: false,
-      isConnected: true,
-      score: 0,
+    return () => {
+      cancelled = true;
+      unsubscribeAuth();
     };
+  }, [subscribe]);
 
-    // Add player
-    await set(ref(db, `rooms/${roomCode}/players/${userId}`), newPlayer);
-
-    // Set presence
-    const playerRef = ref(db, `rooms/${roomCode}/players/${userId}/isConnected`);
-    onDisconnect(playerRef).set(false);
-
-    // Store session
-    sessionStorage.setItem("partyverse_session", JSON.stringify({ userId, roomCode, nickname: newPlayer.nickname }));
-
-    // Listen to room
-    onValue(ref(db, `rooms/${roomCode}`), (snap) => {
-      const d = snap.val();
-      if (!d) return;
-      setRoom({
-        id: d.id,
-        gameId: d.gameId,
-        hostPlayerId: d.hostPlayerId,
-        status: d.status,
-        createdAt: d.createdAt,
-        settings: d.settings,
-        players: d.players || {},
-        gameState: d.gameState || {},
-      });
-      if (d.players?.[userId]) {
-        setPlayer(d.players[userId]);
-      }
+  /**
+   * Presence: re-assert `isConnected` whenever the socket comes back, so a
+   * player who drops and reconnects stops showing as offline in the lobby.
+   */
+  useEffect(() => {
+    const roomId = room?.id;
+    const uid = user?.uid;
+    if (!db || !roomId || !uid) return;
+    const playerRef = ref(db, `rooms/${roomId}/players/${uid}`);
+    return onValue(ref(db, ".info/connected"), (snap) => {
+      if (snap.val() === true) void update(playerRef, { isConnected: true }).catch(() => undefined);
     });
+  }, [room?.id, user?.uid]);
 
-    setUser(user);
-  }, [db, auth]);
+  const ensureAuth = useCallback(async (): Promise<User> => {
+    if (!db) throw new Error(NOT_CONFIGURED);
+    const auth = getAuth();
+    // Reuse the existing anonymous identity rather than minting a new one per join.
+    if (auth.currentUser) return auth.currentUser;
+    const cred = await signInAnonymously(auth);
+    return cred.user;
+  }, []);
 
-  const kickPlayer = useCallback(async (playerId: string) => {
-    if (!db || !room || !auth?.currentUser) return;
-    if (room.hostPlayerId !== auth.currentUser.uid) throw new Error("Not authorized");
-    await remove(ref(db, `rooms/${room.id}/players/${playerId}`));
-  }, [db, room, auth]);
+  const createRoom = useCallback(
+    async (gameId: string, rawNickname: string, settings?: RoomSettings): Promise<string> => {
+      if (!db) throw new Error(NOT_CONFIGURED);
+      const game = GAMES.find((g) => g.id === gameId);
+      if (!game) throw new Error("找不到這個遊戲");
+      if (!getGameEngine(gameId)) throw new Error(`${game.name} 尚未開放，敬請期待`);
 
+      const authUser = await ensureAuth();
+      const nickname = sanitizeNickname(rawNickname) || "房主";
+      const baseSettings: RoomSettings = { ...FALLBACK_SETTINGS, ...settings };
+
+      // Allocate the code and create the room in one transaction, so two hosts
+      // racing for the same code cannot both win it.
+      let roomCode: string | null = null;
+      for (let attempt = 0; attempt < 12 && roomCode === null; attempt++) {
+        const candidate = generateRoomCode();
+        const hostPlayer: Player = {
+          id: authUser.uid,
+          nickname,
+          avatar: pickAvatar(nickname, []),
+          isHost: true,
+          isConnected: true,
+          score: 0,
+        };
+        const now = Date.now();
+        const result = await runTransaction(ref(db, `rooms/${candidate}`), (current) => {
+          if (current !== null) return undefined; // code already taken — abort
+          return {
+            id: candidate,
+            gameId,
+            hostPlayerId: authUser.uid,
+            status: "LOBBY",
+            createdAt: now,
+            expiresAt: now + ROOM_TTL_MS,
+            settings: baseSettings,
+            players: { [authUser.uid]: hostPlayer },
+            gameState: {},
+          };
+        });
+        if (result.committed) roomCode = candidate;
+      }
+      if (!roomCode) throw new Error("無法建立房間，請再試一次");
+
+      markDisconnectedOnLeave(roomCode, authUser.uid);
+      rememberNickname(nickname);
+      writeSession({ userId: authUser.uid, roomCode, nickname });
+      setUser(authUser);
+      subscribe(roomCode, authUser.uid);
+      return roomCode;
+    },
+    [ensureAuth, subscribe],
+  );
+
+  const joinRoom = useCallback(
+    async (rawRoomCode: string, rawNickname: string) => {
+      if (!db) throw new Error(NOT_CONFIGURED);
+      const roomCode = rawRoomCode.toUpperCase();
+      const authUser = await ensureAuth();
+      const nickname = sanitizeNickname(rawNickname) || "玩家";
+
+      const result = await runTransaction(ref(db, `rooms/${roomCode}`), (current) => {
+        if (current === null) return undefined; // no such room — abort
+        const players = (current.players ?? {}) as Record<string, Player>;
+        const existing = players[authUser.uid];
+        if (!existing && Object.keys(players).length >= maxPlayersFor(String(current.gameId))) {
+          throw new Error("房間已額滿");
+        }
+        const avatar = existing?.avatar ?? pickAvatar(nickname, Object.values(players).map((p) => p.avatar));
+        return {
+          ...current,
+          players: {
+            ...players,
+            [authUser.uid]: {
+              id: authUser.uid,
+              nickname,
+              avatar,
+              isHost: Boolean(existing?.isHost),
+              isConnected: true,
+              score: existing?.score ?? 0,
+            } satisfies Player,
+          },
+        };
+      });
+
+      if (!result.committed || result.snapshot.val() === null) throw new Error("找不到這個房間，請確認代碼");
+
+      markDisconnectedOnLeave(roomCode, authUser.uid);
+      rememberNickname(nickname);
+      writeSession({ userId: authUser.uid, roomCode, nickname });
+      setUser(authUser);
+      subscribe(roomCode, authUser.uid);
+    },
+    [ensureAuth, subscribe],
+  );
+
+  const leaveRoom = useCallback(async () => {
+    const uid = user?.uid;
+    stopListening();
+    if (db && room && uid) await remove(ref(db, `rooms/${room.id}/players/${uid}`)).catch(() => undefined);
+    writeSession(null);
+    setRoom(null);
+    setPlayer(null);
+  }, [room, stopListening, user?.uid]);
+
+  const endRoom = useCallback(async () => {
+    // Actually deletes the node. The old "End" button only navigated home and
+    // left the room in the database forever.
+    if (db && room) await remove(ref(db, `rooms/${room.id}`)).catch(() => undefined);
+    stopListening();
+    writeSession(null);
+    setRoom(null);
+    setPlayer(null);
+  }, [room, stopListening]);
+
+  /** Asserts the caller is the host and hands back everything the write needs. */
+  const requireHost = useCallback((): HostContext => {
+    if (!db) throw new Error(NOT_CONFIGURED);
+    if (!room) throw new Error("尚未加入房間");
+    if (!user || room.hostPlayerId !== user.uid) throw new Error("只有房主可以執行這個操作");
+    return { database: db, roomRef: ref(db, `rooms/${room.id}`), current: room, uid: user.uid };
+  }, [room, user]);
+
+  const kickPlayer = useCallback(
+    async (playerId: string) => {
+      const { database, current } = requireHost();
+      if (playerId === current.hostPlayerId) throw new Error("不能移除房主");
+      await remove(ref(database, `rooms/${current.id}/players/${playerId}`));
+    },
+    [requireHost],
+  );
+
+  const claimHost = useCallback(async () => {
+    if (!db || !room || !user) throw new Error("尚未加入房間");
+    const uid = user.uid;
+    await runTransaction(ref(db, `rooms/${room.id}`), (current) => {
+      if (!current) return undefined;
+      const players = (current.players ?? {}) as Record<string, Player>;
+      // Only claimable when the host is genuinely gone.
+      if (players[String(current.hostPlayerId)]?.isConnected) return undefined;
+      return {
+        ...current,
+        hostPlayerId: uid,
+        players: Object.fromEntries(Object.entries(players).map(([id, p]) => [id, { ...p, isHost: id === uid }])),
+      };
+    });
+  }, [room, user]);
+
+  /**
+   * Start the game: seed `gameState` from the engine in the same write that
+   * flips the status. This write was missing entirely — without it every client
+   * read `gameState: {}` and sat on "Loading…" forever.
+   */
   const startGame = useCallback(async () => {
-    if (!db || !room || !auth?.currentUser) return;
-    if (room.hostPlayerId !== auth.currentUser.uid) throw new Error("Not authorized");
-    await update(ref(db, `rooms/${room.id}`), { status: "PLAYING" });
-  }, [db, room, auth]);
+    const { roomRef, current } = requireHost();
+    const engine = getGameEngine(current.gameId);
+    if (!engine) throw new Error("這個遊戲還沒有可玩的內容");
+
+    const online = Object.values(current.players).filter((p) => p.isConnected !== false).length;
+    const min = GAMES.find((g) => g.id === current.gameId)?.minPlayers ?? 2;
+    if (online < min) throw new Error(`至少需要 ${min} 位玩家才能開始`);
+
+    await runTransaction(roomRef, (current) => {
+      if (!current || current.status !== "LOBBY") return undefined;
+      return {
+        ...current,
+        status: "PLAYING",
+        startedAt: Date.now(),
+        lastTickAt: Date.now(),
+        gameState: engine.createGame(current as unknown as Room),
+      };
+    });
+  }, [requireHost]);
+
+  const endRound = useCallback(async () => {
+    const { roomRef } = requireHost();
+    const engine = getGameEngine(room?.gameId ?? "");
+    if (!engine) throw new Error("這個遊戲還沒有可玩的內容");
+    await runTransaction(roomRef, (current) => {
+      if (!current || current.status !== "PLAYING") return undefined;
+      return { ...current, lastTickAt: Date.now(), gameState: engine.endRound(current as unknown as Room) };
+    });
+  }, [requireHost, room?.gameId]);
 
   const endGame = useCallback(async () => {
-    if (!db || !room || !auth?.currentUser) return;
-    if (room.hostPlayerId !== auth.currentUser.uid) throw new Error("Not authorized");
-    await update(ref(db, `rooms/${room.id}`), { status: "RESULTS" });
-  }, [db, room, auth]);
-
-  const switchGame = useCallback(async (newGameId: string) => {
-    if (!db || !room || !auth?.currentUser) return;
-    if (room.hostPlayerId !== auth.currentUser.uid) throw new Error("Not authorized");
-    await update(ref(db, `rooms/${room.id}`), {
-      gameId: newGameId,
-      status: "LOBBY",
-      gameState: {},
+    const { roomRef } = requireHost();
+    const engine = getGameEngine(room?.gameId ?? "");
+    await runTransaction(roomRef, (current) => {
+      if (!current || current.status !== "PLAYING") return undefined;
+      const gameState = (current.gameState ?? {}) as Record<string, unknown>;
+      const summary: GameSummary | null = engine ? engine.endGame(current as unknown as Room) : null;
+      return {
+        ...current,
+        status: "RESULTS",
+        gameState: summary
+          ? { ...gameState, currentScores: summary.scores, achievements: summary.achievements, winnerId: summary.winnerId }
+          : gameState,
+      };
     });
-  }, [db, room, auth]);
+  }, [requireHost, room?.gameId]);
+
+  const switchGame = useCallback(
+    async (newGameId: string) => {
+      const { roomRef } = requireHost();
+      if (!getGameEngine(newGameId)) {
+        const name = GAMES.find((g) => g.id === newGameId)?.name ?? newGameId;
+        throw new Error(`${name} 尚未開放，敬請期待`);
+      }
+      await update(roomRef, { gameId: newGameId, status: "LOBBY", gameState: {}, startedAt: null, lastTickAt: null });
+    },
+    [requireHost],
+  );
+
+  const updateSettings = useCallback(
+    async (patch: Partial<RoomSettings>) => {
+      const { database, current } = requireHost();
+      await update(ref(database, `rooms/${current.id}/settings`), patch);
+    },
+    [requireHost],
+  );
+
+  /** Route a player action through the engine, transactionally. */
+  const submitAction = useCallback(
+    async (action: unknown) => {
+      if (!db || !room || !user) throw new Error("尚未加入房間");
+      const engine = getGameEngine(room.gameId);
+      if (!engine) return;
+      const uid = user.uid;
+      await runTransaction(ref(db, `rooms/${room.id}`), (current) => {
+        if (!current || current.status !== "PLAYING") return undefined;
+        const before = current.gameState;
+        const next = engine.handlePlayerAction(current as unknown as Room, uid, action);
+        if (next === before) return undefined; // nothing changed — don't write
+        return { ...current, gameState: next };
+      });
+    },
+    [room, user],
+  );
+
+  /**
+   * The host's browser owns the game clock. It ticks once a second and
+   * *publishes* the result — the previous implementation ticked into local
+   * component state only, so no other client ever saw the bomb move.
+   */
+  useEffect(() => {
+    if (!db || !room || !user) return;
+    if (room.status !== "PLAYING" || room.hostPlayerId !== user.uid) return;
+    const engine = getGameEngine(room.gameId);
+    if (!engine) return;
+
+    const roomRef = ref(db, `rooms/${room.id}`);
+    const id = setInterval(() => {
+      void runTransaction(roomRef, (current) => {
+        if (!current || current.status !== "PLAYING") return undefined;
+        const next = engine.updateGameState(current as unknown as Room) as Record<string, unknown>;
+        if (next.phase === "result") {
+          const summary = engine.endGame({ ...(current as unknown as Room), gameState: next } as Room);
+          return {
+            ...current,
+            status: "RESULTS",
+            lastTickAt: Date.now(),
+            gameState: {
+              ...next,
+              currentScores: summary.scores,
+              achievements: summary.achievements,
+              winnerId: summary.winnerId,
+            },
+          };
+        }
+        return { ...current, gameState: next, lastTickAt: Date.now() };
+      }).catch((error) => console.error("[partyverse] tick failed:", error));
+    }, TICK_MS);
+
+    return () => clearInterval(id);
+    // Re-created only when the identity of the game changes, not on every state tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.id, room?.status, room?.hostPlayerId, room?.gameId, user?.uid]);
+
+  const isHost = Boolean(user && room && room.hostPlayerId === user.uid);
 
   return (
-    <RoomContext.Provider value={{ room, player, user, loading, joinRoom, createRoom, kickPlayer, startGame, endGame, switchGame }}>
+    <RoomContext.Provider
+      value={{
+        room,
+        player,
+        user,
+        loading,
+        isHost,
+        createRoom,
+        joinRoom,
+        leaveRoom,
+        endRoom,
+        kickPlayer,
+        claimHost,
+        startGame,
+        endRound,
+        endGame,
+        switchGame,
+        updateSettings,
+        submitAction,
+      }}
+    >
       {children}
     </RoomContext.Provider>
   );
 }
 
-export function useRoom() {
+/**
+ * When this client's socket dies, flag the player offline. `onDisconnect` does
+ * accept `serverTimestamp()` (transactions do not).
+ */
+function markDisconnectedOnLeave(roomCode: string, userId: string) {
+  if (!db) return;
+  void onDisconnect(ref(db, `rooms/${roomCode}/players/${userId}`))
+    .update({ isConnected: false, leftAt: serverTimestamp() })
+    .catch(() => undefined);
+}
+
+export function useRoom(): RoomContextValue {
   const ctx = useContext(RoomContext);
   if (!ctx) throw new Error("useRoom must be used within RoomProvider");
   return ctx;
 }
 
-export function usePlayer() {
-  const ctx = useContext(RoomContext);
-  if (!ctx) throw new Error("usePlayer must be used within RoomProvider");
-  return ctx.player;
+export function usePlayer(): Player | null {
+  return useRoom().player;
 }
 
-export function useCurrentRoom() {
-  const ctx = useContext(RoomContext);
-  if (!ctx) throw new Error("useCurrentRoom must be used within RoomProvider");
-  return ctx.room;
+export function useCurrentRoom(): Room | null {
+  return useRoom().room;
 }

@@ -2,66 +2,97 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Users } from "lucide-react";
 import Link from "next/link";
+import { ArrowLeft, Users } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { NICKNAME_KEY, MAX_NICKNAME_LENGTH, ROOM_CODE_LENGTH } from "@/constants/room";
+import { normalizeRoomCode, sanitizeNickname } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { ErrorNote } from "@/components/ui/ErrorNote";
 
 export default function JoinClient() {
   const router = useRouter();
-  const { joinRoom, loading } = useRoom();
+  const { joinRoom } = useRoom();
   const [roomCode, setRoomCode] = useState("");
+  const [savedNickname, setSavedNickname] = useLocalStorage(NICKNAME_KEY, "");
   const [nickname, setNickname] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Pre-fill from the last visit once localStorage has hydrated.
+  const effectiveNickname = nickname || savedNickname;
+  const canSubmit = roomCode.length === ROOM_CODE_LENGTH && effectiveNickname.trim().length > 0 && !submitting;
+
   const handleJoin = async () => {
-    if (!roomCode.trim()) { setError("Please enter a room code"); return; }
-    if (!nickname.trim()) { setError("Please enter a nickname"); return; }
+    if (!canSubmit) return;
     setError("");
+    setSubmitting(true);
     try {
-      await joinRoom(roomCode.trim().toUpperCase(), nickname.trim());
-      router.push(`/join/${roomCode.trim().toUpperCase()}`);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to join room");
+      const cleanName = sanitizeNickname(effectiveNickname);
+      setSavedNickname(cleanName);
+      await joinRoom(roomCode, cleanName);
+      // Straight into the room. The old flow pushed to /join/[code], which
+      // rendered a second nickname form for a player who had already joined.
+      router.push(`/room/${roomCode}/play`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "加入房間失敗，請再試一次");
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#050508] text-white flex items-center justify-center p-4">
-      <div className="max-w-sm w-full">
-        <Link href="/" className="inline-flex items-center gap-2 text-white/40 hover:text-white/70 mb-8 transition-colors text-sm">
-          <ArrowLeft className="w-4 h-4" /> Back
+    <main className="flex min-h-screen items-center justify-center bg-ink p-4 text-white">
+      <div className="w-full max-w-sm">
+        <Link
+          href="/"
+          className="mb-8 inline-flex items-center gap-2 text-sm text-white/40 transition-colors hover:text-white/70"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> 返回首頁
         </Link>
 
-        <div className="text-center mb-8">
-          <div className="text-4xl mb-4">🎮</div>
-          <h1 className="font-bold text-2xl mb-2">Join Party</h1>
-          <p className="text-white/40 text-sm">Enter a room code to join the fun</p>
-        </div>
+        <h1 className="mb-2 text-2xl font-bold">加入派對</h1>
+        <p className="mb-8 text-sm text-white/40">輸入房主給你的房間代碼</p>
 
-        <div className="glass-card rounded-2xl p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-white/60 mb-2">Room Code</label>
-            <input type="text" value={roomCode} onChange={(e) => setRoomCode(e.target.value.toUpperCase())} placeholder="ABC12" maxLength={5}
-              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-center text-2xl font-bold tracking-widest placeholder-white/20 focus:outline-none focus:border-white/20 transition-all"
-              onKeyDown={(e) => e.key === "Enter" && handleJoin()} />
-          </div>
+        <form
+          className="glass-card space-y-4 rounded-2xl p-6"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleJoin();
+          }}
+        >
+          <Field
+            label="房間代碼"
+            name="roomCode"
+            value={roomCode}
+            onChange={(e) => setRoomCode(normalizeRoomCode(e.target.value))}
+            placeholder="ABCDE"
+            maxLength={ROOM_CODE_LENGTH}
+            autoComplete="off"
+            inputMode="text"
+            inputClassName="text-center text-2xl font-bold tracking-[0.3em] uppercase"
+            hint={`${ROOM_CODE_LENGTH} 位英數字，不含 0/O、1/I/L`}
+          />
 
-          <div>
-            <label className="block text-sm font-medium text-white/60 mb-2">Your Name</label>
-            <input type="text" value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="Enter your name..." maxLength={16}
-              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/20 focus:outline-none focus:border-white/20 transition-all"
-              onKeyDown={(e) => e.key === "Enter" && handleJoin()} />
-          </div>
+          <Field
+            label="你的暱稱"
+            name="nickname"
+            value={effectiveNickname}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="輸入你的名字…"
+            maxLength={MAX_NICKNAME_LENGTH}
+            autoComplete="nickname"
+          />
 
-          {error && <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center">{error}</div>}
+          <ErrorNote>{error}</ErrorNote>
 
-          <button onClick={handleJoin} disabled={loading || !roomCode.trim() || !nickname.trim()}
-            className="w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all bg-white/10 hover:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Users className="w-4 h-4" /> {loading ? "Joining..." : "Join Party"}
-          </button>
-        </div>
+          <Button type="submit" variant="ghost" size="md" disabled={!canSubmit} className="w-full">
+            <Users className="h-4 w-4" aria-hidden="true" />
+            {submitting ? "加入中…" : "加入派對"}
+          </Button>
+        </form>
       </div>
-    </div>
+    </main>
   );
 }

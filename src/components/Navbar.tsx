@@ -1,8 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Gamepad2, Menu, X } from "lucide-react";
-import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
+
+const LINKS = [
+  { href: "/games", label: "遊戲" },
+  { href: "/join", label: "加入房間" },
+];
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -10,55 +16,95 @@ export default function Navbar() {
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Close the mobile menu with Escape, and stop it trapping focus behind it.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileOpen]);
+
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 px-4 py-4 transition-all duration-300 ${scrolled ? "py-3" : ""}`}>
-      <div className={`max-w-7xl mx-auto rounded-2xl px-5 py-3 flex items-center justify-between transition-all duration-300 ${scrolled ? "glass-strong" : "glass"}`}>
-        <Link href="/" prefetch className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
-            <Gamepad2 className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-bold text-base tracking-wide">PARTYVERSE</span>
+    <nav
+      className={cn("fixed inset-x-0 top-0 z-50 px-4 py-4 transition-all duration-300", scrolled && "py-3")}
+      aria-label="主導覽"
+    >
+      <div
+        className={cn(
+          "mx-auto flex max-w-7xl items-center justify-between rounded-2xl px-5 py-3 transition-all duration-300",
+          scrolled ? "glass-strong" : "glass",
+        )}
+      >
+        <Link href="/" className="group flex items-center gap-2.5">
+          <span
+            className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 shadow-lg shadow-violet-500/20"
+            aria-hidden="true"
+          >
+            <Gamepad2 className="h-4 w-4 text-white" />
+          </span>
+          <span lang="en" className="text-base font-bold tracking-wide">
+            PARTYVERSE
+          </span>
         </Link>
 
         {/* Desktop nav */}
-        <div className="hidden md:flex items-center gap-1">
-          <Link href="/games" className="px-4 py-2 rounded-xl text-sm text-white/60 hover:text-white hover:bg-white/5 transition-all" prefetch>
-            Games
-          </Link>
-          <Link href="/join" className="px-4 py-2 rounded-xl text-sm text-white/60 hover:text-white hover:bg-white/5 transition-all" prefetch>
-            Join
-          </Link>
-          <div className="w-px h-4 bg-white/10 mx-1" />
-          <Link href="/games" prefetch>
-            <button className="ml-1 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-sm font-medium transition-all">
-              Start Playing
-            </button>
+        <div className="hidden items-center gap-1 md:flex">
+          {LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="rounded-xl px-4 py-2 text-sm text-white/60 transition-all hover:bg-white/5 hover:text-white"
+            >
+              {link.label}
+            </Link>
+          ))}
+          <span className="mx-1 h-4 w-px bg-white/10" aria-hidden="true" />
+          <Link
+            href="/games"
+            className="ml-1 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium transition-all hover:bg-white/15"
+          >
+            開始遊戲
           </Link>
         </div>
 
-        {/* Mobile menu button */}
-        <button onClick={() => setMobileOpen(!mobileOpen)} className="md:hidden p-2 rounded-xl hover:bg-white/10 transition-colors">
-          {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        {/* Mobile menu toggle — a button, not a link wrapping a button */}
+        <button
+          type="button"
+          onClick={() => setMobileOpen((open) => !open)}
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-menu"
+          aria-label={mobileOpen ? "關閉選單" : "開啟選單"}
+          className="rounded-xl p-2 transition-colors hover:bg-white/10 md:hidden"
+        >
+          {mobileOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
         </button>
       </div>
 
-      {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden mt-2 glass-strong rounded-2xl p-3 flex flex-col gap-1">
-          <Link href="/games" onClick={() => setMobileOpen(false)} className="px-4 py-3 rounded-xl text-white/70 hover:text-white hover:bg-white/5 transition-all text-sm font-medium" prefetch>
-            Games
-          </Link>
-          <Link href="/join" onClick={() => setMobileOpen(false)} className="px-4 py-3 rounded-xl text-white/70 hover:text-white hover:bg-white/5 transition-all text-sm font-medium" prefetch>
-            Join
-          </Link>
-          <Link href="/games" onClick={() => setMobileOpen(false)} prefetch className="mt-1">
-            <button className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/15 text-sm font-medium">
-              Start Playing
-            </button>
+        <div id="mobile-menu" className="glass-strong mt-2 flex flex-col gap-1 rounded-2xl p-3 md:hidden">
+          {LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={() => setMobileOpen(false)}
+              className="rounded-xl px-4 py-3 text-sm font-medium text-white/70 transition-all hover:bg-white/5 hover:text-white"
+            >
+              {link.label}
+            </Link>
+          ))}
+          <Link
+            href="/games"
+            onClick={() => setMobileOpen(false)}
+            className="mt-1 rounded-xl bg-white/10 px-4 py-3 text-center text-sm font-medium transition-all hover:bg-white/15"
+          >
+            開始遊戲
           </Link>
         </div>
       )}

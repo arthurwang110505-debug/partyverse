@@ -2,102 +2,163 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft, Crown } from "lucide-react";
-import Link from "next/link";
 import { useRoom } from "@/providers/RoomContext";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { GAMES } from "@/constants/games";
+import { DEFAULT_ROOM_SETTINGS, MAX_NICKNAME_LENGTH, NICKNAME_KEY } from "@/constants/room";
+import type { RoomSettings } from "@/types";
+import { sanitizeNickname } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { ErrorNote } from "@/components/ui/ErrorNote";
+import { cn } from "@/lib/utils";
 
 interface Props {
   gameId: string;
 }
 
+const DIFFICULTIES: Array<{ value: RoomSettings["difficulty"]; label: string; hint: string }> = [
+  { value: "easy", label: "輕鬆", hint: "時間長、題目簡單" },
+  { value: "medium", label: "普通", hint: "標準節奏" },
+  { value: "hard", label: "地獄", hint: "時間短、題目多" },
+];
+
 export default function CreateRoomClient({ gameId }: Props) {
   const router = useRouter();
   const { createRoom } = useRoom();
   const game = GAMES.find((g) => g.id === gameId);
+
+  const [savedNickname, setSavedNickname] = useLocalStorage(NICKNAME_KEY, "");
   const [nickname, setNickname] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState<RoomSettings>(DEFAULT_ROOM_SETTINGS);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   if (!game) {
     return (
-      <div className="min-h-screen bg-[#050508] flex items-center justify-center">
-        <div className="text-white/50 text-lg">Game not found</div>
-      </div>
+      <main className="flex min-h-screen items-center justify-center bg-ink text-white/50">找不到這個遊戲</main>
     );
   }
 
+  const effectiveNickname = nickname || savedNickname;
+  const canSubmit = effectiveNickname.trim().length > 0 && !submitting;
+
   const handleCreate = async () => {
-    if (!nickname.trim()) { setError("Please enter a nickname"); return; }
-    setLoading(true);
+    if (!canSubmit) return;
     setError("");
+    setSubmitting(true);
     try {
-      const roomCode = await createRoom(game.id, nickname.trim(), {
-        timer: 15,
-        difficulty: "easy",
-        rounds: 3,
-        soundEnabled: true,
-        ageMode: "family",
-      });
+      const cleanName = sanitizeNickname(effectiveNickname);
+      setSavedNickname(cleanName);
+      const roomCode = await createRoom(game.id, cleanName, settings);
       router.push(`/room/${roomCode}/host`);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to create room");
-    } finally {
-      setLoading(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "建立房間失敗，請再試一次");
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#050508] text-white flex items-center justify-center px-4 py-24">
-      <div className="max-w-md w-full">
-        <Link href={`/games/${game.id}`} prefetch className="inline-flex items-center gap-2 text-white/40 hover:text-white/70 mb-8 transition-colors text-sm">
-          <ArrowLeft className="w-4 h-4" /> Back
+    <main className="flex min-h-screen items-center justify-center bg-ink px-4 py-24 text-white">
+      <div className="w-full max-w-md">
+        <Link
+          href={`/games/${game.id}`}
+          className="mb-8 inline-flex items-center gap-2 text-sm text-white/40 transition-colors hover:text-white/70"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> 返回遊戲介紹
         </Link>
 
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-3xl">{game.icon}</span>
-            <h1 className="font-bold text-2xl">{game.name}</h1>
-          </div>
-          <p className="text-white/40 text-sm mb-8">{game.nameEn}</p>
-        </motion.div>
+        <motion.header initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <h1 className="mb-2 flex items-center gap-3 text-2xl font-bold">
+            <span aria-hidden="true" className="text-3xl">
+              {game.icon}
+            </span>
+            {game.name}
+          </h1>
+          <p lang="en" className="text-sm text-white/40">
+            {game.nameEn}
+          </p>
+        </motion.header>
 
-        <div className="glass-card rounded-2xl p-6 space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-white/60 mb-2">Your Nickname</label>
-            <input
-              type="text"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              placeholder="Enter your name..."
-              maxLength={16}
-              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/20 text-sm focus:outline-none focus:border-white/20 focus:bg-white/8 transition-all"
-              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-              autoFocus
-            />
-          </div>
+        <form
+          className="glass-card space-y-5 rounded-2xl p-6"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleCreate();
+          }}
+        >
+          <Field
+            label="你的暱稱"
+            name="nickname"
+            value={effectiveNickname}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="輸入你的名字…"
+            maxLength={MAX_NICKNAME_LENGTH}
+            autoComplete="nickname"
+            autoFocus
+          />
 
-          {error && (
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center">
-              {error}
+          <fieldset>
+            <legend className="mb-2 block text-sm font-medium text-white/60">難度</legend>
+            <div className="grid grid-cols-3 gap-2">
+              {DIFFICULTIES.map((option) => {
+                const active = settings.difficulty === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setSettings((s) => ({ ...s, difficulty: option.value }))}
+                    className={cn(
+                      "rounded-xl border px-3 py-2.5 text-center transition-all",
+                      active
+                        ? "border-violet-500/50 bg-violet-500/20 text-white"
+                        : "border-white/10 bg-white/5 text-white/50 hover:bg-white/10",
+                    )}
+                  >
+                    <span className="block text-sm font-medium">{option.label}</span>
+                    <span className="mt-0.5 block text-[10px] text-white/40">{option.hint}</span>
+                  </button>
+                );
+              })}
             </div>
-          )}
+          </fieldset>
 
-          <button
-            onClick={handleCreate}
-            disabled={loading || !nickname.trim()}
-            className="w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all"
-            style={{ background: game.gradient, opacity: loading || !nickname.trim() ? 0.5 : 1 }}
+          <Field
+            label="每題秒數"
+            name="timer"
+            type="number"
+            min={3}
+            max={60}
+            value={settings.timer}
+            onChange={(e) =>
+              setSettings((s) => ({ ...s, timer: Math.min(60, Math.max(3, Number(e.target.value) || s.timer)) }))
+            }
+            inputMode="numeric"
+          />
+
+          <ErrorNote>{error}</ErrorNote>
+
+          <Button
+            type="submit"
+            size="md"
+            disabled={!canSubmit}
+            className="w-full text-white"
+            style={{ background: game.gradient }}
           >
-            {loading ? (
-              <span className="animate-pulse">Creating room...</span>
+            {submitting ? (
+              <span className="animate-pulse">建立房間中…</span>
             ) : (
-              <><Crown className="w-4 h-4" /> Create Room</>
+              <>
+                <Crown className="h-4 w-4" aria-hidden="true" /> 建立房間
+              </>
             )}
-          </button>
-        </div>
+          </Button>
+        </form>
       </div>
-    </div>
+    </main>
   );
 }
