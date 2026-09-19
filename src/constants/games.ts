@@ -163,7 +163,3 @@ export const GAMES: GameDefinition[] = [
   },
 ];
 
-export const AVATARS = ["🦊", "🐻", "🦁", "🐼", "🐨", "🦄", "🐙", "🦋", "🐸", "🦈", "🐯", "🦉"];
-
-export const ROOM_CODE_LENGTH = 5;
-export const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

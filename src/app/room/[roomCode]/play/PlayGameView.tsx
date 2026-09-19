@@ -1,132 +1,163 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { useRoom, usePlayer } from "@/providers/RoomContext";
+import { useEffect, useState } from "react";
+import { useRoom } from "@/providers/RoomContext";
 import { GAMES } from "@/constants/games";
-import { BombEngine, type BombChallenge, type BombGameState } from "@/engine/bombCountdown";
+import { HOST_STALE_MS } from "@/constants/room";
+import type { BombGameState } from "@/engine/bombCountdown";
+import { Button } from "@/components/ui/Button";
+import { ErrorNote } from "@/components/ui/ErrorNote";
 import { cn } from "@/lib/utils";
-import { db } from "@/lib/firebase";
-import { ref, onValue, off, update } from "firebase/database";
 
+/**
+ * The phone-in-hand view.
+ *
+ * State comes from the room context (one shared listener) rather than a second
+ * `onValue` subscription, and answers are submitted through `submitAction`,
+ * which runs the engine inside a transaction on the room node.
+ */
 export default function PlayGameView() {
-  const params = useParams();
-  const router = useRouter();
-  const { room, player: currentPlayer } = useRoom();
-  const roomCode = params.roomCode as string;
+  const { room, player, isHost, submitAction, claimHost } = useRoom();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
 
-  const [gameState, setGameState] = useState<BombGameState | null>(null);
-  const [countdown, setCountdown] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (!db || !roomCode || !currentPlayer) return;
-
-    const unsub = onValue(ref(db, `rooms/${roomCode}`), (snapshot) => {
-      const data = snapshot.val();
-      if (!data) return;
-      const state = data.gameState as BombGameState;
-      setGameState(state || null);
-
-      if (state?.phase === "result") {
-        setTimeout(() => router.push(`/room/${roomCode}/results`), 3000);
-      }
-    });
-
-    return () => off(ref(db, `rooms/${roomCode}`), "value", unsub);
-  }, [roomCode, currentPlayer, router]);
-
-  useEffect(() => {
-    if (!gameState || (gameState.phase !== "passing" && gameState.phase !== "challenge")) return;
-
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) return gameState.bombTimeLeft;
-        return prev - 1;
-      });
-    }, 1000);
-    setCountdown(gameState.bombTimeLeft || 0);
-
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [gameState?.bombTimeLeft, gameState?.phase]);
-
+  const state = room?.gameState as BombGameState | undefined;
   const game = GAMES.find((g) => g.id === room?.gameId);
-  const isMyTurn = gameState?.bombHolderId === currentPlayer?.id;
-  const isEliminated = gameState?.eliminatedPlayers.includes(currentPlayer?.id || "");
 
-  if (!room || !currentPlayer) {
-    return <div className="min-h-screen bg-[#050508] flex items-center justify-center"><div className="text-white/50">Connecting...</div></div>;
-  }
+  const isMyTurn = Boolean(player && state?.bombHolderId === player.id);
+  const isEliminated = Boolean(player && state?.eliminatedPlayers.includes(player.id));
+  const hostStale = Boolean(
+    room?.status === "PLAYING" && room.lastTickAt && Date.now() - room.lastTickAt > HOST_STALE_MS && !isHost,
+  );
+
+  // Clear the pending flag once the server state actually moves on.
+  useEffect(() => {
+    if (pending) setPending(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.bombHolderId, state?.bombTimeLeft]);
+
+  const answer = async (value: string) => {
+    setPending(true);
+    setError("");
+    try {
+      await submitAction({ type: "answer", answer: value });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "送出失敗，請再試一次");
+      setPending(false);
+    }
+  };
+
+  if (!room || !player) return null;
+
+  const timeLeft = state?.bombTimeLeft ?? 0;
+  const critical = timeLeft <= 3;
 
   return (
-    <div className="min-h-screen bg-[#050508] text-white">
-      <div className="max-w-md mx-auto p-4 pt-8">
-        <div className="text-center mb-6">
-          <div className="text-sm text-white/40 mb-1">{game?.icon} {game?.name}</div>
-          <div className="font-bold text-sm">Room {roomCode}</div>
-        </div>
+    <main className="min-h-screen bg-ink pb-24 text-white">
+      <div className="mx-auto max-w-md p-4 pt-8">
+        <header className="mb-6 text-center">
+          <p className="mb-1 text-sm text-white/40">
+            <span aria-hidden="true">{game?.icon}</span> {game?.name}
+          </p>
+          <p className="text-sm font-bold tracking-widest">房間 {room.id}</p>
+        </header>
 
-        {gameState && (gameState.phase === "passing" || gameState.phase === "challenge") && (
-          <div className="flex justify-center mb-6">
-            <div
-              className={cn(
-                "w-32 h-32 rounded-full flex items-center justify-center text-5xl font-bold transition-all duration-300",
-                countdown <= 3 ? "bg-red-500" : countdown <= 5 ? "bg-orange-500" : "bg-white/10"
-              )}
-              style={{ boxShadow: countdown <= 3 ? "0 0 60px rgba(239,68,68,0.6)" : "none" }}
-            >
-              {countdown}
-            </div>
+        {hostStale && (
+          <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-center">
+            <p className="mb-2 text-sm text-amber-300">房主似乎已經離線，遊戲暫停中</p>
+            <Button size="sm" variant="ghost" onClick={() => claimHost().catch(() => setError("接管失敗"))}>
+              由我接管房主
+            </Button>
           </div>
+        )}
+
+        {state && state.phase === "challenge" && (
+          <div className="mb-6 flex justify-center">
+            <p
+              className={cn(
+                "flex h-32 w-32 items-center justify-center rounded-full text-5xl font-bold tabular-nums transition-all duration-300",
+                critical ? "bg-red-500" : timeLeft <= 5 ? "bg-orange-500" : "bg-white/10",
+              )}
+              style={{ boxShadow: critical ? "0 0 60px rgba(239,68,68,0.6)" : "none" }}
+              aria-live="off"
+            >
+              {timeLeft}
+            </p>
+          </div>
+        )}
+
+        {state?.lastEliminatedId === player.id && (
+          <p className="mb-4 text-center text-sm text-red-400" role="status">
+            炸彈在你手上爆炸了！
+          </p>
         )}
 
         {isEliminated ? (
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">💀</div>
-            <h2 className="font-bold text-2xl text-red-400 mb-2">ELIMINATED</h2>
-            <p className="text-white/40 text-sm">The bomb got you</p>
-          </div>
-        ) : gameState?.phase === "result" ? (
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">🏆</div>
-            <h2 className="font-bold text-2xl bg-gradient-to-r from-violet-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">GAME OVER</h2>
-            <p className="text-white/40 text-sm mt-2">Check results</p>
-          </div>
-        ) : !isMyTurn && gameState?.phase === "challenge" ? (
-          <div className="text-center py-12">
-            <div className="text-4xl mb-3">⏳</div>
-            <p className="text-white/40 text-sm">Waiting for your turn</p>
-          </div>
-        ) : isMyTurn && gameState?.phase === "challenge" && gameState.challenge ? (
-          <div>
-            <div className="text-center mb-4">
-              <div className="text-xs text-emerald-400 font-semibold uppercase tracking-wider mb-1">Your Turn</div>
-              <div className="font-bold text-lg">{gameState.challenge.question}</div>
-            </div>
+          <section className="py-12 text-center">
+            <p className="mb-4 text-6xl" aria-hidden="true">
+              💀
+            </p>
+            <h2 className="mb-2 text-2xl font-bold text-red-400">你出局了</h2>
+            <p className="text-sm text-white/40">看看誰能撐到最後</p>
+            <p className="mt-6 text-sm text-white/50">目前得分：{state?.currentScores?.[player.id] ?? 0}</p>
+          </section>
+        ) : state?.phase === "result" ? (
+          <section className="py-12 text-center">
+            <p className="mb-4 text-6xl" aria-hidden="true">
+              🏆
+            </p>
+            <h2 className="text-2xl font-bold">遊戲結束</h2>
+            <p className="mt-2 text-sm text-white/40">正在結算…</p>
+          </section>
+        ) : isMyTurn && state?.challenge ? (
+          <section aria-labelledby="turn-heading">
+            <h2 id="turn-heading" className="mb-4 text-center">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-emerald-400">
+                換你了
+              </span>
+              <span className="block text-lg font-bold">{state.challenge.question}</span>
+            </h2>
             <div className="space-y-2">
-              {gameState.challenge.options?.map((opt) => (
-                <button key={opt} className="w-full py-3.5 rounded-xl font-medium text-sm bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white/80">
-                  {opt}
-                </button>
+              {state.challenge.options.map((option) => (
+                <Button
+                  key={option}
+                  variant="ghost"
+                  size="md"
+                  className="w-full"
+                  disabled={pending}
+                  onClick={() => void answer(option)}
+                >
+                  {option}
+                </Button>
               ))}
             </div>
-          </div>
-        ) : gameState?.phase === "waiting" ? (
-          <div className="text-center py-12">
-            <div className="text-4xl mb-3">💣</div>
-            <p className="text-white/40 text-sm">Waiting for host to start</p>
-          </div>
+            <ErrorNote className="mt-4">{error}</ErrorNote>
+          </section>
+        ) : state?.phase === "challenge" ? (
+          <section className="py-12 text-center" role="status">
+            <p className="mb-3 text-4xl" aria-hidden="true">
+              ⏳
+            </p>
+            <p className="text-sm text-white/40">
+              等 <span className="font-semibold text-white/70">{room.players[state.bombHolderId]?.nickname ?? "其他玩家"}</span>{" "}
+              拆彈…
+            </p>
+          </section>
         ) : (
-          <div className="text-center py-12 text-white/30 text-sm">Loading...</div>
+          <section className="py-12 text-center" role="status">
+            <p className="mb-3 text-4xl" aria-hidden="true">
+              💣
+            </p>
+            <p className="text-sm text-white/40">準備中…</p>
+          </section>
         )}
 
-        {gameState && (
-          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 glass px-4 py-2 rounded-full border border-white/10">
-            <span className="text-sm font-medium">Score: {gameState.currentScores?.[currentPlayer.id] || 0}</span>
-          </div>
+        {state && (
+          <p className="glass fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/10 px-4 py-2 text-sm font-medium">
+            得分：{state.currentScores?.[player.id] ?? 0}
+          </p>
         )}
       </div>
-    </div>
+    </main>
   );
 }

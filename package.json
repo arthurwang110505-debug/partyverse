@@ -6,29 +6,33 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
-    "next": "^14.2.15",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "@fontsource-variable/inter": "^5.3.0",
+    "clsx": "^2.1.1",
     "firebase": "^10.14.1",
     "framer-motion": "^11.11.17",
     "lucide-react": "^0.460.0",
+    "next": "^14.2.15",
     "qrcode.react": "^4.1.0",
-    "clsx": "^2.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.15",
     "@types/node": "^20.16.13",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
-    "typescript": "^5.6.3",
-    "tailwindcss": "^3.4.14",
-    "postcss": "^8.4.47",
     "autoprefixer": "^10.4.20",
-    "@tailwindcss/typography": "^0.5.15",
     "eslint": "^8.57.0",
-    "eslint-config-next": "^14.2.15"
+    "eslint-config-next": "^14.2.15",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
   }
 }

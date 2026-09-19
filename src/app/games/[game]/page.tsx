@@ -1,5 +1,10 @@
+import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft, Clock, Gauge, Users } from "lucide-react";
 import { GAMES } from "@/constants/games";
+import { isPlayable } from "@/engine";
+import { LinkButton } from "@/components/ui/Button";
 
 interface Props {
   params: { game: string };
@@ -9,53 +14,128 @@ export function generateStaticParams() {
   return GAMES.map((g) => ({ game: g.id }));
 }
 
+/**
+ * Per-game metadata. These ten pages carry real long-form copy and were already
+ * statically generated via `generateStaticParams`, but had no titles,
+ * descriptions or OG tags — so every one of them shared the site default.
+ */
+export function generateMetadata({ params }: Props): Metadata {
+  const game = GAMES.find((g) => g.id === params.game);
+  if (!game) return { title: "找不到遊戲" };
+
+  const title = `${game.name} (${game.nameEn})`;
+  const description = game.longDescription;
+  const playable = isPlayable(game.id);
+
+  return {
+    title,
+    description,
+    keywords: [game.name, game.nameEn, ...game.tags],
+    openGraph: {
+      title,
+      description,
+      type: "article",
+      ...(playable ? {} : { description: `${description}（即將推出）` }),
+    },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
+
 export default function GameDetailPage({ params }: Props) {
   const game = GAMES.find((g) => g.id === params.game);
   if (!game) notFound();
 
+  const playable = isPlayable(game.id);
+
   return (
-    <div className="min-h-screen bg-[#050508] text-white pt-24 pb-16 px-4">
-      <div className="max-w-3xl mx-auto">
-        <a href="/games" className="inline-flex items-center gap-2 text-white/40 hover:text-white/70 mb-8 transition-colors text-sm">
-          ← Back to Games
-        </a>
+    <main className="min-h-screen bg-ink px-4 pb-16 pt-24 text-white">
+      <div className="mx-auto max-w-3xl">
+        <Link
+          href="/games"
+          className="mb-8 inline-flex items-center gap-2 text-sm text-white/40 transition-colors hover:text-white/70"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> 返回遊戲列表
+        </Link>
 
-        <div className="glass-card rounded-3xl p-8">
-          <div className="flex items-start gap-4 mb-6">
-            <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-4xl" style={{ background: `${game.color}20`, border: `1px solid ${game.color}30` }}>
+        <article className="glass-card rounded-3xl p-8">
+          <header className="mb-6 flex items-start gap-4">
+            <span
+              className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl text-4xl"
+              style={{ background: `${game.color}20`, border: `1px solid ${game.color}30` }}
+              aria-hidden="true"
+            >
               {game.icon}
-            </div>
+            </span>
             <div>
-              <h1 className="font-bold text-3xl mb-1">{game.name}</h1>
-              <p className="text-white/40 text-sm">{game.nameEn}</p>
+              <h1 className="mb-1 text-3xl font-bold">{game.name}</h1>
+              <p lang="en" className="text-sm text-white/40">
+                {game.nameEn}
+              </p>
             </div>
-          </div>
+          </header>
 
-          <p className="text-white/60 text-base leading-relaxed mb-6">{game.longDescription}</p>
+          <p className="mb-6 text-base leading-relaxed text-white/60">{game.longDescription}</p>
 
-          <div className="flex flex-wrap gap-2 mb-6">
-            <span className="px-3 py-1.5 rounded-full bg-white/5 text-sm text-white/60 border border-white/10">{game.category}</span>
-            <span className="px-3 py-1.5 rounded-full bg-white/5 text-sm text-white/60 border border-white/10">{game.difficulty}</span>
-            <span className="px-3 py-1.5 rounded-full bg-white/5 text-sm text-white/60 border border-white/10">{game.minPlayers}–{game.maxPlayers} players</span>
-            <span className="px-3 py-1.5 rounded-full bg-white/5 text-sm text-white/60 border border-white/10">{game.estimatedDuration}</span>
-          </div>
+          <dl className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { term: "分類", detail: game.category, icon: null },
+              { term: "難度", detail: game.difficulty, icon: <Gauge className="h-3.5 w-3.5" aria-hidden="true" /> },
+              {
+                term: "人數",
+                detail: `${game.minPlayers}–${game.maxPlayers} 人`,
+                icon: <Users className="h-3.5 w-3.5" aria-hidden="true" />,
+              },
+              {
+                term: "時間",
+                detail: game.estimatedDuration,
+                icon: <Clock className="h-3.5 w-3.5" aria-hidden="true" />,
+              },
+            ].map((item) => (
+              <div key={item.term} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <dt className="mb-1 flex items-center gap-1 text-xs text-white/40">
+                  {item.icon}
+                  {item.term}
+                </dt>
+                <dd className="text-sm font-medium text-white/80">{item.detail}</dd>
+              </div>
+            ))}
+          </dl>
 
-          <div className="flex flex-wrap gap-2 mb-8">
+          <div className="mb-8 flex flex-wrap gap-2">
             {game.tags.map((tag) => (
-              <span key={tag} className="px-2.5 py-1 rounded-full bg-white/5 text-white/40 text-xs border border-white/5">{tag}</span>
+              <span key={tag} className="rounded-full border border-white/5 bg-white/5 px-2.5 py-1 text-xs text-white/40">
+                {tag}
+              </span>
             ))}
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <a href={`/create/${game.id}`} className="flex-1 py-3.5 rounded-xl font-semibold text-sm text-center transition-all hover:opacity-90" style={{ background: game.gradient }}>
-              Create Room
-            </a>
-            <a href="/games" className="flex-1 py-3.5 rounded-xl font-semibold text-sm text-center glass hover:bg-white/10 transition-all">
-              Back to Games
-            </a>
-          </div>
-        </div>
+          {playable ? (
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <LinkButton
+                href={`/create/${game.id}`}
+                size="md"
+                className="flex-1"
+                style={{ background: game.gradient }}
+              >
+                建立房間
+              </LinkButton>
+              <LinkButton href="/join" variant="glass" size="md" className="flex-1">
+                用代碼加入
+              </LinkButton>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-center">
+              <p className="mb-1 text-sm font-semibold text-white/80">這款遊戲即將推出</p>
+              <p className="mb-4 text-sm text-white/40">
+                內容已經規劃好了，玩法引擎還在開發中。先試試已經開放的遊戲吧。
+              </p>
+              <LinkButton href="/games" variant="ghost" size="md">
+                看看其他遊戲
+              </LinkButton>
+            </div>
+          )}
+        </article>
       </div>
-    </div>
+    </main>
   );
 }

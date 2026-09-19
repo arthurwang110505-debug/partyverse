@@ -2,60 +2,88 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Users } from "lucide-react";
 import Link from "next/link";
+import { ArrowLeft, Users } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { MAX_NICKNAME_LENGTH, NICKNAME_KEY } from "@/constants/room";
+import { sanitizeNickname } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { ErrorNote } from "@/components/ui/ErrorNote";
 
 interface Props {
   roomCode: string;
 }
 
+/** The page a scanned QR code lands on: the code is known, only a name is needed. */
 export default function JoinRoomClient({ roomCode }: Props) {
   const router = useRouter();
-  const { joinRoom, loading } = useRoom();
+  const { joinRoom } = useRoom();
+  const [savedNickname, setSavedNickname] = useLocalStorage(NICKNAME_KEY, "");
   const [nickname, setNickname] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const effectiveNickname = nickname || savedNickname;
+  const canSubmit = effectiveNickname.trim().length > 0 && !submitting;
+
   const handleJoin = async () => {
-    if (!nickname.trim()) { setError("Please enter your name"); return; }
+    if (!canSubmit) return;
     setError("");
+    setSubmitting(true);
     try {
-      await joinRoom(roomCode, nickname.trim());
-      router.refresh();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to join");
+      const cleanName = sanitizeNickname(effectiveNickname);
+      setSavedNickname(cleanName);
+      await joinRoom(roomCode, cleanName);
+      router.push(`/room/${roomCode}/play`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "加入失敗，請再試一次");
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#050508] text-white flex items-center justify-center p-4">
-      <div className="max-w-sm w-full">
-        <Link href="/join" className="inline-flex items-center gap-2 text-white/40 hover:text-white/70 mb-8 transition-colors text-sm">
-          <ArrowLeft className="w-4 h-4" /> Back
+    <main className="flex min-h-screen items-center justify-center bg-ink p-4 text-white">
+      <div className="w-full max-w-sm">
+        <Link
+          href="/join"
+          className="mb-8 inline-flex items-center gap-2 text-sm text-white/40 transition-colors hover:text-white/70"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> 換一間房
         </Link>
 
-        <div className="text-center mb-8">
-          <div className="font-bold text-5xl mb-2 text-white">{roomCode}</div>
-          <p className="text-white/40 text-sm">Enter your name to join</p>
+        <div className="mb-8 text-center">
+          <p className="mb-2 text-5xl font-bold tracking-[0.2em] text-white">{roomCode}</p>
+          <p className="text-sm text-white/40">輸入名字就能加入</p>
         </div>
 
-        <div className="glass-card rounded-2xl p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-white/60 mb-2">Your Name</label>
-            <input type="text" value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="Enter your name..." maxLength={16}
-              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/20 focus:outline-none focus:border-white/20 transition-all"
-              onKeyDown={(e) => e.key === "Enter" && handleJoin()} autoFocus />
-          </div>
+        <form
+          className="glass-card space-y-4 rounded-2xl p-6"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleJoin();
+          }}
+        >
+          <Field
+            label="你的暱稱"
+            name="nickname"
+            value={effectiveNickname}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="輸入你的名字…"
+            maxLength={MAX_NICKNAME_LENGTH}
+            autoComplete="nickname"
+            autoFocus
+          />
 
-          {error && <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center">{error}</div>}
+          <ErrorNote>{error}</ErrorNote>
 
-          <button onClick={handleJoin} disabled={loading || !nickname.trim()}
-            className="w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all bg-white/10 hover:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Users className="w-4 h-4" /> {loading ? "Joining..." : "Join Party"}
-          </button>
-        </div>
+          <Button type="submit" variant="ghost" size="md" disabled={!canSubmit} className="w-full">
+            <Users className="h-4 w-4" aria-hidden="true" />
+            {submitting ? "加入中…" : "加入派對"}
+          </Button>
+        </form>
       </div>
-    </div>
+    </main>
   );
 }

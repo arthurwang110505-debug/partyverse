@@ -1,79 +1,86 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useRoom, usePlayer } from "@/providers/RoomContext";
-import { GAMES } from "@/constants/games";
-import { ArrowLeft, Crown, Wifi, WifiOff } from "lucide-react";
 import Link from "next/link";
+import { ArrowLeft, Crown } from "lucide-react";
+import { useRoom } from "@/providers/RoomContext";
+import { GAMES } from "@/constants/games";
 import { cn } from "@/lib/utils";
 
 interface Props {
   roomCode: string;
 }
 
+/** A player's holding screen while the host gathers everyone in the lobby. */
 export default function PlayClient({ roomCode }: Props) {
-  const router = useRouter();
-  const { room, player } = useRoom();
-  const currentPlayer = usePlayer();
-
-  useEffect(() => {
-    if (!currentPlayer) router.push(`/join/${roomCode}`);
-  }, [currentPlayer, roomCode, router]);
-
+  const { room, player, leaveRoom } = useRoom();
   const game = GAMES.find((g) => g.id === room?.gameId);
-  const isHost = currentPlayer?.isHost || false;
+  const playerList = Object.values(room?.players ?? {});
+  const onlineCount = playerList.filter((p) => p.isConnected).length;
 
   return (
-    <div className="min-h-screen bg-[#050508] text-white p-4">
-      <div className="max-w-md mx-auto pt-8">
-        <div className="flex items-center justify-between mb-6">
-          <Link href="/join" className="p-2 rounded-xl glass hover:bg-white/10 transition-all">
-            <ArrowLeft className="w-5 h-5" />
+    <main className="min-h-screen bg-ink p-4 text-white">
+      <div className="mx-auto max-w-md pt-8">
+        <div className="mb-6 flex items-center justify-between">
+          <Link
+            href="/"
+            onClick={() => void leaveRoom()}
+            aria-label="離開房間並返回首頁"
+            className="glass rounded-xl p-2 transition-all hover:bg-white/10"
+          >
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </Link>
           <div className="text-center">
-            <div className="text-xs text-white/40 uppercase tracking-wider mb-0.5">Room</div>
-            <div className="font-bold text-xl tracking-widest">{roomCode}</div>
+            <p className="mb-0.5 text-xs uppercase tracking-wider text-white/40">房間</p>
+            <p className="text-xl font-bold tracking-widest">{roomCode}</p>
           </div>
-          <div className="flex items-center gap-1 text-emerald-400 text-sm">
-            <Wifi className="w-4 h-4" />
-            <span>{room ? Object.keys(room.players).length : 0}</span>
-          </div>
+          <p className="text-sm text-emerald-400 tabular-nums">
+            <span className="sr-only">在線玩家數</span>
+            {onlineCount}
+          </p>
         </div>
 
         {game && (
-          <div className="glass-card rounded-2xl p-6 mb-6 text-center">
-            <div className="text-5xl mb-3">{game.icon}</div>
-            <h1 className="font-bold text-2xl mb-1">{game.name}</h1>
-            <p className="text-white/40 text-sm">{game.nameEn}</p>
+          <div className="glass-card mb-6 rounded-2xl p-6 text-center">
+            <p className="mb-3 text-5xl" aria-hidden="true">
+              {game.icon}
+            </p>
+            <h1 className="mb-1 text-2xl font-bold">{game.name}</h1>
+            <p lang="en" className="text-sm text-white/40">
+              {game.nameEn}
+            </p>
           </div>
         )}
 
-        {currentPlayer && (
-          <div className="glass rounded-2xl p-4 mb-4 flex items-center gap-3 border border-white/10">
-            <span className="text-3xl">{currentPlayer.avatar}</span>
-            <div className="flex-1">
-              <div className="font-semibold flex items-center gap-2">{currentPlayer.nickname}{currentPlayer.isHost && <Crown className="w-4 h-4 text-yellow-400" />}</div>
-              <div className="text-xs text-white/40">{currentPlayer.isHost ? "Host" : "Player"}</div>
-            </div>
-            <div className={cn("w-2 h-2 rounded-full", currentPlayer.isConnected ? "bg-emerald-400" : "bg-red-500")} />
+        {player && (
+          <div className="glass mb-4 flex items-center gap-3 rounded-2xl border border-white/10 p-4">
+            <span className="text-3xl" aria-hidden="true">
+              {player.avatar}
+            </span>
+            <span className="flex-1">
+              <span className="flex items-center gap-2 font-semibold">
+                {player.nickname}
+                {player.isHost && <Crown className="h-4 w-4 text-yellow-400" aria-label="房主" />}
+              </span>
+              <span className="text-xs text-white/40">{player.isHost ? "房主" : "玩家"}</span>
+            </span>
+            <span
+              className={cn("h-2 w-2 rounded-full", player.isConnected ? "bg-emerald-400" : "bg-red-500")}
+              aria-label={player.isConnected ? "在線" : "離線"}
+            />
           </div>
         )}
 
-        <div className="text-center py-12">
-          {room?.status === "LOBBY" ? (
-            <>
-              <div className="text-5xl mb-4">⏳</div>
-              <h2 className="font-bold text-2xl mb-2">Waiting for Host</h2>
-              <p className="text-white/40 text-sm">The host will start the game soon</p>
-            </>
-          ) : room?.status === "PLAYING" ? (
-            <div className="text-emerald-400 text-xl font-bold animate-pulse">GAME IN PROGRESS</div>
-          ) : (
-            <div className="text-white/30 py-8">Loading...</div>
-          )}
-        </div>
+        <section className="py-12 text-center" role="status" aria-live="polite">
+          <p className="mb-4 text-5xl" aria-hidden="true">
+            ⏳
+          </p>
+          <h2 className="mb-2 text-2xl font-bold">等待房主開始</h2>
+          <p className="text-sm text-white/40">
+            目前 {onlineCount} 人在房間裡
+            {game ? `，湊滿 ${game.minPlayers} 人就能開始` : ""}
+          </p>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
