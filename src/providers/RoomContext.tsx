@@ -26,6 +26,7 @@ import {
   saveLocalRoom,
   subscribeLocalRoom,
 } from "@/lib/localRoomStore";
+import { joinRoomOnFirebase } from "@/lib/firebaseJoin";
 import { generateRoomCode, pickAvatar, sanitizeNickname } from "@/lib/utils";
 import { getGameEngine } from "@/engine";
 import { sfx } from "@/lib/sound";
@@ -509,54 +510,31 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       const authUser = await ensureAuth();
       const nickname = sanitizeNickname(rawNickname) || "玩家";
 
+      // The most accurate error to surface if neither Firebase nor the local
+      // store has this room.
+      let failure: Error | null = null;
+
       // Attempt Firebase mode
       if (db && connectionStatus !== "local") {
-        try {
-          const result = await withTimeout(
-            runTransaction(ref(db, `rooms/${roomCode}`), (current) => {
-              if (current === null) return undefined; // no such room
-              const players = (current.players ?? {}) as Record<string, Player>;
-              const existing = players[authUser.uid];
-              if (!existing && Object.keys(players).length >= maxPlayersFor(String(current.gameId))) {
-                throw new Error("房間已額滿");
-              }
-              const avatar = existing?.avatar ?? pickAvatar(nickname, Object.values(players).map((p) => p.avatar));
-              return {
-                ...current,
-                players: {
-                  ...players,
-                  [authUser.uid]: {
-                    id: authUser.uid,
-                    nickname,
-                    avatar,
-                    isHost: Boolean(existing?.isHost),
-                    isConnected: true,
-                    isReady: Boolean(existing?.isReady),
-                    score: existing?.score ?? 0,
-                  } satisfies Player,
-                },
-              };
-            }),
-            7000,
-            "加入房間連線逾時",
-          );
-
-          if (result.committed && result.snapshot.val() !== null) {
-            markDisconnectedOnLeave(roomCode, authUser.uid);
-            rememberNickname(nickname);
-            writeSession({ userId: authUser.uid, roomCode, nickname });
-            setUser(authUser);
-            subscribe(roomCode, authUser.uid);
-            return;
-          }
-        } catch (firebaseErr) {
-          console.warn("[partyverse] Firebase joinRoom error or not found, testing local store:", firebaseErr);
+        const result = await joinRoomOnFirebase(db, roomCode, authUser.uid, nickname);
+        if (result.outcome === "joined") {
+          markDisconnectedOnLeave(roomCode, authUser.uid);
+          rememberNickname(nickname);
+          writeSession({ userId: authUser.uid, roomCode, nickname });
+          setUser(authUser);
+          subscribe(roomCode, authUser.uid);
+          return;
         }
+        if (result.outcome === "full") throw new Error("房間已額滿");
+        if (result.outcome === "error") failure = result.error;
+        else failure = new Error("找不到這個房間，請確認代碼是否輸入正確");
+        // Fall through to the local demo store — a same-browser local demo room
+        // may still exist under this code.
       }
 
       // Local mode fallback
       const current = getLocalRoom(roomCode);
-      if (!current) throw new Error("找不到這個房間，請確認代碼或網路連線");
+      if (!current) throw failure ?? new Error("找不到這個房間，請確認代碼或網路連線");
       const players = current.players ?? {};
       const existing = players[authUser.uid];
       if (!existing && Object.keys(players).length >= maxPlayersFor(String(current.gameId))) {
