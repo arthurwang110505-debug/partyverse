@@ -30,7 +30,7 @@ const DIFFICULTIES: Array<{ value: RoomSettings["difficulty"]; label: string; hi
 
 export default function CreateRoomClient({ gameId }: Props) {
   const router = useRouter();
-  const { createRoom } = useRoom();
+  const { createRoom, isLocalMode } = useRoom();
   const game = GAMES.find((g) => g.id === gameId);
 
   const [savedNickname, setSavedNickname] = useLocalStorage(NICKNAME_KEY, "");
@@ -165,6 +165,12 @@ export default function CreateRoomClient({ gameId }: Props) {
               </>
             )}
           </Button>
+
+          {isLocalMode && (
+            <p className="text-center text-xs text-cyan-400/70">
+              💡 本地展示模式：建立後可開啟另一個瀏覽器視窗/無痕分頁加入同樂
+            </p>
+          )}
         </form>
       </div>
     </main>
