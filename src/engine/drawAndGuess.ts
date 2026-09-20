@@ -15,6 +15,18 @@ export const DRAW_PROMPTS: DrawPrompt[] = [
   { id: "d4", word: "摩天輪", category: "遊樂設施" },
   { id: "d5", word: "恐龍", category: "動物" },
   { id: "d6", word: "外星人", category: "神秘生物" },
+  { id: "d7", word: "珍珠奶茶", category: "飲食" },
+  { id: "d8", word: "吉他", category: "樂器" },
+  { id: "d9", word: "火箭", category: "太空" },
+  { id: "d10", word: "企鵝", category: "動物" },
+  { id: "d11", word: "富士山", category: "地標" },
+  { id: "d12", word: "超人", category: "超級英雄" },
+  { id: "d13", word: "比薩", category: "食物" },
+  { id: "d14", word: "海綿寶寶", category: "卡通角色" },
+  { id: "d15", word: "章魚", category: "海洋生物" },
+  { id: "d16", word: "彩虹", category: "自然" },
+  { id: "d17", word: "滑板", category: "運動" },
+  { id: "d18", word: "爆米花", category: "食物" },
 ];
 
 export type DrawPhase = "drawing" | "reveal" | "result";
@@ -55,7 +67,11 @@ export interface ClearCanvasAction {
   type: "clearCanvas";
 }
 
-export type DrawAction = AddStrokeAction | GuessWordAction | ClearCanvasAction;
+export interface UndoStrokeAction {
+  type: "undoStroke";
+}
+
+export type DrawAction = AddStrokeAction | GuessWordAction | ClearCanvasAction | UndoStrokeAction;
 
 function initialScores(players: Room["players"]): Record<string, number> {
   const scores: Record<string, number> = {};
@@ -104,6 +120,10 @@ export const DrawAndGuessEngine: GameEngine<DrawGameState> = {
 
     if (act?.type === "clearCanvas" && playerId === state.drawerPlayerId) {
       return { ...state, strokes: [] };
+    }
+
+    if (act?.type === "undoStroke" && playerId === state.drawerPlayerId) {
+      return { ...state, strokes: state.strokes.slice(0, -1) };
     }
 
     if (act?.type === "guessWord" && playerId !== state.drawerPlayerId) {

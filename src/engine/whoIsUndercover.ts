@@ -18,6 +18,21 @@ export const WORD_PAIRS: WordPair[] = [
   { civilianWord: "太陽眼鏡", undercoverWord: "護目鏡" },
   { civilianWord: "吉他", undercoverWord: "烏克麗麗" },
   { civilianWord: "雨傘", undercoverWord: "雨衣" },
+  { civilianWord: "小籠包", undercoverWord: "水煎包" },
+  { civilianWord: "麻辣鍋", undercoverWord: "壽喜燒" },
+  { civilianWord: "西瓜", undercoverWord: "哈密瓜" },
+  { civilianWord: "貓咪", undercoverWord: "狐狸" },
+  { civilianWord: "咖啡", undercoverWord: "奶茶" },
+  { civilianWord: "電影院", undercoverWord: "歌劇院" },
+  { civilianWord: "跑步機", undercoverWord: "腳踏車" },
+  { civilianWord: "手機", undercoverWord: "平板電腦" },
+  { civilianWord: "泡麵", undercoverWord: "乾拌麵" },
+  { civilianWord: "拖鞋", undercoverWord: "涼鞋" },
+  { civilianWord: "口紅", undercoverWord: "護唇膏" },
+  { civilianWord: "圍巾", undercoverWord: "毛毯" },
+  { civilianWord: "羽球", undercoverWord: "網球" },
+  { civilianWord: "可樂", undercoverWord: "雪碧" },
+  { civilianWord: "護照", undercoverWord: "身分證" },
 ];
 
 export type UndercoverPhase = "viewing_words" | "discussion" | "voting" | "eliminated" | "result";

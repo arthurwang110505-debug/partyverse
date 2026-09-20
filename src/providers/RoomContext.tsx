@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   get,
+  goOnline,
   onDisconnect,
   onValue,
   ref,
@@ -14,7 +15,7 @@ import {
   type Database,
 } from "firebase/database";
 import { onAuthStateChanged, signInAnonymously, type User } from "firebase/auth";
-import type { GameSummary, Player, Room, RoomSettings } from "@/types";
+import type { Player, ReactionItem, Room, RoomSettings } from "@/types";
 import { GAMES } from "@/constants/games";
 import { NICKNAME_KEY, ROOM_TTL_MS, SESSION_KEY } from "@/constants/room";
 import { db, auth as authInstance } from "@/lib/firebase";
@@ -27,9 +28,12 @@ import {
 } from "@/lib/localRoomStore";
 import { generateRoomCode, pickAvatar, sanitizeNickname } from "@/lib/utils";
 import { getGameEngine } from "@/engine";
+import { sfx } from "@/lib/sound";
 
 /** How often the host advances the game clock. */
 const TICK_MS = 1000;
+
+export type ConnectionStatus = "connected" | "connecting" | "reconnecting" | "disconnected" | "local";
 
 interface RoomContextValue {
   room: Room | null;
@@ -39,6 +43,7 @@ interface RoomContextValue {
   loading: boolean;
   isHost: boolean;
   isLocalMode: boolean;
+  connectionStatus: ConnectionStatus;
   createRoom: (gameId: string, nickname: string, settings?: RoomSettings) => Promise<string>;
   joinRoom: (roomCode: string, nickname: string) => Promise<void>;
   leaveRoom: () => Promise<void>;
@@ -51,6 +56,9 @@ interface RoomContextValue {
   switchGame: (newGameId: string) => Promise<void>;
   updateSettings: (patch: Partial<RoomSettings>) => Promise<void>;
   submitAction: (action: unknown) => Promise<void>;
+  toggleReady: () => Promise<void>;
+  sendReaction: (emoji: string) => Promise<void>;
+  addMockPlayer: () => Promise<void>;
 }
 
 const RoomContext = createContext<RoomContextValue | null>(null);
@@ -69,13 +77,34 @@ interface StoredSession {
   nickname: string;
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, errorMsg: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(errorMsg));
+    }, ms);
+    promise
+      .then((res) => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 function readSession(): StoredSession | null {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<StoredSession>;
     if (!parsed?.userId || !parsed?.roomCode) return null;
-    return { userId: parsed.userId, roomCode: parsed.roomCode, nickname: parsed.nickname ?? "" };
+    return {
+      userId: String(parsed.userId),
+      roomCode: String(parsed.roomCode),
+      nickname: typeof parsed.nickname === "string" ? parsed.nickname : String(parsed.nickname ?? ""),
+    };
   } catch {
     return null;
   }
@@ -92,7 +121,7 @@ function writeSession(session: StoredSession | null) {
 
 function rememberNickname(nickname: string) {
   try {
-    localStorage.setItem(NICKNAME_KEY, nickname);
+    localStorage.setItem(NICKNAME_KEY, JSON.stringify(nickname));
   } catch {
     /* ignore */
   }
@@ -121,9 +150,30 @@ function parseRoom(data: Record<string, unknown> | null, roomCode: string): Room
           avatar: String(playerObj.avatar ?? "👾"),
           isHost: Boolean(playerObj.isHost),
           isConnected: playerObj.isConnected !== false,
+          isReady: Boolean(playerObj.isReady),
           score: Number(playerObj.score) || 0,
           leftAt: playerObj.leftAt,
         };
+      }
+    }
+  }
+
+  const rawReactions = (data.reactions ?? {}) as Record<string, unknown>;
+  const cleanReactions: Record<string, ReactionItem> = {};
+  const now = Date.now();
+  if (typeof rawReactions === "object" && rawReactions !== null) {
+    for (const [id, r] of Object.entries(rawReactions)) {
+      if (r && typeof r === "object") {
+        const rec = r as Partial<ReactionItem>;
+        // Keep reactions active for 6 seconds
+        if (now - Number(rec.at || 0) < 6000) {
+          cleanReactions[id] = {
+            id: String(rec.id ?? id),
+            emoji: String(rec.emoji ?? "🎉"),
+            nickname: String(rec.nickname ?? "玩家"),
+            at: Number(rec.at) || now,
+          };
+        }
       }
     }
   }
@@ -137,6 +187,7 @@ function parseRoom(data: Record<string, unknown> | null, roomCode: string): Room
     expiresAt: data.expiresAt as number | undefined,
     settings: (data.settings as RoomSettings) ?? FALLBACK_SETTINGS,
     players: cleanPlayers,
+    reactions: cleanReactions,
     gameState: (data.gameState as Record<string, unknown>) ?? {},
     lastTickAt: data.lastTickAt as number | undefined,
     startedAt: data.startedAt as number | undefined,
@@ -152,8 +203,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const [player, setPlayer] = useState<Player | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(db ? "connecting" : "local");
 
-  const isLocalMode = !db;
+  const isLocalMode = !db || connectionStatus === "local";
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
   const stopListening = useCallback(() => {
@@ -167,7 +219,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const subscribe = useCallback(
     (roomCode: string, userId: string) => {
       stopListening();
-      if (db) {
+      if (db && connectionStatus !== "local") {
         unsubscribeRef.current = onValue(
           ref(db, `rooms/${roomCode}`),
           (snap) => {
@@ -199,7 +251,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [stopListening],
+    [stopListening, connectionStatus],
   );
 
   useEffect(() => stopListening, [stopListening]);
@@ -215,6 +267,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       const localUid = getLocalUserId();
       const mockUser = { uid: localUid, isAnonymous: true } as unknown as User;
       setUser(mockUser);
+      setConnectionStatus("local");
       if (stored) {
         const localRoom = getLocalRoom(stored.roomCode);
         if (localRoom && localRoom.players?.[stored.userId]) {
@@ -241,12 +294,24 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         return;
       }
       try {
-        const snap = await get(ref(database, `rooms/${stored.roomCode}/players/${stored.userId}`));
+        const snap = await withTimeout(
+          get(ref(database, `rooms/${stored.roomCode}/players/${stored.userId}`)),
+          4000,
+          "Session restore timeout",
+        );
         if (cancelled) return;
         if (snap.exists()) subscribe(stored.roomCode, stored.userId);
         else writeSession(null);
       } catch (error) {
-        console.error("[partyverse] Session restore failed:", error);
+        console.warn("[partyverse] Firebase session restore check:", error);
+        // Fallback check in local room store
+        const localRoom = getLocalRoom(stored.roomCode);
+        if (localRoom && localRoom.players?.[stored.userId]) {
+          setConnectionStatus("local");
+          subscribe(stored.roomCode, stored.userId);
+        } else {
+          writeSession(null);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -259,16 +324,64 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }, [subscribe]);
 
   /**
-   * Presence: re-assert `isConnected` whenever the socket comes back (Firebase mode only).
+   * Presence & Reconnection management:
+   * 1. Re-assert `isConnected` whenever socket reconnects.
+   * 2. Re-attach `onDisconnect` upon every reconnection so future drops trigger clean status.
+   * 3. Handle `visibilitychange` and `online` events to immediately wake up sleeping WebSockets on mobile.
    */
   useEffect(() => {
+    const database = db;
+    if (!database) {
+      setConnectionStatus("local");
+      return;
+    }
+
+    const handleWake = () => {
+      if (!document.hidden) {
+        try {
+          goOnline(database);
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    const handleOnline = () => {
+      try {
+        goOnline(database);
+      } catch {
+        // ignore
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleWake);
+    window.addEventListener("online", handleOnline);
+
     const roomId = room?.id;
     const uid = user?.uid;
-    if (!db || !roomId || !uid) return;
-    const playerRef = ref(db, `rooms/${roomId}/players/${uid}`);
-    return onValue(ref(db, ".info/connected"), (snap) => {
-      if (snap.val() === true) void update(playerRef, { isConnected: true }).catch(() => undefined);
+    const connectedRef = ref(database, ".info/connected");
+
+    const unsubscribeConnected = onValue(connectedRef, (snap) => {
+      const isConnected = snap.val() === true;
+      if (isConnected) {
+        setConnectionStatus("connected");
+        if (roomId && uid) {
+          const playerRef = ref(database, `rooms/${roomId}/players/${uid}`);
+          void update(playerRef, { isConnected: true }).catch(() => undefined);
+          void onDisconnect(playerRef)
+            .update({ isConnected: false, leftAt: serverTimestamp() })
+            .catch(() => undefined);
+        }
+      } else {
+        setConnectionStatus("reconnecting");
+      }
     });
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleWake);
+      window.removeEventListener("online", handleOnline);
+      unsubscribeConnected();
+    };
   }, [room?.id, user?.uid]);
 
   const ensureAuth = useCallback(async (): Promise<User> => {
@@ -279,8 +392,21 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       return mockUser;
     }
     if (authInstance.currentUser) return authInstance.currentUser;
-    const cred = await signInAnonymously(authInstance);
-    return cred.user;
+
+    try {
+      const cred = await withTimeout(
+        signInAnonymously(authInstance),
+        6000,
+        "Firebase 匿名認證逾時",
+      );
+      return cred.user;
+    } catch (err) {
+      console.warn("[partyverse] Firebase Auth failed, falling back to local user:", err);
+      const localUid = getLocalUserId();
+      const mockUser = { uid: localUid, isAnonymous: true } as unknown as User;
+      setUser(mockUser);
+      return mockUser;
+    }
   }, []);
 
   const createRoom = useCallback(
@@ -293,76 +419,88 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       const nickname = sanitizeNickname(rawNickname) || "房主";
       const baseSettings: RoomSettings = { ...FALLBACK_SETTINGS, ...settings };
 
-      if (!db) {
-        // Local mode
-        const candidate = generateRoomCode();
-        const hostPlayer: Player = {
-          id: authUser.uid,
-          nickname,
-          avatar: pickAvatar(nickname, []),
-          isHost: true,
-          isConnected: true,
-          score: 0,
-        };
-        const now = Date.now();
-        const newRoom: Room = {
-          id: candidate,
-          gameId,
-          hostPlayerId: authUser.uid,
-          status: "LOBBY",
-          createdAt: now,
-          expiresAt: now + ROOM_TTL_MS,
-          settings: baseSettings,
-          players: { [authUser.uid]: hostPlayer },
-          gameState: {},
-        };
-        saveLocalRoom(newRoom);
-        rememberNickname(nickname);
-        writeSession({ userId: authUser.uid, roomCode: candidate, nickname });
-        setUser(authUser);
-        subscribe(candidate, authUser.uid);
-        return candidate;
+      // Attempt Firebase mode first if available
+      if (db && connectionStatus !== "local") {
+        try {
+          let roomCode: string | null = null;
+          for (let attempt = 0; attempt < 8 && roomCode === null; attempt++) {
+            const candidate = generateRoomCode();
+            const hostPlayer: Player = {
+              id: authUser.uid,
+              nickname,
+              avatar: pickAvatar(nickname, []),
+              isHost: true,
+              isConnected: true,
+              isReady: true,
+              score: 0,
+            };
+            const now = Date.now();
+            const result = await withTimeout(
+              runTransaction(ref(db, `rooms/${candidate}`), (current) => {
+                if (current !== null) return undefined; // code already taken
+                return {
+                  id: candidate,
+                  gameId,
+                  hostPlayerId: authUser.uid,
+                  status: "LOBBY",
+                  createdAt: now,
+                  expiresAt: now + ROOM_TTL_MS,
+                  settings: baseSettings,
+                  players: { [authUser.uid]: hostPlayer },
+                  gameState: {},
+                };
+              }),
+              7000,
+              "Firebase 房間建立連線逾時",
+            );
+            if (result.committed) roomCode = candidate;
+          }
+
+          if (roomCode) {
+            markDisconnectedOnLeave(roomCode, authUser.uid);
+            rememberNickname(nickname);
+            writeSession({ userId: authUser.uid, roomCode, nickname });
+            setUser(authUser);
+            subscribe(roomCode, authUser.uid);
+            return roomCode;
+          }
+        } catch (firebaseErr) {
+          console.warn("[partyverse] Firebase createRoom failed, auto-falling back to local mode:", firebaseErr);
+          setConnectionStatus("local");
+        }
       }
 
-      // Firebase mode
-      let roomCode: string | null = null;
-      for (let attempt = 0; attempt < 12 && roomCode === null; attempt++) {
-        const candidate = generateRoomCode();
-        const hostPlayer: Player = {
-          id: authUser.uid,
-          nickname,
-          avatar: pickAvatar(nickname, []),
-          isHost: true,
-          isConnected: true,
-          score: 0,
-        };
-        const now = Date.now();
-        const result = await runTransaction(ref(db, `rooms/${candidate}`), (current) => {
-          if (current !== null) return undefined; // code already taken — abort
-          return {
-            id: candidate,
-            gameId,
-            hostPlayerId: authUser.uid,
-            status: "LOBBY",
-            createdAt: now,
-            expiresAt: now + ROOM_TTL_MS,
-            settings: baseSettings,
-            players: { [authUser.uid]: hostPlayer },
-            gameState: {},
-          };
-        });
-        if (result.committed) roomCode = candidate;
-      }
-      if (!roomCode) throw new Error("無法建立房間，請再試一次");
-
-      markDisconnectedOnLeave(roomCode, authUser.uid);
+      // Local mode fallback
+      const candidate = generateRoomCode();
+      const hostPlayer: Player = {
+        id: authUser.uid,
+        nickname,
+        avatar: pickAvatar(nickname, []),
+        isHost: true,
+        isConnected: true,
+        isReady: true,
+        score: 0,
+      };
+      const now = Date.now();
+      const newRoom: Room = {
+        id: candidate,
+        gameId,
+        hostPlayerId: authUser.uid,
+        status: "LOBBY",
+        createdAt: now,
+        expiresAt: now + ROOM_TTL_MS,
+        settings: baseSettings,
+        players: { [authUser.uid]: hostPlayer },
+        gameState: {},
+      };
+      saveLocalRoom(newRoom);
       rememberNickname(nickname);
-      writeSession({ userId: authUser.uid, roomCode, nickname });
+      writeSession({ userId: authUser.uid, roomCode: candidate, nickname });
       setUser(authUser);
-      subscribe(roomCode, authUser.uid);
-      return roomCode;
+      subscribe(candidate, authUser.uid);
+      return candidate;
     },
-    [ensureAuth, subscribe],
+    [ensureAuth, subscribe, connectionStatus],
   );
 
   const joinRoom = useCallback(
@@ -371,125 +509,164 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       const authUser = await ensureAuth();
       const nickname = sanitizeNickname(rawNickname) || "玩家";
 
-      if (!db) {
-        // Local mode
-        const current = getLocalRoom(roomCode);
-        if (!current) throw new Error("找不到這個房間，請確認代碼");
-        const players = current.players ?? {};
-        const existing = players[authUser.uid];
-        if (!existing && Object.keys(players).length >= maxPlayersFor(String(current.gameId))) {
-          throw new Error("房間已額滿");
+      // Attempt Firebase mode
+      if (db && connectionStatus !== "local") {
+        try {
+          const result = await withTimeout(
+            runTransaction(ref(db, `rooms/${roomCode}`), (current) => {
+              if (current === null) return undefined; // no such room
+              const players = (current.players ?? {}) as Record<string, Player>;
+              const existing = players[authUser.uid];
+              if (!existing && Object.keys(players).length >= maxPlayersFor(String(current.gameId))) {
+                throw new Error("房間已額滿");
+              }
+              const avatar = existing?.avatar ?? pickAvatar(nickname, Object.values(players).map((p) => p.avatar));
+              return {
+                ...current,
+                players: {
+                  ...players,
+                  [authUser.uid]: {
+                    id: authUser.uid,
+                    nickname,
+                    avatar,
+                    isHost: Boolean(existing?.isHost),
+                    isConnected: true,
+                    isReady: Boolean(existing?.isReady),
+                    score: existing?.score ?? 0,
+                  } satisfies Player,
+                },
+              };
+            }),
+            7000,
+            "加入房間連線逾時",
+          );
+
+          if (result.committed && result.snapshot.val() !== null) {
+            markDisconnectedOnLeave(roomCode, authUser.uid);
+            rememberNickname(nickname);
+            writeSession({ userId: authUser.uid, roomCode, nickname });
+            setUser(authUser);
+            subscribe(roomCode, authUser.uid);
+            return;
+          }
+        } catch (firebaseErr) {
+          console.warn("[partyverse] Firebase joinRoom error or not found, testing local store:", firebaseErr);
         }
-        const avatar = existing?.avatar ?? pickAvatar(nickname, Object.values(players).map((p) => p.avatar));
-        const updated: Room = {
-          ...current,
-          players: {
-            ...players,
-            [authUser.uid]: {
-              id: authUser.uid,
-              nickname,
-              avatar,
-              isHost: Boolean(existing?.isHost),
-              isConnected: true,
-              score: existing?.score ?? 0,
-            },
-          },
-        };
-        saveLocalRoom(updated);
-        rememberNickname(nickname);
-        writeSession({ userId: authUser.uid, roomCode, nickname });
-        setUser(authUser);
-        subscribe(roomCode, authUser.uid);
-        return;
       }
 
-      // Firebase mode
-      const result = await runTransaction(ref(db, `rooms/${roomCode}`), (current) => {
-        if (current === null) return undefined; // no such room — abort
-        const players = (current.players ?? {}) as Record<string, Player>;
-        const existing = players[authUser.uid];
-        if (!existing && Object.keys(players).length >= maxPlayersFor(String(current.gameId))) {
-          throw new Error("房間已額滿");
-        }
-        const avatar = existing?.avatar ?? pickAvatar(nickname, Object.values(players).map((p) => p.avatar));
-        return {
-          ...current,
-          players: {
-            ...players,
-            [authUser.uid]: {
-              id: authUser.uid,
-              nickname,
-              avatar,
-              isHost: Boolean(existing?.isHost),
-              isConnected: true,
-              score: existing?.score ?? 0,
-            } satisfies Player,
+      // Local mode fallback
+      const current = getLocalRoom(roomCode);
+      if (!current) throw new Error("找不到這個房間，請確認代碼或網路連線");
+      const players = current.players ?? {};
+      const existing = players[authUser.uid];
+      if (!existing && Object.keys(players).length >= maxPlayersFor(String(current.gameId))) {
+        throw new Error("房間已額滿");
+      }
+      const avatar = existing?.avatar ?? pickAvatar(nickname, Object.values(players).map((p) => p.avatar));
+      const updated: Room = {
+        ...current,
+        players: {
+          ...players,
+          [authUser.uid]: {
+            id: authUser.uid,
+            nickname,
+            avatar,
+            isHost: Boolean(existing?.isHost),
+            isConnected: true,
+            isReady: Boolean(existing?.isReady),
+            score: existing?.score ?? 0,
           },
-        };
-      });
-
-      if (!result.committed || result.snapshot.val() === null) throw new Error("找不到這個房間，請確認代碼");
-
-      markDisconnectedOnLeave(roomCode, authUser.uid);
+        },
+      };
+      setConnectionStatus("local");
+      saveLocalRoom(updated);
       rememberNickname(nickname);
       writeSession({ userId: authUser.uid, roomCode, nickname });
       setUser(authUser);
       subscribe(roomCode, authUser.uid);
     },
-    [ensureAuth, subscribe],
+    [ensureAuth, subscribe, connectionStatus],
   );
 
   const leaveRoom = useCallback(async () => {
     const uid = user?.uid;
     const currentRoom = room;
     stopListening();
-    if (currentRoom && uid) {
-      if (db) {
-        await remove(ref(db, `rooms/${currentRoom.id}/players/${uid}`)).catch(() => undefined);
-      } else {
-        const local = getLocalRoom(currentRoom.id);
-        if (local && local.players?.[uid]) {
-          const { [uid]: _, ...rest } = local.players;
-          saveLocalRoom({ ...local, players: rest });
-        }
-      }
-    }
-    writeSession(null);
     setRoom(null);
     setPlayer(null);
-  }, [room, stopListening, user?.uid]);
+    writeSession(null);
+
+    if (!currentRoom || !uid) return;
+
+    if (db && connectionStatus !== "local") {
+      try {
+        await update(ref(db, `rooms/${currentRoom.id}/players/${uid}`), {
+          isConnected: false,
+          leftAt: serverTimestamp(),
+        });
+      } catch {
+        // ignore
+      }
+    } else {
+      const local = getLocalRoom(currentRoom.id);
+      if (local && local.players?.[uid]) {
+        saveLocalRoom({
+          ...local,
+          players: {
+            ...local.players,
+            [uid]: { ...local.players[uid], isConnected: false, leftAt: Date.now() },
+          },
+        });
+      }
+    }
+  }, [room, user, stopListening, connectionStatus]);
 
   const endRoom = useCallback(async () => {
     const currentRoom = room;
-    if (currentRoom) {
-      if (db) {
-        await remove(ref(db, `rooms/${currentRoom.id}`)).catch(() => undefined);
-      } else {
-        deleteLocalRoom(currentRoom.id);
-      }
-    }
+    if (!currentRoom) return;
+
     stopListening();
-    writeSession(null);
     setRoom(null);
     setPlayer(null);
-  }, [room, stopListening]);
+    writeSession(null);
 
-  /** Asserts the caller is the host and hands back everything the write needs. */
+    if (db && connectionStatus !== "local") {
+      try {
+        await remove(ref(db, `rooms/${currentRoom.id}`));
+      } catch {
+        // ignore
+      }
+    } else {
+      deleteLocalRoom(currentRoom.id);
+    }
+  }, [room, stopListening, connectionStatus]);
+
   const requireHost = useCallback((): HostContext => {
     if (!room) throw new Error("尚未加入房間");
-    if (!user || room.hostPlayerId !== user.uid) throw new Error("只有房主可以執行這個操作");
-    if (db) {
-      return { database: db, roomRef: ref(db, `rooms/${room.id}`), current: room, uid: user.uid };
+    if (!user) throw new Error("尚未登入");
+    if (room.hostPlayerId !== user.uid) throw new Error("只有房主可以執行此操作");
+    if (!db || connectionStatus === "local") {
+      return {
+        database: null as unknown as Database,
+        roomRef: null as unknown as DatabaseReference,
+        current: room,
+        uid: user.uid,
+      };
     }
-    // Return dummy host context for local mode
-    return { database: null as unknown as Database, roomRef: null as unknown as DatabaseReference, current: room, uid: user.uid };
-  }, [room, user]);
+    return {
+      database: db,
+      roomRef: ref(db, `rooms/${room.id}`),
+      current: room,
+      uid: user.uid,
+    };
+  }, [room, user, connectionStatus]);
 
   const kickPlayer = useCallback(
     async (playerId: string) => {
       const { current } = requireHost();
       if (playerId === current.hostPlayerId) throw new Error("不能移除房主");
-      if (db) {
+
+      if (db && connectionStatus !== "local") {
         await remove(ref(db, `rooms/${current.id}/players/${playerId}`));
       } else {
         const local = getLocalRoom(current.id);
@@ -499,13 +676,13 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [requireHost],
+    [requireHost, connectionStatus],
   );
 
   const claimHost = useCallback(async () => {
     if (!room || !user) throw new Error("尚未加入房間");
     const uid = user.uid;
-    if (db) {
+    if (db && connectionStatus !== "local") {
       await runTransaction(ref(db, `rooms/${room.id}`), (current) => {
         if (!current) return undefined;
         const players = (current.players ?? {}) as Record<string, Player>;
@@ -527,7 +704,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       };
       saveLocalRoom(updated);
     }
-  }, [room, user]);
+  }, [room, user, connectionStatus]);
 
   const startGame = useCallback(async () => {
     const { current } = requireHost();
@@ -538,7 +715,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     const min = GAMES.find((g) => g.id === current.gameId)?.minPlayers ?? 2;
     if (online < min) throw new Error(`至少需要 ${min} 位玩家才能開始`);
 
-    if (db) {
+    if (db && connectionStatus !== "local") {
       const { roomRef } = requireHost();
       await runTransaction(roomRef, (current) => {
         if (!current || current.status !== "LOBBY") return undefined;
@@ -562,14 +739,14 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       };
       saveLocalRoom(updated);
     }
-  }, [requireHost]);
+  }, [requireHost, connectionStatus]);
 
   const endRound = useCallback(async () => {
     const { current } = requireHost();
     const engine = getGameEngine(room?.gameId ?? "");
     if (!engine) throw new Error("這個遊戲還沒有可玩的內容");
 
-    if (db) {
+    if (db && connectionStatus !== "local") {
       const { roomRef } = requireHost();
       await runTransaction(roomRef, (current) => {
         if (!current || current.status !== "PLAYING") return undefined;
@@ -585,52 +762,64 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       };
       saveLocalRoom(updated);
     }
-  }, [requireHost, room?.gameId]);
+  }, [requireHost, room?.gameId, connectionStatus]);
 
   const endGame = useCallback(async () => {
     const { current } = requireHost();
     const engine = getGameEngine(room?.gameId ?? "");
+    if (!engine) throw new Error("這個遊戲還沒有可玩的內容");
 
-    if (db) {
+    const summary = engine.endGame(current);
+
+    if (db && connectionStatus !== "local") {
       const { roomRef } = requireHost();
       await runTransaction(roomRef, (current) => {
-        if (!current || current.status !== "PLAYING") return undefined;
-        const gameState = (current.gameState ?? {}) as Record<string, unknown>;
-        const summary: GameSummary | null = engine ? engine.endGame(current as unknown as Room) : null;
+        if (!current) return undefined;
         return {
           ...current,
           status: "RESULTS",
-          gameState: summary
-            ? { ...gameState, currentScores: summary.scores, achievements: summary.achievements, winnerId: summary.winnerId }
-            : gameState,
+          lastTickAt: Date.now(),
+          gameState: {
+            ...(current.gameState as Record<string, unknown>),
+            currentScores: summary.scores,
+            achievements: summary.achievements,
+            winnerId: summary.winnerId,
+          },
         };
       });
     } else {
       const local = getLocalRoom(current.id);
-      if (!local || local.status !== "PLAYING") return;
-      const gameState = (local.gameState ?? {}) as Record<string, unknown>;
-      const summary: GameSummary | null = engine ? engine.endGame(local) : null;
+      if (!local) return;
       const updated: Room = {
         ...local,
         status: "RESULTS",
-        gameState: summary
-          ? { ...gameState, currentScores: summary.scores, achievements: summary.achievements, winnerId: summary.winnerId }
-          : gameState,
+        lastTickAt: Date.now(),
+        gameState: {
+          ...local.gameState,
+          currentScores: summary.scores,
+          achievements: summary.achievements,
+          winnerId: summary.winnerId,
+        },
       };
       saveLocalRoom(updated);
     }
-  }, [requireHost, room?.gameId]);
+  }, [requireHost, room?.gameId, connectionStatus]);
 
   const switchGame = useCallback(
     async (newGameId: string) => {
       const { current } = requireHost();
-      if (!getGameEngine(newGameId)) {
-        const name = GAMES.find((g) => g.id === newGameId)?.name ?? newGameId;
-        throw new Error(`${name} 尚未開放，敬請期待`);
-      }
-      if (db) {
+      const game = GAMES.find((g) => g.id === newGameId);
+      if (!game) throw new Error("找不到這個遊戲");
+
+      if (db && connectionStatus !== "local") {
         const { roomRef } = requireHost();
-        await update(roomRef, { gameId: newGameId, status: "LOBBY", gameState: {}, startedAt: null, lastTickAt: null });
+        await update(roomRef, {
+          gameId: newGameId,
+          status: "LOBBY",
+          gameState: {},
+          startedAt: null,
+          lastTickAt: null,
+        });
       } else {
         const local = getLocalRoom(current.id);
         if (local) {
@@ -645,13 +834,13 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [requireHost],
+    [requireHost, connectionStatus],
   );
 
   const updateSettings = useCallback(
     async (patch: Partial<RoomSettings>) => {
       const { current } = requireHost();
-      if (db) {
+      if (db && connectionStatus !== "local") {
         await update(ref(db, `rooms/${current.id}/settings`), patch);
       } else {
         const local = getLocalRoom(current.id);
@@ -660,7 +849,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [requireHost],
+    [requireHost, connectionStatus],
   );
 
   const submitAction = useCallback(
@@ -670,13 +859,12 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       if (!engine) return;
       const uid = user.uid;
 
-      if (db) {
-        await runTransaction(ref(db, `rooms/${room.id}`), (current) => {
-          if (!current || current.status !== "PLAYING") return undefined;
-          const before = current.gameState;
-          const next = engine.handlePlayerAction(current as unknown as Room, uid, action);
-          if (next === before) return undefined;
-          return { ...current, gameState: next };
+      if (db && connectionStatus !== "local") {
+        await runTransaction(ref(db, `rooms/${room.id}/gameState`), (current) => {
+          if (!current) return undefined;
+          const mockRoom = { ...room, gameState: current } as Room;
+          const next = engine.handlePlayerAction(mockRoom, uid, action);
+          return next;
         });
       } else {
         const local = getLocalRoom(room.id);
@@ -685,8 +873,108 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         saveLocalRoom({ ...local, gameState: next });
       }
     },
-    [room, user],
+    [room, user, connectionStatus],
   );
+
+  const toggleReady = useCallback(async () => {
+    if (!room || !user || !player) return;
+    const nextState = !player.isReady;
+    if (nextState) sfx.playReady();
+
+    if (db && connectionStatus !== "local") {
+      try {
+        await update(ref(db, `rooms/${room.id}/players/${user.uid}`), { isReady: nextState });
+      } catch (err) {
+        console.warn("[partyverse] toggleReady error:", err);
+      }
+    } else {
+      const local = getLocalRoom(room.id);
+      if (local && local.players?.[user.uid]) {
+        saveLocalRoom({
+          ...local,
+          players: {
+            ...local.players,
+            [user.uid]: { ...local.players[user.uid], isReady: nextState },
+          },
+        });
+      }
+    }
+  }, [room, user, player, connectionStatus]);
+
+  const sendReaction = useCallback(
+    async (emoji: string) => {
+      if (!room || !user) return;
+      sfx.playPop();
+      const id = `rx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const reaction: ReactionItem = {
+        id,
+        emoji,
+        nickname: player?.nickname ?? "玩家",
+        at: Date.now(),
+      };
+
+      if (db && connectionStatus !== "local") {
+        try {
+          await update(ref(db, `rooms/${room.id}/reactions`), { [id]: reaction });
+          setTimeout(() => {
+            if (db) void remove(ref(db, `rooms/${room.id}/reactions/${id}`)).catch(() => undefined);
+          }, 6000);
+        } catch (err) {
+          console.warn("[partyverse] sendReaction error:", err);
+        }
+      } else {
+        const local = getLocalRoom(room.id);
+        if (local) {
+          const nextReactions = { ...(local.reactions ?? {}), [id]: reaction };
+          saveLocalRoom({ ...local, reactions: nextReactions });
+          setTimeout(() => {
+            const fresh = getLocalRoom(room.id);
+            if (fresh && fresh.reactions?.[id]) {
+              const { [id]: _, ...rest } = fresh.reactions;
+              saveLocalRoom({ ...fresh, reactions: rest });
+            }
+          }, 6000);
+        }
+      }
+    },
+    [room, user, player, connectionStatus],
+  );
+
+  const addMockPlayer = useCallback(async () => {
+    if (!room) return;
+    const BOT_AVATARS = ["🤖", "🐧", "🐻", "🦊", "🦥", "🐱", "🦄", "🐼"];
+    const BOT_NAMES = ["阿呆機器人 🤖", "心機企鵝 🐧", "無敵小熊 🐻", "神抽狐狸 🦊", "躺平樹懶 🦥"];
+    const count = Object.keys(room.players).length;
+    const botId = `bot_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const nickname = BOT_NAMES[count % BOT_NAMES.length] || `機器人 ${count + 1}`;
+    const avatar = BOT_AVATARS[count % BOT_AVATARS.length];
+    const newBot: Player = {
+      id: botId,
+      nickname,
+      avatar,
+      isHost: false,
+      isConnected: true,
+      isReady: true,
+      score: 0,
+    };
+    sfx.playChime();
+
+    if (db && connectionStatus !== "local") {
+      try {
+        await update(ref(db, `rooms/${room.id}/players/${botId}`), newBot);
+      } catch (err) {
+        console.warn("[partyverse] addMockPlayer error:", err);
+      }
+    } else {
+      const local = getLocalRoom(room.id);
+      if (local) {
+        saveLocalRoom({
+          ...local,
+          players: { ...local.players, [botId]: newBot },
+        });
+      }
+    }
+  }, [room, connectionStatus]);
 
   // Authoritative host game clock
   useEffect(() => {
@@ -698,7 +986,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     const roomId = room.id;
 
     const id = setInterval(() => {
-      if (db) {
+      if (db && connectionStatus !== "local") {
         void runTransaction(ref(db, `rooms/${roomId}`), (current) => {
           if (!current || current.status !== "PLAYING") return undefined;
           const next = engine.updateGameState(current as unknown as Room) as Record<string, unknown>;
@@ -744,7 +1032,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room?.id, room?.status, room?.hostPlayerId, room?.gameId, user?.uid]);
+  }, [room?.id, room?.status, room?.hostPlayerId, room?.gameId, user?.uid, connectionStatus]);
 
   const isHost = Boolean(user && room && room.hostPlayerId === user.uid);
 
@@ -757,6 +1045,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         loading,
         isHost,
         isLocalMode,
+        connectionStatus,
         createRoom,
         joinRoom,
         leaveRoom,
@@ -769,6 +1058,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         switchGame,
         updateSettings,
         submitAction,
+        toggleReady,
+        sendReaction,
+        addMockPlayer,
       }}
     >
       {children}

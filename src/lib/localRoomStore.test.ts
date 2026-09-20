@@ -82,6 +82,57 @@ describe("localRoomStore", () => {
     expect(getLocalRoom("TEST1")).toBeNull();
   });
 
+  it("persists reactions and player readiness in local room", () => {
+    const mockRoom: Room = {
+      id: "READY01",
+      gameId: "bombcountdown",
+      hostPlayerId: "user-1",
+      status: "LOBBY",
+      createdAt: Date.now(),
+      settings: {
+        timer: 15,
+        difficulty: "easy",
+        rounds: 3,
+        soundEnabled: true,
+        ageMode: "family",
+      },
+      players: {
+        "user-1": {
+          id: "user-1",
+          nickname: "Host",
+          avatar: "👑",
+          isHost: true,
+          isConnected: true,
+          isReady: true,
+          score: 0,
+        },
+        "user-2": {
+          id: "user-2",
+          nickname: "Player2",
+          avatar: "🦊",
+          isHost: false,
+          isConnected: true,
+          isReady: true,
+          score: 0,
+        },
+      },
+      reactions: {
+        rx1: {
+          id: "rx1",
+          emoji: "🔥",
+          nickname: "Player2",
+          at: Date.now(),
+        },
+      },
+      gameState: {},
+    };
+
+    saveLocalRoom(mockRoom);
+    const fetched = getLocalRoom("READY01");
+    expect(fetched?.players["user-2"].isReady).toBe(true);
+    expect(fetched?.reactions?.rx1.emoji).toBe("🔥");
+  });
+
   it("notifies subscribers when room updates or is deleted", () => {
     const mockRoom: Room = {
       id: "SUB01",

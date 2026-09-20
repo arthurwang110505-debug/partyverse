@@ -60,8 +60,8 @@ export default function PlayRealBattle() {
   ];
 
   const padButtonClass =
-    "flex h-20 w-20 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-3xl " +
-    "font-black text-white shadow-lg transition-all active:scale-95 active:bg-orange-500 select-none";
+    "flex h-20 w-20 items-center justify-center rounded-2xl border-2 border-cyan-400/40 bg-cyan-950/40 text-3xl " +
+    "font-black text-cyan-200 shadow-lg shadow-cyan-500/20 transition-all active:scale-95 active:bg-cyan-500 active:text-black select-none cursor-pointer";
 
   const padHandlers = (dx: number, dy: number) => ({
     onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -78,10 +78,10 @@ export default function PlayRealBattle() {
     <PlayShell>
       <div className="text-center">
         <header className="mb-4 mt-2">
-          <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-orange-400">
-            手機手把 · 大亂鬥 ⚔️
+          <span className="mb-1 inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-950/40 px-3 py-1 text-xs font-black uppercase tracking-wider text-rose-300 shadow-sm shadow-rose-500/20">
+            ⚔️ 實體手機手把 · 大亂鬥
           </span>
-          <p className="text-sm text-white/70">按住方向鍵操控角色，搶奪星星與金幣！</p>
+          <p className="mt-2 text-sm text-white/70">按住方向鍵操控角色，搶奪星星與金幣！</p>
         </header>
 
         {/* touch-none: swiping across the pad shouldn't scroll the page */}
@@ -104,9 +104,11 @@ export default function PlayRealBattle() {
               <span aria-hidden="true">{padButtons[1].glyph}</span>
             </button>
             <div
-              className="h-20 w-20 rounded-2xl border border-white/5 bg-white/5"
+              className="flex h-20 w-20 items-center justify-center rounded-2xl border-2 border-rose-500/40 bg-rose-950/40 text-xs font-black tracking-widest text-rose-400 shadow-md shadow-rose-500/20"
               aria-hidden="true"
-            />
+            >
+              JOY
+            </div>
             <button
               type="button"
               aria-label={padButtons[2].label}
@@ -126,8 +128,8 @@ export default function PlayRealBattle() {
           </button>
         </div>
 
-        <p className="text-xs text-white/40">
-          {state.phase === "battle" ? `剩餘 ${state.timeLeft} 秒` : "等房主開戰…"}
+        <p className="font-mono text-sm font-bold text-cyan-300">
+          {state.phase === "battle" ? `⏳ 剩餘 ${state.timeLeft} 秒` : "等房主開戰…"}
         </p>
       </div>
     </PlayShell>

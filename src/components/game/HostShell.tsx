@@ -4,6 +4,8 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { useRoom } from "@/providers/RoomContext";
 import { GAMES } from "@/constants/games";
 import { MuteToggle } from "@/components/game/MuteToggle";
+import { ConnectionBadge } from "@/components/game/ConnectionBadge";
+import { FloatingReactions } from "@/components/game/FloatingReactions";
 import { sfx } from "@/lib/sound";
 import { cn } from "@/lib/utils";
 
@@ -52,12 +54,14 @@ export function HostShell({ children, className, wide = true }: HostShellProps) 
 
   return (
     <main
-      className="min-h-[100dvh] bg-ink p-4 text-white md:p-8"
+      className="min-h-[100dvh] bg-ink p-4 text-white md:p-8 relative"
       style={{ "--game-accent": game?.color, "--game-gradient": game?.gradient } as CSSProperties}
     >
+      <FloatingReactions />
+
       <div
         className={cn(
-          "mx-auto mb-6 flex items-center justify-between gap-3",
+          "mx-auto mb-6 flex items-center justify-between gap-3 relative z-10",
           wide ? "max-w-5xl" : "max-w-3xl",
         )}
       >
@@ -71,9 +75,13 @@ export function HostShell({ children, className, wide = true }: HostShellProps) 
           </span>
           <span className="font-bold tracking-widest text-white/70">房間 {room?.id}</span>
         </p>
-        <MuteToggle />
+
+        <div className="flex items-center gap-2">
+          <ConnectionBadge className="hidden sm:inline-flex text-[11px] px-2.5 py-0.5" />
+          <MuteToggle />
+        </div>
       </div>
-      <div className={className}>{children}</div>
+      <div className={cn("relative z-10", className)}>{children}</div>
     </main>
   );
 }

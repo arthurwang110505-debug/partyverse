@@ -34,6 +34,12 @@ describe("utils", () => {
       expect(normalizeRoomCode("a-b c!2")).toBe("ABC2");
       expect(normalizeRoomCode("abcdefghi")).toHaveLength(ROOM_CODE_LENGTH);
     });
+
+    it("handles non-string inputs safely", () => {
+      expect(normalizeRoomCode(12345 as unknown as string)).toBe("12345");
+      expect(normalizeRoomCode(null as unknown as string)).toBe("");
+      expect(normalizeRoomCode(undefined as unknown as string)).toBe("");
+    });
   });
 
   describe("sanitizeNickname", () => {
@@ -48,6 +54,13 @@ describe("utils", () => {
     it("truncates at maxLength", () => {
       const long = "A".repeat(30);
       expect(sanitizeNickname(long, 16)).toHaveLength(16);
+    });
+
+    it("handles non-string inputs safely without throwing", () => {
+      expect(sanitizeNickname(123 as unknown as string)).toBe("123");
+      expect(sanitizeNickname(true as unknown as string)).toBe("true");
+      expect(sanitizeNickname(null as unknown as string)).toBe("");
+      expect(sanitizeNickname(undefined as unknown as string)).toBe("");
     });
   });
 

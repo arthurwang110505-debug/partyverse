@@ -24,7 +24,8 @@ export default function JoinClient() {
   const recentRooms = useRecentRooms();
 
   // Pre-fill from the last visit once localStorage has hydrated.
-  const effectiveNickname = nickname || savedNickname;
+  const rawNickname = nickname || (typeof savedNickname === "string" ? savedNickname : String(savedNickname ?? ""));
+  const effectiveNickname = typeof rawNickname === "string" ? rawNickname : String(rawNickname);
   const canSubmit = roomCode.length === ROOM_CODE_LENGTH && effectiveNickname.trim().length > 0 && !submitting;
 
   const handleJoin = async () => {
