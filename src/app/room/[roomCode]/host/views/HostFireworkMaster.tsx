@@ -1,10 +1,11 @@
 "use client";
 
+import { engineRoom } from "@/engine/participants";
+
 import { useEffect, useRef } from "react";
 import { useRoom } from "@/providers/RoomContext";
-import { useToast } from "@/providers/ToastProvider";
 import type { FireworkGameState } from "@/engine/fireworkMaster";
-import { Button } from "@/components/ui/Button";
+import { HostGameControls } from "@/components/game/HostGameControls";
 import { HostShell } from "@/components/game/HostShell";
 import { PlayerChip } from "@/components/game/PlayerChip";
 import { RoundTimer } from "@/components/game/RoundTimer";
@@ -12,10 +13,9 @@ import { Confetti } from "@/components/game/Confetti";
 import { sfx } from "@/lib/sound";
 
 export default function HostFireworkMaster() {
-  const { room, endRound, endGame } = useRoom();
-  const { toast } = useToast();
+  const { room } = useRoom();
   const state = room?.gameState as FireworkGameState | undefined;
-  const players = room?.players ?? {};
+  const players = room ? engineRoom(room).players : {};
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -121,7 +121,6 @@ export default function HostFireworkMaster() {
 
   if (!state) return null;
 
-  const fail = (e: unknown) => toast(e instanceof Error ? e.message : "操作失敗");
   const livingPlayerCount = Object.keys(players).length;
   const voteCount = Object.keys(state.votes).length;
 
@@ -143,7 +142,11 @@ export default function HostFireworkMaster() {
         {state.phase === "designing" && (
           <div className="my-10">
             <div className="mx-auto mb-8 max-w-md">
-              <RoundTimer timeLeft={state.timeLeft} total={Math.max(25, room?.settings?.timer ?? 30)} endLabel="設計截止" />
+              <RoundTimer
+                timeLeft={state.timeLeft}
+                total={Math.max(25, room?.settings?.timer ?? 30)}
+                endLabel="設計截止"
+              />
             </div>
             <p className="text-white/60">在手機上調配顏色、形狀與花紋，等待盛大夜空匯演！</p>
           </div>
@@ -159,9 +162,7 @@ export default function HostFireworkMaster() {
                     className="inline-block h-8 w-8 rounded-full shadow-lg border-2 border-white/60"
                     style={{ backgroundColor: d.color, boxShadow: `0 0 20px ${d.color}` }}
                   />
-                  <p className="mt-1 text-xs font-bold text-white drop-shadow-md">
-                    {players[id]?.nickname}
-                  </p>
+                  <p className="mt-1 text-xs font-bold text-white drop-shadow-md">{players[id]?.nickname}</p>
                 </div>
               ))}
             </div>
@@ -203,9 +204,7 @@ export default function HostFireworkMaster() {
             <p className="mb-2 text-6xl animate-bounce" aria-hidden="true">
               🎆
             </p>
-            <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-cyan-300">
-              人氣總冠軍
-            </span>
+            <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-cyan-300">人氣總冠軍</span>
             <h2 className="mb-2 text-3xl font-black text-white">
               {state.winnerId ? players[state.winnerId]?.nickname : "全體大師"} 贏得最佳煙火賞！
             </h2>
@@ -225,16 +224,8 @@ export default function HostFireworkMaster() {
           ))}
         </ul>
 
-        <div className="mt-8 flex justify-center gap-3">
-          <Button variant="ghost" size="md" onClick={() => endRound().catch(fail)}>
-            重開
-          </Button>
-          <Button variant="danger" size="md" onClick={() => endGame().catch(fail)}>
-            結算
-          </Button>
-        </div>
+        <HostGameControls />
       </div>
     </HostShell>
   );
 }
-

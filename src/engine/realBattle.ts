@@ -90,7 +90,16 @@ export const RealBattleEngine: GameEngine<BattleGameState> = {
     if (!state || state.phase !== "battle") return state;
 
     const act = action as MoveAction;
-    if (act?.type !== "move" || typeof act.dx !== "number" || typeof act.dy !== "number") return state;
+    if (
+      act?.type !== "move" ||
+      typeof act.dx !== "number" ||
+      typeof act.dy !== "number" ||
+      !Number.isFinite(act.dx) ||
+      !Number.isFinite(act.dy) ||
+      Math.abs(act.dx) > 1 ||
+      Math.abs(act.dy) > 1
+    )
+      return state;
 
     const cur = state.positions[playerId];
     if (!cur) return state;

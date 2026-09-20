@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, CheckCircle2, Clock, Copy, Crown, Link2, Power, Settings, Share2, Sparkles, Users, X } from "lucide-react";
+import { CheckCircle2, Clock, Copy, Crown, Link2, Power, Settings, Share2, Sparkles, Users, X } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
 import { GAMES } from "@/constants/games";
-import type { Player, RoomSettings } from "@/types";
+import type { Player } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { ErrorNote } from "@/components/ui/ErrorNote";
 import { Modal } from "@/components/ui/Modal";
@@ -16,16 +17,13 @@ import { ConnectionBadge } from "@/components/game/ConnectionBadge";
 import { FloatingReactions } from "@/components/game/FloatingReactions";
 import { sfx } from "@/lib/sound";
 import { cn } from "@/lib/utils";
-
-const DIFFICULTIES: Array<{ value: RoomSettings["difficulty"]; label: string }> = [
-  { value: "easy", label: "輕鬆" },
-  { value: "medium", label: "普通" },
-  { value: "hard", label: "地獄" },
-];
+import { isParticipant } from "@/engine/participants";
+import { normalizeSettings } from "@/constants/gameSettings";
+import { RoomSettingsFields } from "@/components/game/RoomSettingsFields";
 
 export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
   const router = useRouter();
-  const { room, startGame, kickPlayer, endRoom, updateSettings, addMockPlayer } = useRoom();
+  const { room, startGame, kickPlayer, endRoom, updateSettings, isLocalMode, isHost } = useRoom();
 
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -34,28 +32,36 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [origin, setOrigin] = useState("");
   const [error, setError] = useState("");
+  const [starting, setStarting] = useState(false);
+  const [confirmStart, setConfirmStart] = useState(false);
 
   useEffect(() => setOrigin(window.location.origin), []);
   const joinUrl = origin ? `${origin}/join/${roomCode}` : "";
 
   const game = GAMES.find((g) => g.id === room?.gameId);
   const playerList = Object.values(room?.players ?? {})
-    .filter((p): p is Player => Boolean(p && typeof p === "object"))
-    .sort((a, b) =>
-      a.isHost === b.isHost ? (a.nickname || "").localeCompare(b.nickname || "") : a.isHost ? -1 : 1,
-    );
+    .filter((p): p is Player => Boolean(p && typeof p === "object") && isParticipant(p))
+    .sort((a, b) => (a.isHost === b.isHost ? (a.nickname || "").localeCompare(b.nickname || "") : a.isHost ? -1 : 1));
   const onlineCount = playerList.filter((p) => p.isConnected).length;
   const readyCount = playerList.filter((p) => p.isConnected && p.isReady).length;
   const minPlayers = Math.max(1, game?.minPlayers ?? 2);
   const canStart = onlineCount >= minPlayers;
   const allReady = canStart && readyCount === onlineCount;
 
-  const currentSettings = room?.settings ?? {
-    timer: 15,
-    difficulty: "easy" as const,
-    rounds: 3,
-    soundEnabled: true,
-    ageMode: "family" as const,
+  const currentSettings = room?.settings ?? normalizeSettings(room?.gameId ?? "");
+  const handleStart = async () => {
+    if (starting) return;
+    setStarting(true);
+    setError("");
+    try {
+      await startGame();
+      setConfirmStart(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "無法開始");
+      setConfirmStart(false);
+    } finally {
+      setStarting(false);
+    }
   };
 
   const prevCount = useRef<number | null>(null);
@@ -109,6 +115,12 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
           </div>
           <h1 className="mb-2 text-4xl font-bold tracking-tight md:text-5xl">遊戲大廳</h1>
           <p className="text-sm text-white/40">把代碼或 QR code 分享給朋友，手機掃描即可加入</p>
+          <p className="mt-3 text-sm text-cyan-200/80">📺 電視不占玩家名額，所有參賽者請用手機加入。</p>
+          {isLocalMode && (
+            <p className="mt-2 rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
+              本地展示：房間只在這個瀏覽器內同步，請用「開新分頁當玩家」。跨手機或無痕視窗需設定 Firebase。
+            </p>
+          )}
         </header>
 
         {/* Room Code & QR Card */}
@@ -126,7 +138,9 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
                 <QRCodeSVG value={joinUrl} size={240} level="H" aria-label={`加入房間 ${roomCode} 的 QR code`} />
               </div>
               <p className="mb-4 break-all font-mono text-sm text-white/60">
-                <span className="mb-1 block text-xs uppercase tracking-wider text-white/30">手機瀏覽器直接輸入網址</span>
+                <span className="mb-1 block text-xs uppercase tracking-wider text-white/30">
+                  手機瀏覽器直接輸入網址
+                </span>
                 {joinUrl}
               </p>
             </>
@@ -153,15 +167,16 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
             <Button variant="ghost" size="md" onClick={() => setShowQR(true)} disabled={!joinUrl}>
               <Share2 className="h-4 w-4" aria-hidden="true" /> 全螢幕 QR
             </Button>
-            <Button
-              variant="ghost"
-              size="md"
-              onClick={() => void addMockPlayer()}
-              className="border border-violet-500/30 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20"
-              title="單人測試時可點擊新增虛擬玩家"
-            >
-              <Bot className="h-4 w-4" aria-hidden="true" /> +1 機器人測試
-            </Button>
+            {isLocalMode && (
+              <Link
+                href={`/join/${roomCode}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-200"
+              >
+                開新分頁當玩家 ↗
+              </Link>
+            )}
           </div>
         </section>
 
@@ -256,7 +271,7 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
                       </span>
                     )}
 
-                    {!p.isHost && (
+                    {!p.isHost && isHost && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -283,28 +298,31 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
 
         <ErrorNote className="mb-4">{error}</ErrorNote>
 
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <Button
-            variant="accent"
-            size="md"
-            disabled={!canStart}
-            className={cn(
-              "col-span-2 md:col-span-1 font-bold transition-all shadow-lg",
-              allReady && "ring-2 ring-emerald-400 ring-offset-2 ring-offset-ink scale-105",
-            )}
-            aria-describedby={canStart ? undefined : "start-hint"}
-            onClick={() => startGame().catch((e) => setError(e instanceof Error ? e.message : "無法開始"))}
-          >
-            <Crown className="h-4 w-4" aria-hidden="true" />
-            {allReady ? "全員就緒！立刻開始" : "開始遊戲"}
-          </Button>
-          <Button variant="ghost" size="md" onClick={() => setShowSettings(true)}>
-            <Settings className="h-4 w-4" aria-hidden="true" /> 設定
-          </Button>
-          <Button variant="ghost" size="md" onClick={() => setConfirmingEnd(true)}>
-            <Power className="h-4 w-4" aria-hidden="true" /> 結束房間
-          </Button>
-        </div>
+        {isHost && (
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            <Button
+              variant="accent"
+              size="md"
+              disabled={!canStart || starting}
+              loading={starting}
+              className={cn(
+                "col-span-2 md:col-span-1 font-bold transition-all shadow-lg",
+                allReady && "ring-2 ring-emerald-400 ring-offset-2 ring-offset-ink scale-105",
+              )}
+              aria-describedby={canStart ? undefined : "start-hint"}
+              onClick={() => (allReady ? void handleStart() : setConfirmStart(true))}
+            >
+              <Crown className="h-4 w-4" aria-hidden="true" />
+              {allReady ? "全員就緒！立刻開始" : "開始遊戲"}
+            </Button>
+            <Button variant="ghost" size="md" onClick={() => setShowSettings(true)}>
+              <Settings className="h-4 w-4" aria-hidden="true" /> 設定
+            </Button>
+            <Button variant="ghost" size="md" onClick={() => setConfirmingEnd(true)}>
+              <Power className="h-4 w-4" aria-hidden="true" /> 結束房間
+            </Button>
+          </div>
+        )}
 
         <p id="start-hint" className="mt-4 text-center text-sm text-white/40" role="status">
           {canStart ? (
@@ -341,39 +359,15 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
       <Modal open={showSettings && Boolean(room)} onClose={() => setShowSettings(false)} title="房間設定">
         {room && (
           <>
-            <fieldset className="mb-4">
-              <legend className="mb-2 text-sm font-medium text-white/60">難度</legend>
-              <div className="grid grid-cols-3 gap-2">
-                {DIFFICULTIES.map((d) => (
-                  <Button
-                    key={d.value}
-                    size="sm"
-                    aria-pressed={currentSettings.difficulty === d.value}
-                    variant={currentSettings.difficulty === d.value ? "primary" : "ghost"}
-                    onClick={() =>
-                      updateSettings({ difficulty: d.value }).catch((e) =>
-                        setError(e instanceof Error ? e.message : "無法更新"),
-                      )
-                    }
-                  >
-                    {d.label}
-                  </Button>
-                ))}
-              </div>
-            </fieldset>
-
-            <label htmlFor="timer-input" className="mb-2 block text-sm font-medium text-white/60">
-              每題秒數：{currentSettings.timer}
-            </label>
-            <input
-              id="timer-input"
-              type="range"
-              min={3}
-              max={30}
-              value={currentSettings.timer}
-              onChange={(e) => void updateSettings({ timer: Number(e.target.value) }).catch(() => undefined)}
-              className="mb-6 w-full accent-violet-500"
-            />
+            <div className="mb-6">
+              <RoomSettingsFields
+                gameId={room.gameId}
+                settings={currentSettings}
+                onChange={(patch) =>
+                  void updateSettings(patch).catch((e) => setError(e instanceof Error ? e.message : "無法更新設定"))
+                }
+              />
+            </div>
 
             <Button variant="ghost" size="md" className="w-full" onClick={() => setShowSettings(false)}>
               完成
@@ -382,11 +376,23 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
         )}
       </Modal>
 
+      <Modal open={confirmStart} onClose={() => setConfirmStart(false)} title="仍有玩家未就緒" role="alertdialog">
+        <p className="mb-5 text-sm text-white/70">
+          {onlineCount - readyCount} 位玩家還沒按就緒。確認大家看懂規則後再開始。
+        </p>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={() => setConfirmStart(false)}>
+            再等一下
+          </Button>
+          <Button variant="accent" loading={starting} onClick={() => void handleStart()}>
+            仍然開始
+          </Button>
+        </div>
+      </Modal>
+
       {/* End-room confirmation */}
       <Modal open={confirmingEnd} onClose={() => setConfirmingEnd(false)} title="要結束這間房嗎？" role="alertdialog">
-        <p className="mb-6 text-sm text-white/50">
-          所有玩家都會被移出，房間代碼也會立刻失效。這個動作無法復原。
-        </p>
+        <p className="mb-6 text-sm text-white/50">所有玩家都會被移出，房間代碼也會立刻失效。這個動作無法復原。</p>
         <div className="flex gap-2">
           <Button variant="ghost" size="md" className="flex-1" onClick={() => setConfirmingEnd(false)}>
             取消

@@ -47,7 +47,8 @@ export function HostShell({ children, className, wide = true }: HostShellProps) 
   useEffect(() => {
     if (phase === undefined) return;
     if (lastPhase.current !== undefined && phase !== lastPhase.current) {
-      sfx.playSuccess();
+      if (phase === "exploded") sfx.playBoom();
+      else if (["reveal", "round_reveal", "result"].includes(phase)) sfx.playSuccess();
     }
     lastPhase.current = phase;
   }, [phase]);
@@ -61,14 +62,12 @@ export function HostShell({ children, className, wide = true }: HostShellProps) 
 
       <div
         className={cn(
-          "mx-auto mb-6 flex items-center justify-between gap-3 relative z-10",
+          "mx-auto mb-6 flex flex-wrap items-center justify-between gap-3 relative z-10",
           wide ? "max-w-5xl" : "max-w-3xl",
         )}
       >
         <p className="glass inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-1.5 text-sm text-white/60">
-          {game && (
-            <span aria-hidden="true">{game.icon}</span>
-          )}
+          {game && <span aria-hidden="true">{game.icon}</span>}
           <span className="font-medium text-white/80">{game?.name ?? "PARTYVERSE"}</span>
           <span className="text-white/25" aria-hidden="true">
             ·

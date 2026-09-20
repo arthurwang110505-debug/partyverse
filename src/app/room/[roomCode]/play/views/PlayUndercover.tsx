@@ -1,5 +1,7 @@
 "use client";
 
+import { engineRoom } from "@/engine/participants";
+
 import { useState } from "react";
 import { Eye, Lock, ShieldAlert } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
@@ -13,7 +15,7 @@ export default function PlayUndercover() {
   const { room, player, submitAction } = useRoom();
   const { toast } = useToast();
   const state = room?.gameState as UndercoverGameState | undefined;
-  const players = room?.players ?? {};
+  const players = room ? engineRoom(room).players : {};
 
   const [revealed, setRevealed] = useState(false);
 

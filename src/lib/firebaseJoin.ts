@@ -1,6 +1,7 @@
 import { get, ref, runTransaction, type Database } from "firebase/database";
 import type { Player } from "@/types";
 import { GAMES } from "@/constants/games";
+import { isParticipant } from "@/engine/participants";
 import { pickAvatar } from "@/lib/utils";
 
 /** How long a single Firebase round-trip may take before we give up. */
@@ -37,9 +38,7 @@ function toJoinError(err: unknown): Error {
   const code = (err as { code?: string } | null)?.code ?? "";
   const message = err instanceof Error ? err.message : String(err);
   if (code.includes("permission") || message.includes("permission_denied")) {
-    return new Error(
-      "無法讀取房間：資料庫安全規則拒絕存取（請確認 Realtime Database 規則允許 rooms 的讀寫）",
-    );
+    return new Error("無法讀取房間：資料庫安全規則拒絕存取（請確認 Realtime Database 規則允許 rooms 的讀寫）");
   }
   if (code.includes("unavailable") || message.includes("network")) {
     return new Error("暫時連不上房間伺服器，請確認網路後再試一次");
@@ -87,10 +86,15 @@ export async function joinRoomOnFirebase(
         const room = current as Record<string, unknown>;
         const players = (room.players ?? {}) as Record<string, Player>;
         const existing = players[playerId];
-        if (!existing && Object.keys(players).length >= maxPlayersFor(String(room.gameId))) {
+        if (!existing && Object.values(players).filter(isParticipant).length >= maxPlayersFor(String(room.gameId))) {
           throw new Error("__ROOM_FULL__");
         }
-        const avatar = existing?.avatar ?? pickAvatar(nickname, Object.values(players).map((p) => p.avatar));
+        const avatar =
+          existing?.avatar ??
+          pickAvatar(
+            nickname,
+            Object.values(players).map((p) => p.avatar),
+          );
         return {
           ...room,
           players: {
@@ -100,6 +104,7 @@ export async function joinRoomOnFirebase(
               nickname,
               avatar,
               isHost: Boolean(existing?.isHost),
+              role: existing?.role ?? "player",
               isConnected: true,
               isReady: Boolean(existing?.isReady),
               score: existing?.score ?? 0,

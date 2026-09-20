@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useRoom } from "@/providers/RoomContext";
 import { useToast } from "@/providers/ToastProvider";
 import type { BattleGameState } from "@/engine/realBattle";
@@ -17,16 +17,17 @@ export default function PlayRealBattle() {
   const repeatTimer = useRef<number | null>(null);
   const failedOnce = useRef(false);
 
-  useEffect(() => stopRepeating, []);
-
-  if (!state || !player) return null;
-
-  const stopRepeating = () => {
+  const stopRepeating = useCallback(() => {
     if (repeatTimer.current !== null) {
       window.clearInterval(repeatTimer.current);
       repeatTimer.current = null;
     }
-  };
+  }, []);
+  useEffect(() => stopRepeating, [stopRepeating]);
+  useEffect(() => {
+    if (state?.phase !== "battle") stopRepeating();
+  }, [state?.phase, stopRepeating]);
+  if (!state || !player) return null;
 
   const move = async (dx: number, dy: number) => {
     vibrate(8);
@@ -47,6 +48,7 @@ export default function PlayRealBattle() {
 
   /** Press-and-hold: tap moves once, holding keeps walking. */
   const startRepeating = (dx: number, dy: number) => {
+    if (state.phase !== "battle") return;
     stopRepeating();
     void move(dx, dy);
     repeatTimer.current = window.setInterval(() => void move(dx, dy), REPEAT_MS);
@@ -64,6 +66,10 @@ export default function PlayRealBattle() {
     "font-black text-cyan-200 shadow-lg shadow-cyan-500/20 transition-all active:scale-95 active:bg-cyan-500 active:text-black select-none cursor-pointer";
 
   const padHandlers = (dx: number, dy: number) => ({
+    disabled: state.phase !== "battle",
+    onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (e.detail === 0) void move(dx, dy);
+    },
     onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
       e.preventDefault();
       startRepeating(dx, dy);

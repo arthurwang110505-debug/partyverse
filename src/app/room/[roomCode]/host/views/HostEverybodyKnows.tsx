@@ -1,26 +1,24 @@
 "use client";
 
+import { engineRoom } from "@/engine/participants";
+
 import { useRoom } from "@/providers/RoomContext";
-import { useToast } from "@/providers/ToastProvider";
 import type { EverybodyGameState } from "@/engine/everybodyKnows";
-import { Button } from "@/components/ui/Button";
+import { HostGameControls } from "@/components/game/HostGameControls";
 import { HostShell } from "@/components/game/HostShell";
 import { PlayerChip } from "@/components/game/PlayerChip";
 import { RoundTimer } from "@/components/game/RoundTimer";
 
 export default function HostEverybodyKnows() {
-  const { room, endRound, endGame } = useRoom();
-  const { toast } = useToast();
+  const { room } = useRoom();
   const state = room?.gameState as EverybodyGameState | undefined;
-  const players = room?.players ?? {};
+  const players = room ? engineRoom(room).players : {};
 
   if (!state) return null;
 
   const totalVotes = Object.keys(state.votes ?? {}).length;
   const totalPlayers = Object.keys(players).length;
   const totalTime = room?.settings?.timer ?? 15;
-
-  const fail = (e: unknown) => toast(e instanceof Error ? e.message : "操作失敗");
 
   return (
     <HostShell>
@@ -29,9 +27,7 @@ export default function HostEverybodyKnows() {
           <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-cyan-400">
             第 {state.currentRound} / {state.totalRounds} 回合
           </p>
-          <h1 className="px-4 text-3xl font-black leading-tight text-white md:text-5xl">
-            {state.question?.question}
-          </h1>
+          <h1 className="px-4 text-3xl font-black leading-tight text-white md:text-5xl">{state.question?.question}</h1>
         </header>
 
         {state.phase === "voting" && (
@@ -83,14 +79,7 @@ export default function HostEverybodyKnows() {
           ))}
         </ul>
 
-        <div className="mt-8 flex justify-center gap-3">
-          <Button variant="ghost" size="md" onClick={() => endRound().catch(fail)}>
-            重啟本局
-          </Button>
-          <Button variant="danger" size="md" onClick={() => endGame().catch(fail)}>
-            結束結算
-          </Button>
-        </div>
+        <HostGameControls />
       </div>
     </HostShell>
   );

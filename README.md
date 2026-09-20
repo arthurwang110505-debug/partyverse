@@ -1,4 +1,5 @@
 # PARTYVERSE
+
 One Room. Ten Games. Infinite Chaos.
 
 多人派對遊戲平台：電視當主畫面，手機就是控制器。掃描 QR code 就能立即加入，免下載、免註冊。
@@ -57,3 +58,11 @@ npm run dev
   }
 }
 ```
+
+## Gameplay/mobile implementation update
+
+See [the first-pass implementation and verification notes](docs/gameplay-implementation.md).
+
+The default host device is now a display-only TV; every participant (including the host who wants to play) joins using a separate controller. **Local demo mode only shares rooms between ordinary tabs in the same browser** — use the lobby's “開新分頁當玩家” link. Physical phones and separate/incognito browser profiles require configured Firebase.
+
+Browser regressions: `npx playwright install chromium && npm run test:e2e` (local/demo data only).

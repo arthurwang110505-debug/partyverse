@@ -1,5 +1,7 @@
 "use client";
 
+import { engineRoom } from "@/engine/participants";
+
 import { useRoom } from "@/providers/RoomContext";
 import { useToast } from "@/providers/ToastProvider";
 import type { EverybodyGameState } from "@/engine/everybodyKnows";
@@ -12,7 +14,7 @@ export default function PlayEverybodyKnows() {
   const { room, player, submitAction } = useRoom();
   const { toast } = useToast();
   const state = room?.gameState as EverybodyGameState | undefined;
-  const players = room?.players ?? {};
+  const players = room ? engineRoom(room).players : {};
 
   if (!state || !player) return null;
 

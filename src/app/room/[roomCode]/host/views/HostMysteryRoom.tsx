@@ -1,10 +1,11 @@
 "use client";
 
+import { engineRoom } from "@/engine/participants";
+
 import { useEffect } from "react";
 import { useRoom } from "@/providers/RoomContext";
-import { useToast } from "@/providers/ToastProvider";
 import type { MysteryGameState } from "@/engine/mysteryRoom";
-import { Button } from "@/components/ui/Button";
+import { HostGameControls } from "@/components/game/HostGameControls";
 import { HostShell } from "@/components/game/HostShell";
 import { PlayerChip } from "@/components/game/PlayerChip";
 import { RoundTimer } from "@/components/game/RoundTimer";
@@ -12,10 +13,9 @@ import { Confetti } from "@/components/game/Confetti";
 import { sfx } from "@/lib/sound";
 
 export default function HostMysteryRoom() {
-  const { room, endRound, endGame } = useRoom();
-  const { toast } = useToast();
+  const { room } = useRoom();
   const state = room?.gameState as MysteryGameState | undefined;
-  const players = room?.players ?? {};
+  const players = room ? engineRoom(room).players : {};
 
   const phase = state?.phase;
   const isUnlocked = state?.isUnlocked;
@@ -32,17 +32,13 @@ export default function HostMysteryRoom() {
 
   if (!state) return null;
 
-  const fail = (e: unknown) => toast(e instanceof Error ? e.message : "操作失敗");
-
   return (
     <HostShell>
       {state.phase === "result" && state.isUnlocked && <Confetti />}
 
       <div className="mx-auto max-w-4xl text-center">
         <header className="mb-6">
-          <p className="mb-1 text-sm font-semibold tracking-wider text-indigo-400">
-            密室推理 🔍 · 合作解謎逃脫
-          </p>
+          <p className="mb-1 text-sm font-semibold tracking-wider text-indigo-400">密室推理 🔍 · 合作解謎逃脫</p>
           <h1 className="px-4 text-3xl font-black text-white md:text-5xl">{state.caseTitle}</h1>
           <p className="mx-auto mt-2 max-w-xl text-sm text-white/60 leading-relaxed">{state.caseBackground}</p>
         </header>
@@ -50,7 +46,11 @@ export default function HostMysteryRoom() {
         {state.phase === "investigation" && (
           <div className="my-8">
             <div className="mx-auto mb-8 max-w-md">
-              <RoundTimer timeLeft={state.timeLeft} total={Math.max(45, room?.settings?.timer ?? 60)} endLabel="時間到" />
+              <RoundTimer
+                timeLeft={state.timeLeft}
+                total={Math.max(45, room?.settings?.timer ?? 60)}
+                endLabel="時間到"
+              />
             </div>
             <div className="glass mb-6 inline-block rounded-3xl border border-indigo-500/40 bg-indigo-950/40 p-8 shadow-2xl">
               <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-indigo-300">
@@ -88,16 +88,8 @@ export default function HostMysteryRoom() {
           ))}
         </ul>
 
-        <div className="mt-8 flex justify-center gap-3">
-          <Button variant="ghost" size="md" onClick={() => endRound().catch(fail)}>
-            重開
-          </Button>
-          <Button variant="danger" size="md" onClick={() => endGame().catch(fail)}>
-            結算
-          </Button>
-        </div>
+        <HostGameControls />
       </div>
     </HostShell>
   );
 }
-

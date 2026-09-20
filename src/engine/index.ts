@@ -1,4 +1,6 @@
-import type { GameEngine } from "@/types";
+import type { GameEngine, Room } from "@/types";
+import { engineRoom } from "./participants";
+import { normalizeGameState } from "./state";
 import { BOMB_GAME_ID, BombEngine } from "./bombCountdown";
 import { EVERYBODY_GAME_ID, EverybodyKnowsEngine } from "./everybodyKnows";
 import { AIBULLSHIT_GAME_ID, AIBullshitEngine } from "./aiBullshit";
@@ -12,7 +14,7 @@ import { MYSTERY_GAME_ID, MysteryRoomEngine } from "./mysteryRoom";
 
 /**
  * The registry of all games with playable engines.
- * All 10 party games are implemented and fully playable!
+ * Normalize database collections at every engine boundary.
  */
 const engines: Record<string, GameEngine<any>> = {
   [BOMB_GAME_ID]: BombEngine as GameEngine<any>,
@@ -27,14 +29,36 @@ const engines: Record<string, GameEngine<any>> = {
   [MYSTERY_GAME_ID]: MysteryRoomEngine as GameEngine<any>,
 };
 
+function prepare(room: Room<any>): Room<any> {
+  return engineRoom({ ...room, gameState: normalizeGameState(room.gameId, room.gameState) });
+}
+const guardedEngines: Record<string, GameEngine<any>> = Object.fromEntries(
+  Object.entries(engines).map(([id, engine]) => [
+    id,
+    {
+      createGame: (room: Room<any>) => engine.createGame(prepare(room)),
+      startGame: (room: Room<any>) => engine.startGame(prepare(room)),
+      handlePlayerAction: (room: Room<any>, playerId: string, action: unknown) => {
+        const current = prepare(room);
+        if (!current.players[playerId] || current.players[playerId].isConnected === false) return current.gameState;
+        return engine.handlePlayerAction(current, playerId, action);
+      },
+      updateGameState: (room: Room<any>) => engine.updateGameState(prepare(room)),
+      endRound: (room: Room<any>) => engine.endRound(prepare(room)),
+      endGame: (room: Room<any>) => engine.endGame(prepare(room)),
+      calculateScores: (room: Room<any>) => engine.calculateScores(prepare(room)),
+    },
+  ]),
+);
+
 export function getGameEngine(gameId: string): GameEngine<any> | null {
-  return engines[gameId] ?? null;
+  return guardedEngines[gameId] ?? null;
 }
 
 export function isPlayable(gameId: string): boolean {
-  return gameId in engines;
+  return gameId in guardedEngines;
 }
 
 export function playableGameIds(): string[] {
-  return Object.keys(engines);
+  return Object.keys(guardedEngines);
 }

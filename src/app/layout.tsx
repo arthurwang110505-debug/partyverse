@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import { Providers } from "@/providers/Providers";
 import "./globals.css";
 
 /**
@@ -20,8 +19,7 @@ const inter = localFont({
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 const title = "PARTYVERSE — 一間房，十款遊戲，無限混亂";
-const description =
-  "多人派對遊戲平台。用手機加入房間，電視當主畫面，和朋友即時同樂。Bomb Countdown 現已開放。";
+const description = "多人派對遊戲平台。用手機加入房間，電視當主畫面，和朋友即時同樂。Bomb Countdown 現已開放。";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -65,9 +63,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-Hant" className={inter.variable}>
-      <body className="min-h-screen bg-ink text-white antialiased">
-        <Providers>{children}</Providers>
-      </body>
+      <body className="min-h-screen bg-ink text-white antialiased">{children}</body>
     </html>
   );
 }

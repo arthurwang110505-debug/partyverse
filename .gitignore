@@ -40,3 +40,8 @@ next-env.d.ts
 *.swo
 
 .vercel
+
+# browser regression artifacts and scratch files
+/.cache/
+/test-results/
+/playwright-report/

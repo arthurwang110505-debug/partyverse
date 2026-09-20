@@ -1,22 +1,20 @@
 "use client";
 
+import { engineRoom } from "@/engine/participants";
+
 import { useRoom } from "@/providers/RoomContext";
-import { useToast } from "@/providers/ToastProvider";
 import type { SongGameState } from "@/engine/song3Seconds";
-import { Button } from "@/components/ui/Button";
+import { HostGameControls } from "@/components/game/HostGameControls";
 import { HostShell } from "@/components/game/HostShell";
 import { PlayerChip } from "@/components/game/PlayerChip";
 import { RoundTimer } from "@/components/game/RoundTimer";
 
 export default function HostSong3Seconds() {
-  const { room, endRound, endGame } = useRoom();
-  const { toast } = useToast();
+  const { room } = useRoom();
   const state = room?.gameState as SongGameState | undefined;
-  const players = room?.players ?? {};
+  const players = room ? engineRoom(room).players : {};
 
   if (!state) return null;
-
-  const fail = (e: unknown) => toast(e instanceof Error ? e.message : "操作失敗");
 
   return (
     <HostShell>
@@ -40,7 +38,11 @@ export default function HostSong3Seconds() {
         {state.phase === "answering" && (
           <div className="my-8">
             <div className="mx-auto mb-8 max-w-md">
-              <RoundTimer timeLeft={state.timeLeft} total={Math.max(6, room?.settings?.timer ?? 8)} endLabel="搶答截止" />
+              <RoundTimer
+                timeLeft={state.timeLeft}
+                total={Math.max(6, room?.settings?.timer ?? 8)}
+                endLabel="搶答截止"
+              />
             </div>
             <div className="glass mb-6 inline-block max-w-xl rounded-3xl border border-pink-500/30 bg-pink-500/10 p-6">
               <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-pink-300">歌詞旋律線索</span>
@@ -74,14 +76,7 @@ export default function HostSong3Seconds() {
           ))}
         </ul>
 
-        <div className="mt-8 flex justify-center gap-3">
-          <Button variant="ghost" size="md" onClick={() => endRound().catch(fail)}>
-            重開
-          </Button>
-          <Button variant="danger" size="md" onClick={() => endGame().catch(fail)}>
-            結算
-          </Button>
-        </div>
+        <HostGameControls />
       </div>
     </HostShell>
   );

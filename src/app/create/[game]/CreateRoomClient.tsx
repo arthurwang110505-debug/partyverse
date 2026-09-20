@@ -9,24 +9,19 @@ import { useRoom } from "@/providers/RoomContext";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { addRecentRoom } from "@/hooks/useRecentRooms";
 import { GAMES } from "@/constants/games";
-import { DEFAULT_ROOM_SETTINGS, MAX_NICKNAME_LENGTH, NICKNAME_KEY } from "@/constants/room";
+import { MAX_NICKNAME_LENGTH, NICKNAME_KEY } from "@/constants/room";
 import type { RoomSettings } from "@/types";
 import { sanitizeNickname } from "@/lib/utils";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { ErrorNote } from "@/components/ui/ErrorNote";
-import { cn } from "@/lib/utils";
+import { normalizeSettings } from "@/constants/gameSettings";
+import { RoomSettingsFields } from "@/components/game/RoomSettingsFields";
 
 interface Props {
   gameId: string;
 }
-
-const DIFFICULTIES: Array<{ value: RoomSettings["difficulty"]; label: string; hint: string }> = [
-  { value: "easy", label: "輕鬆", hint: "時間長、題目簡單" },
-  { value: "medium", label: "普通", hint: "標準節奏" },
-  { value: "hard", label: "地獄", hint: "時間短、題目多" },
-];
 
 export default function CreateRoomClient({ gameId }: Props) {
   const router = useRouter();
@@ -35,14 +30,12 @@ export default function CreateRoomClient({ gameId }: Props) {
 
   const [savedNickname, setSavedNickname] = useLocalStorage(NICKNAME_KEY, "");
   const [nickname, setNickname] = useState("");
-  const [settings, setSettings] = useState<RoomSettings>(DEFAULT_ROOM_SETTINGS);
+  const [settings, setSettings] = useState<RoomSettings>(() => normalizeSettings(gameId));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   if (!game) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-ink text-white/50">找不到這個遊戲</main>
-    );
+    return <main className="flex min-h-screen items-center justify-center bg-ink text-white/50">找不到這個遊戲</main>;
   }
 
   const rawNickname = nickname || (typeof savedNickname === "string" ? savedNickname : String(savedNickname ?? ""));
@@ -99,7 +92,7 @@ export default function CreateRoomClient({ gameId }: Props) {
           }}
         >
           <Field
-            label="你的暱稱"
+            label="房主暱稱（顯示在電視上）"
             name="nickname"
             value={effectiveNickname}
             onChange={(e) => setNickname(e.target.value)}
@@ -109,43 +102,13 @@ export default function CreateRoomClient({ gameId }: Props) {
             autoFocus
           />
 
-          <fieldset>
-            <legend className="mb-2 block text-sm font-medium text-white/60">難度</legend>
-            <div className="grid grid-cols-3 gap-2">
-              {DIFFICULTIES.map((option) => {
-                const active = settings.difficulty === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => setSettings((s) => ({ ...s, difficulty: option.value }))}
-                    className={cn(
-                      "rounded-xl border px-3 py-2.5 text-center transition-all",
-                      active
-                        ? "border-violet-500/50 bg-violet-500/20 text-white"
-                        : "border-white/10 bg-white/5 text-white/50 hover:bg-white/10",
-                    )}
-                  >
-                    <span className="block text-sm font-medium">{option.label}</span>
-                    <span className="mt-0.5 block text-[10px] text-white/40">{option.hint}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
-
-          <Field
-            label="每題秒數"
-            name="timer"
-            type="number"
-            min={3}
-            max={60}
-            value={settings.timer}
-            onChange={(e) =>
-              setSettings((s) => ({ ...s, timer: Math.min(60, Math.max(3, Number(e.target.value) || s.timer)) }))
-            }
-            inputMode="numeric"
+          <p className="text-sm leading-relaxed text-white/65">
+            此裝置作為電視主畫面，不占玩家名額。房主想參賽，也請用手機掃碼加入。
+          </p>
+          <RoomSettingsFields
+            gameId={gameId}
+            settings={settings}
+            onChange={(patch) => setSettings((current) => ({ ...current, ...patch }))}
           />
 
           <ErrorNote>{error}</ErrorNote>
@@ -169,7 +132,7 @@ export default function CreateRoomClient({ gameId }: Props) {
 
           {isLocalMode && (
             <p className="text-center text-xs text-cyan-400/70">
-              💡 本地展示模式：建立後可開啟另一個瀏覽器視窗/無痕分頁加入同樂
+              本地展示模式：只限同一瀏覽器的一般分頁。跨手機連線需要設定 Firebase，無痕視窗不共用房間。
             </p>
           )}
         </form>
