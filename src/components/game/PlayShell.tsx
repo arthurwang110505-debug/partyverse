@@ -5,6 +5,7 @@ import { Crown } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
 import { GAMES } from "@/constants/games";
 import { MuteToggle } from "@/components/game/MuteToggle";
+import { FloatingReactions } from "@/components/game/FloatingReactions";
 import { cn } from "@/lib/utils";
 
 interface PlayShellProps {
@@ -36,10 +37,12 @@ export function PlayShell({ children, className, round }: PlayShellProps) {
 
   return (
     <main
-      className="flex min-h-[100dvh] flex-col bg-ink text-white"
+      className="flex min-h-[100dvh] flex-col bg-ink text-white relative"
       style={{ "--game-accent": game?.color, "--game-gradient": game?.gradient } as CSSProperties}
     >
-      <div className="mx-auto w-full max-w-md px-4 pt-4 pt-safe">
+      <FloatingReactions />
+
+      <div className="mx-auto w-full max-w-md px-4 pt-4 pt-safe relative z-10">
         <div className="glass flex items-center justify-between gap-2 rounded-2xl border border-white/10 px-3.5 py-2">
           <span className="flex min-w-0 items-center gap-2">
             <span className="text-xl" aria-hidden="true">
@@ -51,7 +54,7 @@ export function PlayShell({ children, className, round }: PlayShellProps) {
             </span>
           </span>
           <span className="flex shrink-0 items-center gap-2 text-xs text-white/50">
-            {round && <span className="tabular-nums">{round}</span>}
+            {round && <span className="tabular-nums font-medium text-white/70">{round}</span>}
             {game && (
               <span aria-hidden="true" title={game.name}>
                 {game.icon}
@@ -62,14 +65,14 @@ export function PlayShell({ children, className, round }: PlayShellProps) {
         </div>
       </div>
 
-      <div className={cn("mx-auto w-full max-w-md flex-1 px-4 pb-28", className)}>{children}</div>
+      <div className={cn("mx-auto w-full max-w-md flex-1 px-4 pb-28 relative z-10", className)}>{children}</div>
 
       {/* Bottom dock — sits above the iPhone home indicator thanks to dock-safe. */}
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex items-center justify-center gap-2 px-4 dock-safe">
-        <p className="pointer-events-auto glass rounded-full border border-white/10 px-4 py-2 text-sm font-medium tabular-nums">
+        <p className="pointer-events-auto glass rounded-full border border-white/10 px-4 py-2 text-sm font-medium tabular-nums shadow-lg">
           得分：<span className="font-bold text-white">{score}</span>
         </p>
-        <MuteToggle className="pointer-events-auto" />
+        <MuteToggle className="pointer-events-auto shadow-lg" />
       </div>
     </main>
   );

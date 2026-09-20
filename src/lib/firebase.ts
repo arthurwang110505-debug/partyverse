@@ -1,19 +1,27 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getDatabase, type Database } from "firebase/database";
+import { getDatabase, goOnline, goOffline, type Database } from "firebase/database";
 import { getAuth, type Auth } from "firebase/auth";
 
+const rawDatabaseUrl = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL?.trim().replace(/\/+$/, "");
+const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim();
+
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim(),
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim(),
+  projectId,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET?.trim(),
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID?.trim(),
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID?.trim(),
+  databaseURL: rawDatabaseUrl || (projectId ? `https://${projectId}-default-rtdb.firebaseio.com` : undefined),
 };
 
 export function isFirebaseConfigured(): boolean {
-  return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
+  const key = firebaseConfig.apiKey;
+  const proj = firebaseConfig.projectId;
+  if (!key || !proj) return false;
+  // Ignore placeholder strings
+  if (key.includes("your-") || proj.includes("your-")) return false;
+  return true;
 }
 
 let app: FirebaseApp | null = null;
@@ -28,6 +36,28 @@ if (isFirebaseConfigured()) {
     auth = getAuth(app);
   } catch (error) {
     console.error("[partyverse] Firebase init failed:", error);
+  }
+}
+
+/** Reconnect the Firebase Realtime Database socket immediately (e.g. after tab wakeup). */
+export function reconnectFirebase(): void {
+  if (db) {
+    try {
+      goOnline(db);
+    } catch {
+      // Ignore reconnect error
+    }
+  }
+}
+
+/** Disconnect the socket when entering deep background if desired. */
+export function disconnectFirebase(): void {
+  if (db) {
+    try {
+      goOffline(db);
+    } catch {
+      // Ignore
+    }
   }
 }
 

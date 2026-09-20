@@ -1,56 +1,86 @@
 "use client";
 
-import Link from "next/link";
-import { ArrowLeft, Crown } from "lucide-react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, CheckCircle2, Clock, Crown, Sparkles } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
 import { GAMES } from "@/constants/games";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { ConnectionBadge } from "@/components/game/ConnectionBadge";
+import { FloatingReactions } from "@/components/game/FloatingReactions";
+import { vibrate } from "@/lib/sound";
 import { cn } from "@/lib/utils";
 
 interface Props {
   roomCode: string;
 }
 
-/** A player's holding screen while the host gathers everyone in the lobby. */
+const REACTIONS = ["🎉", "🔥", "👑", "💩", "❤️", "🤣"];
+
+/** A player's interactive holding screen while waiting in the lobby. */
 export default function PlayClient({ roomCode }: Props) {
-  const { room, player, leaveRoom } = useRoom();
+  const router = useRouter();
+  const { room, player, leaveRoom, toggleReady, sendReaction } = useRoom();
+  const [confirmLeave, setConfirmLeave] = useState(false);
+
   const game = GAMES.find((g) => g.id === room?.gameId);
   const playerList = Object.values(room?.players ?? {});
   const onlineCount = playerList.filter((p) => p.isConnected).length;
+  const isReady = Boolean(player?.isReady);
+
+  const handleToggleReady = async () => {
+    vibrate(25);
+    await toggleReady();
+  };
+
+  const handleReaction = async (emoji: string) => {
+    vibrate(12);
+    await sendReaction(emoji);
+  };
+
+  const handleConfirmLeave = async () => {
+    await leaveRoom();
+    router.push("/");
+  };
 
   return (
-    <main className="min-h-[100dvh] bg-ink p-4 pb-safe text-white">
-      <div className="mx-auto max-w-md pt-8">
-        <div className="mb-6 flex items-center justify-between">
-          <Link
-            href="/"
-            onClick={() => void leaveRoom()}
-            aria-label="離開房間並返回首頁"
-            className="glass rounded-xl p-2 transition-all hover:bg-white/10"
+    <main className="min-h-[100dvh] bg-ink p-4 pb-safe text-white relative">
+      <FloatingReactions />
+
+      <div className="mx-auto max-w-md pt-4 relative z-10 flex flex-col min-h-[92dvh]">
+        {/* Header */}
+        <div className="mb-4 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setConfirmLeave(true)}
+            aria-label="離開房間"
+            className="glass rounded-xl p-2.5 transition-all hover:bg-white/10 active:scale-95"
           >
-            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-          </Link>
+            <ArrowLeft className="h-5 w-5 text-white/70" aria-hidden="true" />
+          </button>
           <div className="text-center">
-            <p className="mb-0.5 text-xs uppercase tracking-wider text-white/40">房間</p>
-            <p className="text-xl font-bold tracking-widest">{roomCode}</p>
+            <p className="mb-0.5 text-[10px] uppercase tracking-wider text-white/40">房間代碼</p>
+            <p className="text-xl font-bold tracking-widest text-violet-300">{roomCode}</p>
           </div>
-          <p className="text-sm text-emerald-400 tabular-nums">
-            <span className="sr-only">在線玩家數</span>
-            {onlineCount}
-          </p>
+          <ConnectionBadge className="text-[10px] px-2 py-0.5" />
         </div>
 
+        {/* Game Info Card */}
         {game && (
-          <div className="glass-card mb-6 rounded-2xl p-6 text-center">
-            <p className="mb-3 text-5xl" aria-hidden="true">
+          <div className="glass-card mb-4 rounded-2xl p-5 text-center border border-white/10">
+            <span className="mb-2 inline-block text-4xl" aria-hidden="true">
               {game.icon}
-            </p>
-            <h1 className="mb-1 text-2xl font-bold">{game.name}</h1>
-            <p lang="en" className="text-sm text-white/40">
+            </span>
+            <h1 className="mb-0.5 text-xl font-bold">{game.name}</h1>
+            <p lang="en" className="text-xs text-white/40 mb-2">
               {game.nameEn}
             </p>
+            <p className="text-xs text-white/60 line-clamp-2">{game.description}</p>
           </div>
         )}
 
+        {/* Player Identity Card */}
         {player && (
           <div className="glass mb-4 flex items-center gap-3 rounded-2xl border border-white/10 p-4">
             <span className="text-3xl" aria-hidden="true">
@@ -61,26 +91,92 @@ export default function PlayClient({ roomCode }: Props) {
                 {player.nickname}
                 {player.isHost && <Crown className="h-4 w-4 text-yellow-400" aria-label="房主" />}
               </span>
-              <span className="text-xs text-white/40">{player.isHost ? "房主" : "玩家"}</span>
+              <span className="text-xs text-white/40">{player.isHost ? "我是房主" : "我是玩家"}</span>
             </span>
             <span
-              className={cn("h-2 w-2 rounded-full", player.isConnected ? "bg-emerald-400" : "bg-red-500")}
+              className={cn("h-2.5 w-2.5 rounded-full", player.isConnected ? "bg-emerald-400" : "bg-red-500")}
               aria-label={player.isConnected ? "在線" : "離線"}
             />
           </div>
         )}
 
-        <section className="py-12 text-center" role="status" aria-live="polite">
-          <p className="mb-4 text-5xl" aria-hidden="true">
-            ⏳
+        {/* Tactile Ready Toggle (for non-hosts) */}
+        {!player?.isHost && (
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={() => void handleToggleReady()}
+              className={cn(
+                "w-full rounded-2xl p-4 text-center font-bold text-base transition-all duration-200 active:scale-95 shadow-xl flex items-center justify-center gap-2.5 border",
+                isReady
+                  ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 ring-2 ring-emerald-500/30"
+                  : "bg-gradient-to-r from-violet-600 to-pink-600 border-white/20 text-white hover:brightness-110",
+              )}
+            >
+              {isReady ? (
+                <>
+                  <CheckCircle2 className="h-5 w-5 text-emerald-400" aria-hidden="true" />
+                  已就緒！等待房主開始…
+                </>
+              ) : (
+                <>
+                  <Clock className="h-5 w-5 text-white/70" aria-hidden="true" />
+                  點擊確認準備就緒 (Ready)
+                </>
+              )}
+            </button>
+            <p className="mt-2 text-center text-xs text-white/40">
+              {isReady ? "點擊可取消就緒狀態" : "確認暱稱無誤後，請按就緒讓房主知道！"}
+            </p>
+          </div>
+        )}
+
+        {/* Waiting Status */}
+        <section className="flex-1 flex flex-col items-center justify-center py-6 text-center" role="status">
+          <p className="mb-2 text-4xl animate-bounce" aria-hidden="true">
+            📺
           </p>
-          <h2 className="mb-2 text-2xl font-bold">等待房主開始</h2>
-          <p className="text-sm text-white/40">
-            目前 {onlineCount} 人在房間裡
-            {game ? `，湊滿 ${game.minPlayers} 人就能開始` : ""}
+          <h2 className="mb-1 text-lg font-bold">請看電視大螢幕</h2>
+          <p className="text-xs text-white/50 max-w-xs">
+            目前 {onlineCount} 人在線
+            {game ? `（最少 ${game.minPlayers} 人開局）` : ""}，等待房主開啟遊戲！
           </p>
         </section>
+
+        {/* Reaction Bar */}
+        <div className="mt-auto pt-4 pb-2">
+          <p className="mb-2 text-center text-xs text-white/40 flex items-center justify-center gap-1">
+            <Sparkles className="h-3 w-3 text-pink-400" aria-hidden="true" />
+            點擊表情，發送即時氣氛到大螢幕：
+          </p>
+          <div className="grid grid-cols-6 gap-2">
+            {REACTIONS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => void handleReaction(emoji)}
+                className="glass rounded-xl py-2.5 text-2xl transition-all hover:bg-white/15 active:scale-90 select-none"
+                aria-label={`發送 ${emoji} 表情`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {/* Confirm Leave Modal */}
+      <Modal open={confirmLeave} onClose={() => setConfirmLeave(false)} title="確定要離開房間嗎？" role="alertdialog">
+        <p className="mb-6 text-sm text-white/60">離開後你的名額將會釋出，需要重新輸入代碼才能加入。</p>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="md" className="flex-1" onClick={() => setConfirmLeave(false)}>
+            留下
+          </Button>
+          <Button variant="danger" size="md" className="flex-1" onClick={() => void handleConfirmLeave()}>
+            離開房間
+          </Button>
+        </div>
+      </Modal>
     </main>
   );
 }

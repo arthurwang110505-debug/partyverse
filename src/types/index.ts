@@ -17,6 +17,8 @@ export interface Player {
   isHost: boolean;
   isConnected: boolean;
   score: number;
+  /** Whether player has marked themselves ready in the lobby */
+  isReady?: boolean;
   /** Server timestamp of the last time this client dropped its connection. */
   leftAt?: number;
 }
@@ -27,6 +29,13 @@ export interface RoomSettings {
   rounds: number;
   soundEnabled: boolean;
   ageMode: "family" | "adults";
+}
+
+export interface ReactionItem {
+  id: string;
+  emoji: string;
+  nickname: string;
+  at: number;
 }
 
 /**
@@ -47,6 +56,8 @@ export interface Room<S = Record<string, unknown>> {
   settings: RoomSettings;
   players: Record<string, Player>;
   gameState: S;
+  /** Ephemeral reactions broadcast from player controllers */
+  reactions?: Record<string, ReactionItem>;
   /** Server timestamp written by the authoritative tick, used to detect a stalled host. */
   lastTickAt?: number;
   startedAt?: number;
