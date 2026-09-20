@@ -17,11 +17,35 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
   useEffect(() => {
     try {
       const item = window.localStorage.getItem(key);
-      if (item !== null) setStoredValue(JSON.parse(item) as T);
+      if (item !== null) {
+        try {
+          const parsed = JSON.parse(item);
+          if (typeof initialValue === "string") {
+            // When a string is expected, ensure we never set a non-string:
+            // if parsed is a string, use it;
+            // if parsed is a number or boolean, coerce to string;
+            // otherwise (objects, arrays, null) ignore or fallback.
+            if (typeof parsed === "string") {
+              setStoredValue(parsed as T);
+            } else if (typeof parsed === "number" || typeof parsed === "boolean") {
+              setStoredValue(String(parsed) as T);
+            } else {
+              setStoredValue(initialValue);
+            }
+          } else {
+            setStoredValue(parsed as T);
+          }
+        } catch {
+          // If JSON.parse fails (e.g. unquoted raw string previously saved)
+          if (typeof initialValue === "string") {
+            setStoredValue(item as T);
+          }
+        }
+      }
     } catch {
       // Storage unavailable or corrupt — keep the initial value.
     }
-  }, [key]);
+  }, [key, initialValue]);
 
   const setValue = useCallback(
     (value: T | ((prev: T) => T)) => {

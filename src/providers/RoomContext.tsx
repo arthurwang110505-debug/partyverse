@@ -75,7 +75,11 @@ function readSession(): StoredSession | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<StoredSession>;
     if (!parsed?.userId || !parsed?.roomCode) return null;
-    return { userId: parsed.userId, roomCode: parsed.roomCode, nickname: parsed.nickname ?? "" };
+    return {
+      userId: String(parsed.userId),
+      roomCode: String(parsed.roomCode),
+      nickname: typeof parsed.nickname === "string" ? parsed.nickname : String(parsed.nickname ?? ""),
+    };
   } catch {
     return null;
   }
@@ -92,7 +96,7 @@ function writeSession(session: StoredSession | null) {
 
 function rememberNickname(nickname: string) {
   try {
-    localStorage.setItem(NICKNAME_KEY, nickname);
+    localStorage.setItem(NICKNAME_KEY, JSON.stringify(nickname));
   } catch {
     /* ignore */
   }

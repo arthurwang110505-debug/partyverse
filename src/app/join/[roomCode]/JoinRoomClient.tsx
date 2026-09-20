@@ -27,7 +27,8 @@ export default function JoinRoomClient({ roomCode }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const effectiveNickname = nickname || savedNickname;
+  const rawNickname = nickname || (typeof savedNickname === "string" ? savedNickname : String(savedNickname ?? ""));
+  const effectiveNickname = typeof rawNickname === "string" ? rawNickname : String(rawNickname);
   const canSubmit = effectiveNickname.trim().length > 0 && !submitting;
 
   const handleJoin = async () => {

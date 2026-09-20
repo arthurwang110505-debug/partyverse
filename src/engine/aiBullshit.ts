@@ -89,7 +89,7 @@ function buildOptions(submissions: Record<string, string>, prompt: TriviaPrompt)
   ];
 
   for (const [playerId, text] of Object.entries(submissions)) {
-    if (text.trim()) {
+    if (typeof text === "string" && text.trim()) {
       options.push({
         id: `fake_${playerId}`,
         text: text.trim(),

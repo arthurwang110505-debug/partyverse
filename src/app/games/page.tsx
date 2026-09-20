@@ -17,7 +17,7 @@ export default function GamesPage() {
   const debouncedSearch = useDebounce(search, 150);
 
   const filtered = useMemo(() => {
-    const needle = debouncedSearch.trim().toLowerCase();
+    const needle = typeof debouncedSearch === "string" ? debouncedSearch.trim().toLowerCase() : "";
     return GAMES.filter((g) => {
       if (filter !== "ALL" && g.category !== filter) return false;
       if (showPlayableOnly && !isPlayable(g.id)) return false;

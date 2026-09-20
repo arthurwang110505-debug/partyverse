@@ -45,7 +45,8 @@ export default function CreateRoomClient({ gameId }: Props) {
     );
   }
 
-  const effectiveNickname = nickname || savedNickname;
+  const rawNickname = nickname || (typeof savedNickname === "string" ? savedNickname : String(savedNickname ?? ""));
+  const effectiveNickname = typeof rawNickname === "string" ? rawNickname : String(rawNickname);
   const canSubmit = effectiveNickname.trim().length > 0 && !submitting;
 
   const handleCreate = async () => {

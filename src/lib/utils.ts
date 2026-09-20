@@ -49,8 +49,9 @@ export function pickAvatar(nickname: string, takenAvatars: Iterable<string>): st
  * screen. React escapes them, so this is about readability, not injection:
  * strip control characters and zero-width glyphs, collapse whitespace, cap length.
  */
-export function sanitizeNickname(raw: string, maxLength = MAX_NICKNAME_LENGTH): string {
-  return raw
+export function sanitizeNickname(raw: unknown, maxLength = MAX_NICKNAME_LENGTH): string {
+  const str = typeof raw === "string" ? raw : String(raw ?? "");
+  return str
     .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u2028\u2029\ufeff]/g, "")
     .replace(/\s+/g, " ")
     .trim()
@@ -58,8 +59,9 @@ export function sanitizeNickname(raw: string, maxLength = MAX_NICKNAME_LENGTH): 
 }
 
 /** Normalise a typed room code: uppercase, drop anything outside the alphabet. */
-export function normalizeRoomCode(raw: string): string {
-  return raw
+export function normalizeRoomCode(raw: unknown): string {
+  const str = typeof raw === "string" ? raw : String(raw ?? "");
+  return str
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")
     .slice(0, ROOM_CODE_LENGTH);
