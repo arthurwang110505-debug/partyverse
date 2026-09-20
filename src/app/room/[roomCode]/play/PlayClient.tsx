@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Clock, Crown, Sparkles } from "lucide-react";
+import { useToast } from "@/providers/ToastProvider";
+import { isParticipant } from "@/engine/participants";
 import { useRoom } from "@/providers/RoomContext";
 import { GAMES } from "@/constants/games";
 import { Button } from "@/components/ui/Button";
@@ -21,17 +23,22 @@ const REACTIONS = ["🎉", "🔥", "👑", "💩", "❤️", "🤣"];
 /** A player's interactive holding screen while waiting in the lobby. */
 export default function PlayClient({ roomCode }: Props) {
   const router = useRouter();
+  const { toast } = useToast();
   const { room, player, leaveRoom, toggleReady, sendReaction } = useRoom();
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   const game = GAMES.find((g) => g.id === room?.gameId);
-  const playerList = Object.values(room?.players ?? {});
+  const playerList = Object.values(room?.players ?? {}).filter(isParticipant);
   const onlineCount = playerList.filter((p) => p.isConnected).length;
   const isReady = Boolean(player?.isReady);
 
   const handleToggleReady = async () => {
     vibrate(25);
-    await toggleReady();
+    try {
+      await toggleReady();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "無法更新就緒狀態");
+    }
   };
 
   const handleReaction = async (emoji: string) => {

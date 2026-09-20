@@ -15,6 +15,8 @@ export interface Player {
   nickname: string;
   avatar: string;
   isHost: boolean;
+  /** Display-only hosts never receive turns or count toward player limits. */
+  role?: "player" | "display";
   isConnected: boolean;
   score: number;
   /** Whether player has marked themselves ready in the lobby */
@@ -61,6 +63,11 @@ export interface Room<S = Record<string, unknown>> {
   /** Server timestamp written by the authoritative tick, used to detect a stalled host. */
   lastTickAt?: number;
   startedAt?: number;
+  finishedAt?: number;
+  /** Frozen when a match starts. Late joiners spectate until the next match. */
+  participantIds?: string[];
+  /** Small content history retained across rematches; never stores drawings. */
+  contentHistory?: Record<string, string[]>;
 }
 
 export interface GameDefinition {
@@ -93,6 +100,7 @@ export interface GameSummary {
   scores: Record<string, number>;
   achievements: Achievement[];
   winnerId: string;
+  winnerIds?: string[];
 }
 
 /**

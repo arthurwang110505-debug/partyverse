@@ -6,6 +6,8 @@ import { useRoom } from "@/providers/RoomContext";
 import { GAMES } from "@/constants/games";
 import { MuteToggle } from "@/components/game/MuteToggle";
 import { FloatingReactions } from "@/components/game/FloatingReactions";
+import { HostGameControls } from "./HostGameControls";
+import { HostRecoveryNotice } from "./HostRecoveryNotice";
 import { cn } from "@/lib/utils";
 
 interface PlayShellProps {
@@ -29,11 +31,10 @@ interface PlayShellProps {
  *  - `100dvh` height so nothing hides under mobile Safari's collapsing URL bar
  */
 export function PlayShell({ children, className, round }: PlayShellProps) {
-  const { room, player } = useRoom();
+  const { room, player, isHost } = useRoom();
   const game = GAMES.find((g) => g.id === room?.gameId);
   const score =
-    (room?.gameState as { currentScores?: Record<string, number> } | undefined)?.currentScores?.[player?.id ?? ""] ??
-    0;
+    (room?.gameState as { currentScores?: Record<string, number> } | undefined)?.currentScores?.[player?.id ?? ""] ?? 0;
 
   return (
     <main
@@ -43,9 +44,12 @@ export function PlayShell({ children, className, round }: PlayShellProps) {
       <FloatingReactions />
 
       <div className="mx-auto w-full max-w-md px-4 pt-4 pt-safe relative z-10">
-        <div className="glass flex items-center justify-between gap-2 rounded-2xl border border-white/10 px-3.5 py-2.5 shadow-lg shadow-black/40 ring-1 ring-white/5">
+        <div className="glass flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/10 px-3.5 py-2.5 shadow-lg shadow-black/40 ring-1 ring-white/5">
           <span className="flex min-w-0 items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/20 text-lg ring-1 ring-cyan-500/30" aria-hidden="true">
+            <span
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/20 text-lg ring-1 ring-cyan-500/30"
+              aria-hidden="true"
+            >
               {player?.avatar}
             </span>
             <span className="flex items-center gap-1 truncate text-sm font-bold text-white">
@@ -53,8 +57,12 @@ export function PlayShell({ children, className, round }: PlayShellProps) {
               {player?.isHost && <Crown className="h-3.5 w-3.5 shrink-0 text-yellow-400" aria-label="房主" />}
             </span>
           </span>
-          <span className="flex shrink-0 items-center gap-2 text-xs">
-            {round && <span className="tabular-nums font-bold text-cyan-300 bg-cyan-950/50 px-2 py-0.5 rounded-full border border-cyan-500/30">{round}</span>}
+          <span className="flex flex-wrap items-center gap-2 text-xs">
+            {round && (
+              <span className="tabular-nums font-bold text-cyan-300 bg-cyan-950/50 px-2 py-0.5 rounded-full border border-cyan-500/30">
+                {round}
+              </span>
+            )}
             {game && (
               <span aria-hidden="true" title={game.name}>
                 {game.icon}
@@ -67,7 +75,11 @@ export function PlayShell({ children, className, round }: PlayShellProps) {
         </div>
       </div>
 
-      <div className={cn("mx-auto w-full max-w-md flex-1 px-4 pb-28 relative z-10", className)}>{children}</div>
+      <div className={cn("mx-auto w-full max-w-md flex-1 px-4 pb-28 relative z-10", className)}>
+        <HostRecoveryNotice />
+        {children}
+        {isHost && player?.role !== "display" && <HostGameControls />}
+      </div>
 
       {/* Bottom dock — sits above the iPhone home indicator thanks to dock-safe. */}
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex items-center justify-center gap-2 px-4 dock-safe">

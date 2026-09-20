@@ -1,19 +1,19 @@
 "use client";
 
+import { engineRoom } from "@/engine/participants";
+
 import { useEffect } from "react";
 import { useRoom } from "@/providers/RoomContext";
-import { useToast } from "@/providers/ToastProvider";
 import type { BattleGameState } from "@/engine/realBattle";
-import { Button } from "@/components/ui/Button";
+import { HostGameControls } from "@/components/game/HostGameControls";
 import { HostShell } from "@/components/game/HostShell";
 import { Confetti } from "@/components/game/Confetti";
 import { sfx } from "@/lib/sound";
 
 export default function HostRealBattle() {
-  const { room, endRound, endGame } = useRoom();
-  const { toast } = useToast();
+  const { room } = useRoom();
   const state = room?.gameState as BattleGameState | undefined;
-  const players = room?.players ?? {};
+  const players = room ? engineRoom(room).players : {};
 
   const phase = state?.phase;
   const timeLeft = state?.timeLeft;
@@ -30,10 +30,7 @@ export default function HostRealBattle() {
 
   if (!state) return null;
 
-  const fail = (e: unknown) => toast(e instanceof Error ? e.message : "操作失敗");
-
-  const rankedPlayers = Object.entries(state.currentScores ?? {})
-    .sort((a, b) => b[1] - a[1]);
+  const rankedPlayers = Object.entries(state.currentScores ?? {}).sort((a, b) => b[1] - a[1]);
 
   return (
     <HostShell>
@@ -41,9 +38,7 @@ export default function HostRealBattle() {
 
       <div className="mx-auto max-w-4xl text-center">
         <header className="mb-4">
-          <p className="mb-1 text-sm font-semibold tracking-wider text-orange-400">
-            大亂鬥 ⚔️ · 即時手機手把對決
-          </p>
+          <p className="mb-1 text-sm font-semibold tracking-wider text-orange-400">大亂鬥 ⚔️ · 即時手機手把對決</p>
           <h1 className="text-2xl font-black text-white md:text-4xl">搶奪金幣與星星！</h1>
         </header>
 
@@ -75,7 +70,10 @@ export default function HostRealBattle() {
                   className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center transition-all duration-100 ease-out"
                   style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
                 >
-                  <div className="text-3xl filter drop-shadow-[0_0_10px_rgba(255,255,255,0.9)] animate-pulse" aria-hidden="true">
+                  <div
+                    className="text-3xl filter drop-shadow-[0_0_10px_rgba(255,255,255,0.9)] animate-pulse"
+                    aria-hidden="true"
+                  >
                     {p?.avatar ?? "👾"}
                   </div>
                   <span className="mt-0.5 whitespace-nowrap rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-black text-white shadow">
@@ -143,16 +141,8 @@ export default function HostRealBattle() {
           </div>
         </div>
 
-        <div className="mt-6 flex justify-center gap-3">
-          <Button variant="ghost" size="md" onClick={() => endRound().catch(fail)}>
-            重開
-          </Button>
-          <Button variant="danger" size="md" onClick={() => endGame().catch(fail)}>
-            結算
-          </Button>
-        </div>
+        <HostGameControls />
       </div>
     </HostShell>
   );
 }
-

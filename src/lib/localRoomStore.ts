@@ -5,14 +5,14 @@ import type { Room } from "@/types";
 const LOCAL_STORAGE_PREFIX = "partyverse_room_";
 const LOCAL_USER_KEY = "partyverse_local_uid";
 
-/** Generate a persistent local user id for local demo mode. */
-export function getLocalUserId(): string {
+/** One controller identity per tab; refreshing keeps it, a new tab gets its own. */
+export function getLocalUserId(previousSessionId?: string): string {
   if (typeof window === "undefined") return "local-server-user";
   try {
-    let uid = window.localStorage.getItem(LOCAL_USER_KEY);
+    let uid = window.sessionStorage.getItem(LOCAL_USER_KEY);
     if (!uid) {
-      uid = "demo-" + Math.random().toString(36).substring(2, 10);
-      window.localStorage.setItem(LOCAL_USER_KEY, uid);
+      uid = previousSessionId || "demo-" + Math.random().toString(36).substring(2, 10);
+      window.sessionStorage.setItem(LOCAL_USER_KEY, uid);
     }
     return uid;
   } catch {
@@ -144,4 +144,19 @@ export function subscribeLocalRoom(roomCode: string, callback: Listener): () => 
     }
     window.removeEventListener("storage", onStorage);
   };
+}
+
+/** Serialize read-modify-write operations across same-browser demo tabs. */
+export async function updateLocalRoom(roomCode: string, apply: (room: Room) => Room | null): Promise<Room | null> {
+  const update = () => {
+    const current = getLocalRoom(roomCode);
+    if (!current) return null;
+    const next = apply(current);
+    if (next) saveLocalRoom(next);
+    return next;
+  };
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    return navigator.locks.request(`partyverse-room-${roomCode}`, update);
+  }
+  return update();
 }

@@ -226,29 +226,23 @@ describe("Firework Master Engine", () => {
 });
 
 describe("Draw and Guess Engine", () => {
-  it("receives strokes from drawer and guesses from guessers", () => {
+  it("accepts live strokes and rewards correct guesses", () => {
     const room = createMockRoom(DRAW_GAME_ID);
-    const state = DrawAndGuessEngine.createGame(room);
-    expect(state.phase).toBe("drawing");
-    expect(state.drawerPlayerId).toBe("p1");
-
-    room.gameState = state;
-    // Drawer adds stroke
-    let next = DrawAndGuessEngine.handlePlayerAction(room, "p1", {
+    room.gameState = DrawAndGuessEngine.createGame(room);
+    for (let i = 0; i < 3; i++) room.gameState = DrawAndGuessEngine.updateGameState(room);
+    const state = room.gameState;
+    const drawer = state.drawerPlayerId;
+    const guesser = Object.keys(room.players).find((id) => id !== drawer)!;
+    room.gameState = DrawAndGuessEngine.handlePlayerAction(room, drawer, {
       type: "addStroke",
-      stroke: { color: "#000", width: 4, points: [10, 20, 30, 40] },
+      canvasVersion: 0,
+      stroke: { id: "live-1", revision: 1, color: "#ffffff", width: 6, points: [10, 20, 30, 40] },
     });
-    expect(next.strokes.length).toBe(1);
-
-    // p2 guesses correctly
-    room.gameState = next;
-    next = DrawAndGuessEngine.handlePlayerAction(room, "p2", {
-      type: "guessWord",
-      word: state.prompt.word,
-    });
-    expect(next.correctPlayerIds).toContain("p2");
-    expect(next.currentScores["p2"]).toBe(15);
-    expect(next.currentScores["p1"]).toBe(5); // Drawer rewarded
+    expect(room.gameState.strokes).toHaveLength(1);
+    const next = DrawAndGuessEngine.handlePlayerAction(room, guesser, { type: "guessWord", word: state.prompt.word });
+    expect(next.correctPlayerIds).toContain(guesser);
+    expect(next.currentScores[guesser]).toBe(25);
+    expect(next.currentScores[drawer]).toBe(5);
   });
 });
 

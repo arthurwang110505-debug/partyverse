@@ -1,168 +1,163 @@
-import { describe, expect, it } from "vitest";
-import {
-  BombEngine,
-  generateChallenge,
-  survivorIds,
-  type BombGameState,
-} from "./bombCountdown";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { BombEngine, generateChallenge, survivorIds, type BombGameState } from "./bombCountdown";
+import { testRoom } from "@/test/fixtures";
 import type { Room } from "@/types";
 
-function mockRoom(playersCount = 3): Room<BombGameState> {
-  const players: Room["players"] = {};
-  for (let i = 1; i <= playersCount; i++) {
-    players[`p${i}`] = {
-      id: `p${i}`,
-      nickname: `Player ${i}`,
-      avatar: "🦊",
-      isHost: i === 1,
-      isConnected: true,
-      score: 0,
-    };
-  }
-
-  return {
-    id: "TEST1",
-    gameId: "bombcountdown",
-    hostPlayerId: "p1",
-    status: "PLAYING",
-    createdAt: Date.now(),
-    settings: {
-      timer: 10,
-      difficulty: "easy",
-      rounds: 3,
-      soundEnabled: true,
-      ageMode: "family",
-    },
-    players,
-    gameState: {} as BombGameState,
-  };
+function activeRoom(count = 4): Room<BombGameState> {
+  const room = testRoom("bombcountdown", count) as unknown as Room<BombGameState>;
+  room.settings.timer = 10;
+  room.gameState = BombEngine.createGame(room);
+  for (let i = 0; i < 3; i++) room.gameState = BombEngine.updateGameState(room);
+  return room;
+}
+function tick(room: Room<BombGameState>, count = 1) {
+  for (let i = 0; i < count; i++) room.gameState = BombEngine.updateGameState(room);
+  return room.gameState;
+}
+function answer(room: Room<BombGameState>, correct = true) {
+  const state = room.gameState;
+  const challenge = state.challenge!;
+  return BombEngine.handlePlayerAction(room, state.bombHolderId, {
+    type: "answer",
+    challengeId: challenge.id,
+    answer: correct ? challenge.correctAnswer : challenge.options.find((option) => option !== challenge.correctAnswer)!,
+  });
 }
 
-describe("BombCountdown Engine", () => {
-  it("initializes a valid game state with a chosen bomb holder", () => {
-    const room = mockRoom(3);
+beforeEach(() => vi.useFakeTimers().setSystemTime(100000));
+afterEach(() => vi.useRealTimers());
+
+describe("Bomb Countdown match rules", () => {
+  it("briefs players before starting and never gives the display a turn", () => {
+    const room = testRoom() as unknown as Room<BombGameState>;
     const state = BombEngine.createGame(room);
-
-    expect(state.phase).toBe("challenge");
-    expect(["p1", "p2", "p3"]).toContain(state.bombHolderId);
-    expect(state.bombTimeLeft).toBe(10);
-    expect(state.challenge).not.toBeNull();
-    expect(state.challenge?.targetPlayerId).toBe(state.bombHolderId);
-    expect(state.eliminatedPlayers).toEqual([]);
-    expect(state.currentScores).toEqual({ p1: 0, p2: 0, p3: 0 });
+    expect(state.phase).toBe("briefing");
+    expect(state.challenge).toBeNull();
+    expect(state.currentScores).not.toHaveProperty("tv");
+    const active = activeRoom().gameState;
+    expect(active.phase).toBe("challenge");
+    expect(active.bombHolderId).not.toBe("tv");
+    expect(active.challenge?.targetPlayerId).toBe(active.bombHolderId);
   });
-
-  it("ignores answers from players who are not holding the bomb", () => {
-    const room = mockRoom(3);
-    const initial = BombEngine.createGame(room);
-    room.gameState = initial;
-
-    const nonHolder = ["p1", "p2", "p3"].find((id) => id !== initial.bombHolderId)!;
-    const next = BombEngine.handlePlayerAction(room, nonHolder, {
-      type: "answer",
-      answer: initial.challenge!.correctAnswer,
-    });
-
-    expect(next).toBe(initial);
+  it("only accepts a valid answer from the current holder for the current challenge", () => {
+    const room = activeRoom();
+    const initial = room.gameState;
+    const act = { type: "answer", answer: initial.challenge!.correctAnswer, challengeId: initial.challenge!.id };
+    const other = survivorIds(room).find((id) => id !== initial.bombHolderId)!;
+    expect(BombEngine.handlePlayerAction(room, other, act)).toBe(initial);
+    expect(BombEngine.handlePlayerAction(room, "tv", act)).toBe(initial);
+    expect(BombEngine.handlePlayerAction(room, initial.bombHolderId, { ...act, challengeId: "old" })).toBe(initial);
+    expect(BombEngine.handlePlayerAction(room, initial.bombHolderId, { ...act, answer: {} })).toBe(initial);
   });
-
-  it("does not pass bomb on wrong answer", () => {
-    const room = mockRoom(3);
-    const initial = BombEngine.createGame(room);
-    room.gameState = initial;
-
-    const holder = initial.bombHolderId;
-    const wrongAnswer = "definitely-wrong-answer";
-    const next = BombEngine.handlePlayerAction(room, holder, {
-      type: "answer",
-      answer: wrongAnswer,
-    });
-
-    expect(next.bombHolderId).toBe(holder);
-    expect(next.currentScores[holder]).toBe(0);
-  });
-
-  it("passes bomb and adds points on correct answer", () => {
-    const room = mockRoom(3);
-    const initial = BombEngine.createGame(room);
-    room.gameState = initial;
-
-    const holder = initial.bombHolderId;
-    const next = BombEngine.handlePlayerAction(room, holder, {
-      type: "answer",
-      answer: initial.challenge!.correctAnswer,
-    });
-
+  it("keeps the shared fuse running when passing and awards 10 points once", () => {
+    const room = activeRoom();
+    room.gameState.bombTimeLeft = 7;
+    const holder = room.gameState.bombHolderId;
+    const before = structuredClone(room.gameState);
+    const next = answer(room);
+    expect(next.bombTimeLeft).toBe(7);
+    expect(next.bombHolderId).not.toBe(holder);
     expect(next.currentScores[holder]).toBe(10);
     expect(next.correctAnswers[holder]).toBe(1);
-    expect(["p1", "p2", "p3"]).toContain(next.bombHolderId);
-    expect(next.challenge?.targetPlayerId).toBe(next.bombHolderId);
+    expect(next.passes).toBe(1);
+    expect(room.gameState).toEqual(before);
+    room.gameState = next;
+    expect(
+      BombEngine.handlePlayerAction(room, holder, {
+        type: "answer",
+        answer: before.challenge!.correctAnswer,
+        challengeId: before.challenge!.id,
+      }),
+    ).toBe(next);
   });
-
-  it("decrements time on normal tick", () => {
-    const room = mockRoom(3);
-    const initial = BombEngine.createGame(room);
-    initial.bombTimeLeft = 8;
-    room.gameState = initial;
-
-    const next = BombEngine.updateGameState(room);
-    expect(next.bombTimeLeft).toBe(7);
-    expect(next.phase).toBe("challenge");
+  it("penalizes a wrong answer and enforces a short retry cooldown", () => {
+    const room = activeRoom();
+    const holder = room.gameState.bombHolderId;
+    room.gameState = answer(room, false);
+    expect(room.gameState.bombTimeLeft).toBe(9);
+    expect(room.gameState.bombHolderId).toBe(holder);
+    expect(room.gameState.lastAnswer?.correct).toBe(false);
+    expect(answer(room, false)).toBe(room.gameState);
+    vi.advanceTimersByTime(500);
+    expect(answer(room, false).bombTimeLeft).toBe(8);
   });
-
-  it("eliminates bomb holder when timer hits 0", () => {
-    const room = mockRoom(3);
-    const initial = BombEngine.createGame(room);
-    initial.bombTimeLeft = 1;
-    const currentHolder = initial.bombHolderId;
-    room.gameState = initial;
-
-    const next = BombEngine.updateGameState(room);
-    expect(next.eliminatedPlayers).toContain(currentHolder);
-    expect(next.lastEliminatedId).toBe(currentHolder);
-    // 2 survivors remain, so still playing
-    expect(next.phase).toBe("challenge");
-    expect(next.bombHolderId).not.toBe(currentHolder);
+  it("ignores disconnected and eliminated recipients", () => {
+    const room = activeRoom();
+    const holder = room.gameState.bombHolderId;
+    const others = survivorIds(room).filter((id) => id !== holder);
+    room.players[others[0]].isConnected = false;
+    room.gameState.eliminatedPlayers = [others[1]];
+    expect(survivorIds(room, room.gameState.eliminatedPlayers).sort()).toEqual([holder, others[2]].sort());
+    expect(answer(room).bombHolderId).toBe(others[2]);
   });
-
-  it("ends the game when only one player survives", () => {
-    const room = mockRoom(2);
-    const initial = BombEngine.createGame(room);
-    initial.bombTimeLeft = 1;
-    const currentHolder = initial.bombHolderId;
-    const otherPlayer = currentHolder === "p1" ? "p2" : "p1";
-    room.gameState = initial;
-
-    const next = BombEngine.updateGameState(room);
-    expect(next.phase).toBe("result");
-    expect(next.winnerId).toBe(otherPlayer);
-    expect(next.currentScores[otherPlayer]).toBe(50);
+  it("ticks normally, then gives an explosion a visible pause", () => {
+    const room = activeRoom();
+    const holder = room.gameState.bombHolderId;
+    expect(tick(room).bombTimeLeft).toBe(9);
+    room.gameState.bombTimeLeft = 1;
+    expect(tick(room).phase).toBe("exploded");
+    expect(room.gameState.lastEliminatedId).toBe(holder);
+    expect(room.gameState.eliminatedPlayers).toContain(holder);
+    expect(room.gameState.bombTimeLeft).toBe(3);
+    tick(room, 3);
+    expect(room.gameState.phase).toBe("challenge");
+    expect(room.gameState.bombHolderId).not.toBe(holder);
+    expect(room.gameState.fuseDuration).toBeLessThan(10);
   });
-
-  it("generates valid challenges with all required fields", () => {
-    const challenge = generateChallenge("p1", "easy");
-    expect(challenge.targetPlayerId).toBe("p1");
-    expect(challenge.options).toContain(challenge.correctAnswer);
-    expect(challenge.options.length).toBeGreaterThanOrEqual(1);
-    expect(challenge.timeLimit).toBeGreaterThan(0);
+  it("advances when the holder disconnects instead of waiting on a dead turn", () => {
+    const room = activeRoom();
+    room.players[room.gameState.bombHolderId].isConnected = false;
+    expect(tick(room).phase).toBe("exploded");
   });
-
-  it("correctly identifies survivors", () => {
-    const room = mockRoom(3);
-    expect(survivorIds(room, ["p1"])).toEqual(["p2", "p3"]);
-    expect(survivorIds(room, ["p1", "p2"])).toEqual(["p3"]);
+  it("awards the survivor once and restores everyone for the next configured round", () => {
+    const room = activeRoom(2);
+    const holder = room.gameState.bombHolderId;
+    const survivor = survivorIds(room).find((id) => id !== holder)!;
+    room.gameState.bombTimeLeft = 1;
+    tick(room, 4);
+    expect(room.gameState.phase).toBe("round_reveal");
+    expect(room.gameState.currentScores[survivor]).toBe(50);
+    expect(room.gameState.roundWins[survivor]).toBe(1);
+    tick(room, 5);
+    expect(room.gameState.phase).toBe("briefing");
+    expect(room.gameState.currentRound).toBe(2);
+    expect(room.gameState.eliminatedPlayers).toEqual([]);
+    expect(room.gameState.currentScores[survivor]).toBe(50);
   });
-
-  it("produces valid summary and achievements on endGame", () => {
-    const room = mockRoom(2);
-    const state = BombEngine.createGame(room);
-    state.currentScores = { p1: 50, p2: 10 };
-    state.winnerId = "p1";
-    room.gameState = state;
-
-    const summary = BombEngine.endGame(room);
-    expect(summary.winnerId).toBe("p1");
-    expect(summary.scores).toEqual({ p1: 50, p2: 10 });
-    expect(summary.achievements.some((a) => a.id === "survivor")).toBe(true);
+  it("finishes only after the configured round count", () => {
+    const room = activeRoom(2);
+    room.gameState.totalRounds = 1;
+    room.gameState.bombTimeLeft = 1;
+    tick(room, 9);
+    expect(room.gameState.phase).toBe("result");
+    expect(room.gameState.winnerIds).toHaveLength(1);
+    expect(BombEngine.endGame(room).winnerId).toBe(room.gameState.winnerId);
+  });
+  it("reports tied champions instead of breaking ties by player id", () => {
+    const room = activeRoom();
+    room.gameState.currentScores = { p1: 50, p2: 50, p3: 10, p4: 0 };
+    expect(BombEngine.endGame(room).winnerIds).toEqual(["p1", "p2"]);
+  });
+  it("does not invent a survivor if everyone disconnected", () => {
+    const room = activeRoom(2);
+    Object.values(room.players).forEach((p) => {
+      p.isConnected = false;
+    });
+    tick(room, 4);
+    expect(room.gameState.roundWinnerId).toBeNull();
+    expect(Object.values(room.gameState.currentScores)).toEqual([0, 0]);
+  });
+  it("difficulty changes the fuse and generates valid shuffled challenges", () => {
+    const room = activeRoom();
+    room.settings.difficulty = "hard";
+    room.gameState = BombEngine.createGame(room);
+    tick(room, 3);
+    expect(room.gameState.fuseDuration).toBe(7);
+    for (const difficulty of ["easy", "medium", "hard"]) {
+      const challenge = generateChallenge("p1", difficulty, () => 0.7);
+      expect(challenge.options).toContain(challenge.correctAnswer);
+      expect(new Set(challenge.options).size).toBe(challenge.options.length);
+      expect(challenge.targetPlayerId).toBe("p1");
+    }
   });
 });

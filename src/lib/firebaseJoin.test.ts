@@ -38,10 +38,7 @@ vi.mock("firebase/database", () => {
       return snapshotOf(value);
     },
 
-    runTransaction: async (
-      r: { path: string },
-      updateFunction: (current: unknown) => unknown,
-    ) => {
+    runTransaction: async (r: { path: string }, updateFunction: (current: unknown) => unknown) => {
       state.calls.push("transaction");
       const path = r.path;
 
@@ -108,7 +105,9 @@ describe("joinRoomOnFirebase", () => {
 
     expect(result).toEqual({ outcome: "joined" });
 
-    const room = state.server.get("rooms/ABCDE") as { players: Record<string, { nickname: string; isHost: boolean; isConnected: boolean }> };
+    const room = state.server.get("rooms/ABCDE") as {
+      players: Record<string, { nickname: string; isHost: boolean; isConnected: boolean }>;
+    };
     expect(room.players["joiner-uid"].nickname).toBe("小明");
     expect(room.players["joiner-uid"].isHost).toBe(false);
     expect(room.players["joiner-uid"].isConnected).toBe(true);
@@ -145,6 +144,14 @@ describe("joinRoomOnFirebase", () => {
     expect(room.players["joiner-uid"]).toBeUndefined();
   });
 
+  it("does not count a display-only host toward the player limit", async () => {
+    const players: Record<string, object> = { "host-uid": { ...HOST, role: "display" } };
+    for (let i = 0; i < 11; i++) players[`p${i}`] = { ...HOST, id: `p${i}`, isHost: false };
+    seedServerRoom("ABCDE", players);
+    expect(await joinRoomOnFirebase({} as never, "ABCDE", "last-seat", "小明")).toEqual({ outcome: "joined" });
+    expect(await joinRoomOnFirebase({} as never, "ABCDE", "one-too-many", "小華")).toEqual({ outcome: "full" });
+  });
+
   it("rejoining keeps the player's previous avatar and score", async () => {
     seedServerRoom("ABCDE", {
       "host-uid": HOST,
@@ -154,7 +161,9 @@ describe("joinRoomOnFirebase", () => {
     const result = await joinRoomOnFirebase({} as never, "ABCDE", "joiner-uid", "小明");
 
     expect(result).toEqual({ outcome: "joined" });
-    const room = state.server.get("rooms/ABCDE") as { players: Record<string, { nickname: string; avatar: string; score: number }> };
+    const room = state.server.get("rooms/ABCDE") as {
+      players: Record<string, { nickname: string; avatar: string; score: number }>;
+    };
     expect(room.players["joiner-uid"].nickname).toBe("小明");
     expect(room.players["joiner-uid"].avatar).toBe("🐼");
     expect(room.players["joiner-uid"].score).toBe(7);

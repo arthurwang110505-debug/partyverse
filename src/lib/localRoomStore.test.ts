@@ -1,11 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
-import {
-  getLocalUserId,
-  getLocalRoom,
-  saveLocalRoom,
-  deleteLocalRoom,
-  subscribeLocalRoom,
-} from "./localRoomStore";
+import { getLocalUserId, getLocalRoom, saveLocalRoom, deleteLocalRoom, subscribeLocalRoom } from "./localRoomStore";
 import type { Room } from "@/types";
 
 describe("localRoomStore", () => {
@@ -28,6 +22,7 @@ describe("localRoomStore", () => {
 
     (global as unknown as { window: unknown }).window = {
       localStorage: mockStorage,
+      sessionStorage: mockStorage,
       addEventListener: () => {},
       removeEventListener: () => {},
     };
@@ -43,6 +38,25 @@ describe("localRoomStore", () => {
     expect(uid1.startsWith("demo-")).toBe(true);
     const uid2 = getLocalUserId();
     expect(uid2).toBe(uid1);
+  });
+
+  it("keeps an existing local session's identity during migration", () => {
+    expect(getLocalUserId("old-player")).toBe("old-player");
+    expect(getLocalUserId("another-player")).toBe("old-player");
+  });
+
+  it("does not reuse a different tab's controller identity", () => {
+    const first = getLocalUserId();
+    const tabStorage: Record<string, string> = {};
+    Reflect.set(window, "sessionStorage", {
+      getItem: (key: string) => tabStorage[key] ?? null,
+      setItem: (key: string, value: string) => {
+        tabStorage[key] = value;
+      },
+    });
+    const second = getLocalUserId();
+    expect(second).not.toBe(first);
+    expect(getLocalUserId()).toBe(second);
   });
 
   it("saves, reads and deletes a local room", () => {

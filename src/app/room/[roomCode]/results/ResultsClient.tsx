@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Copy, Gamepad2, Home, RotateCcw, Sparkles } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
@@ -16,6 +15,7 @@ import { Confetti } from "@/components/game/Confetti";
 import { FloatingReactions } from "@/components/game/FloatingReactions";
 import { useCountUp } from "@/hooks/useCountUp";
 import { vibrate } from "@/lib/sound";
+import { participantIds } from "@/engine/participants";
 import { cn, formatTime } from "@/lib/utils";
 
 interface Props {
@@ -38,16 +38,13 @@ const REACTIONS = ["🎉", "👑", "🔥", "💩", "👏", "❤️"];
 /** Podium score with a count-up entrance animation. */
 function AnimatedScore({ value, className }: { value: number; className?: string }) {
   const animated = useCountUp(value);
-  return (
-    <p className={cn("text-sm font-bold tabular-nums", className)}>
-      {animated} 分
-    </p>
-  );
+  return <p className={cn("text-sm font-bold tabular-nums", className)}>{animated} 分</p>;
 }
 
 export default function ResultsClient({ roomCode }: Props) {
   const router = useRouter();
-  const { room, player, isHost, endRound, endRoom, switchGame, sendReaction } = useRoom();
+  const { room, player, isHost, rematch, endRoom, switchGame, sendReaction } = useRoom();
+  const [restarting, setRestarting] = useState(false);
   const [error, setError] = useState("");
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
@@ -60,6 +57,7 @@ export default function ResultsClient({ roomCode }: Props) {
     if (!room) return [];
     const scores = state?.currentScores ?? {};
     return Object.entries(room.players)
+      .filter(([id]) => participantIds(room).includes(id))
       .map(([id, p]) => ({
         id,
         nickname: p.nickname,
@@ -71,9 +69,16 @@ export default function ResultsClient({ roomCode }: Props) {
       .sort((a, b) => b.score - a.score || a.nickname.localeCompare(b.nickname));
   }, [room, state?.currentScores, player?.id]);
 
-  const podium = PODIUM_ORDER.map((i) => ranked[i]).filter(Boolean) as RankedPlayer[];
+  const podium = PODIUM_ORDER.map((i) => ({ entry: ranked[i], slot: i })).filter(({ entry }) => Boolean(entry));
+  const winners = (room?.gameState.winnerIds as string[] | undefined) ?? [];
+  const cooperative = room?.gameId === "mysteryroom";
+  const teamVictory = cooperative || room?.gameId === "whoisundercoveragent";
+  const rankOf = (entry: RankedPlayer) => ranked.findIndex((p) => p.score === entry.score);
+
   const achievements = state?.achievements ?? [];
-  const elapsed = room?.startedAt ? Math.round((Date.now() - room.startedAt) / 1000) : null;
+  const elapsed = room?.startedAt
+    ? Math.max(0, Math.round(((room.finishedAt ?? Date.now()) - room.startedAt) / 1000))
+    : null;
 
   const totalScore = ranked.reduce((sum, r) => sum + r.score, 0);
   const leader = ranked[0];
@@ -105,7 +110,10 @@ export default function ResultsClient({ roomCode }: Props) {
       `🏆 PARTYVERSE 派對排行榜 · ${game?.name ?? "遊戲"}`,
       `房間代碼：${roomCode}`,
       `------------------------`,
-      ...ranked.map((r, i) => `${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`} ${r.avatar} ${r.nickname}：${r.score} 分`),
+      ...ranked.map(
+        (r) =>
+          `${rankOf(r) === 0 ? "🥇" : rankOf(r) === 1 ? "🥈" : rankOf(r) === 2 ? "🥉" : `#${rankOf(r) + 1}`} ${r.avatar} ${r.nickname}：${r.score} 分`,
+      ),
     ];
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
@@ -130,7 +138,7 @@ export default function ResultsClient({ roomCode }: Props) {
       className="min-h-[100dvh] bg-ink p-4 pb-safe text-white relative"
       style={{ "--game-accent": game?.color, "--game-gradient": game?.gradient } as CSSProperties}
     >
-      <Confetti />
+      {winners.length > 0 && <Confetti />}
       <FloatingReactions />
 
       <div className="mx-auto max-w-lg pt-8 relative z-10">
@@ -138,7 +146,16 @@ export default function ResultsClient({ roomCode }: Props) {
           <p className="mb-4 text-5xl animate-bounce" aria-hidden="true">
             🏆
           </p>
-          <h1 className="mb-2 text-3xl font-black tracking-tight">遊戲結算</h1>
+          <h1 className="mb-2 text-3xl font-black tracking-tight">
+            {cooperative ? (room.gameState.isUnlocked ? "全員合作成功！" : "挑戰未完成") : "遊戲結算"}
+          </h1>
+          {winners.length > 0 && (
+            <p className="mb-3 text-sm leading-relaxed text-yellow-200" role="status">
+              {teamVictory ? "獲勝隊伍" : winners.length > 1 ? "並列冠軍" : "本場冠軍"}：
+              {winners.map((id) => room.players[id]?.nickname ?? "玩家").join("、")}
+            </p>
+          )}
+          {!winners.length && <p className="mb-3 text-sm text-white/65">本場尚無得分冠軍，再挑戰一次吧！</p>}
           {game && (
             <p className="text-sm text-white/50">
               <span aria-hidden="true">{game.icon}</span> {game.name}
@@ -164,10 +181,10 @@ export default function ResultsClient({ roomCode }: Props) {
         )}
 
         {/* Podium Display */}
-        {ranked.length > 0 && (
+        {ranked.length > 0 && winners.length > 0 && !teamVictory && (
           <section className="mb-8 flex h-48 items-end justify-center gap-3" aria-label="前三名領獎台">
-            {podium.map((entry, visualIndex) => {
-              const place = PODIUM_ORDER[visualIndex];
+            {podium.map(({ entry }) => {
+              const place = rankOf(entry);
               const podiumStyles = [
                 "h-20 w-24 border-yellow-500/30 bg-gradient-to-t from-yellow-500/20 to-yellow-500/5 shadow-lg",
                 "h-14 w-20 border-white/10 bg-white/5 shadow",
@@ -212,7 +229,10 @@ export default function ResultsClient({ roomCode }: Props) {
 
         {/* Full Rankings */}
         {ranked.length > 0 && (
-          <section className="glass mb-6 rounded-2xl border border-white/10 p-4 shadow-lg" aria-labelledby="rankings-heading">
+          <section
+            className="glass mb-6 rounded-2xl border border-white/10 p-4 shadow-lg"
+            aria-labelledby="rankings-heading"
+          >
             <div className="mb-3 flex items-center justify-between">
               <h2 id="rankings-heading" className="flex items-center gap-2 text-base font-semibold">
                 <span aria-hidden="true">⭐</span> 完整排行榜
@@ -223,7 +243,7 @@ export default function ResultsClient({ roomCode }: Props) {
               </Button>
             </div>
             <ol className="space-y-2">
-              {ranked.map((entry, i) => (
+              {ranked.map((entry) => (
                 <li
                   key={entry.id}
                   className={cn(
@@ -231,7 +251,7 @@ export default function ResultsClient({ roomCode }: Props) {
                     entry.isMe ? "border-violet-500/40 bg-violet-500/15" : "border-white/5 bg-white/5",
                   )}
                 >
-                  <span className="w-6 text-sm font-bold tabular-nums text-white/40">#{i + 1}</span>
+                  <span className="w-6 text-sm font-bold tabular-nums text-white/40">#{rankOf(entry) + 1}</span>
                   <span className="text-2xl" aria-hidden="true">
                     {entry.avatar}
                   </span>
@@ -252,7 +272,10 @@ export default function ResultsClient({ roomCode }: Props) {
         )}
 
         {achievements.length > 0 && (
-          <section className="glass mb-6 rounded-2xl border border-white/10 p-4 shadow-lg" aria-labelledby="achievements-heading">
+          <section
+            className="glass mb-6 rounded-2xl border border-white/10 p-4 shadow-lg"
+            aria-labelledby="achievements-heading"
+          >
             <h2 id="achievements-heading" className="mb-3 text-base font-semibold">
               <span aria-hidden="true">🎖️</span> 本局專屬成就
             </h2>
@@ -306,9 +329,19 @@ export default function ResultsClient({ roomCode }: Props) {
                 variant="accent"
                 size="md"
                 className="w-full font-bold shadow-lg"
-                onClick={() => endRound().catch((e) => setError(e instanceof Error ? e.message : "無法重新開始"))}
+                loading={restarting}
+                onClick={async () => {
+                  setRestarting(true);
+                  try {
+                    await rematch();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "無法重新開始");
+                  } finally {
+                    setRestarting(false);
+                  }
+                }}
               >
-                <RotateCcw className="h-4 w-4" aria-hidden="true" /> 再玩一次同款遊戲
+                <RotateCcw className="h-4 w-4" aria-hidden="true" /> 再玩一次（回大廳）
               </Button>
 
               <Button
@@ -317,7 +350,7 @@ export default function ResultsClient({ roomCode }: Props) {
                 className="w-full border border-violet-500/30 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20"
                 onClick={() => setShowSwitchModal(true)}
               >
-                <Gamepad2 className="h-4 w-4" aria-hidden="true" /> 換一款遊戲開房（免重新掃碼）
+                <Gamepad2 className="h-4 w-4" aria-hidden="true" /> 換一款遊戲（免重新掃碼）
               </Button>
 
               <Button variant="danger" size="md" className="w-full" onClick={() => setConfirmingEnd(true)}>
@@ -337,13 +370,6 @@ export default function ResultsClient({ roomCode }: Props) {
               </LinkButton>
             </>
           )}
-
-          <Link
-            href={`/room/${roomCode}/${isHost ? "host" : "play"}`}
-            className="block w-full rounded-xl py-3 text-center text-sm font-medium text-white/40 transition-all hover:text-white/70"
-          >
-            回到{isHost ? "大廳" : "房間"}
-          </Link>
         </div>
       </div>
 

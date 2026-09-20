@@ -1,291 +1,360 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { RotateCcw, Trash2 } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
 import { useToast } from "@/providers/ToastProvider";
-import type { DrawGameState, StrokeLine } from "@/engine/drawAndGuess";
+import {
+  DRAW_COLORS,
+  MAX_STROKES,
+  MAX_STROKE_POINTS,
+  drawHint,
+  type DrawGameState,
+  type StrokeLine,
+} from "@/engine/drawAndGuess";
+import { DrawingCanvas } from "@/components/game/DrawingCanvas";
+import { RoundTimer } from "@/components/game/RoundTimer";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { PlayShell } from "@/components/game/PlayShell";
-import { RotateCcw, Trash2, Palette } from "lucide-react";
 import { vibrate } from "@/lib/sound";
 import { cn } from "@/lib/utils";
 
-const PALETTE = ["#ffffff", "#ef4444", "#3b82f6", "#10b981", "#eab308", "#ec4899", "#8b5cf6", "#f97316"];
-const BRUSH_SIZES = [
+const COLORS = ["白色", "紅色", "藍色", "綠色", "黃色", "粉紅色", "紫色", "橘色"];
+const BRUSHES = [
   { label: "細", width: 3 },
   { label: "中", width: 6 },
   { label: "粗", width: 12 },
 ];
+const STREAM_MS = 100;
+interface ActiveStroke {
+  stroke: StrokeLine;
+  version: number;
+  submit: (action: unknown) => Promise<void>;
+}
 
 export default function PlayDrawAndGuess() {
   const { room, player, submitAction } = useRoom();
   const { toast } = useToast();
   const state = room?.gameState as DrawGameState | undefined;
   const [guessInput, setGuessInput] = useState("");
-  const [selectedColor, setSelectedColor] = useState(PALETTE[0]);
-  const [selectedWidth, setSelectedWidth] = useState(6);
-  const [livePoints, setLivePoints] = useState<number[]>([]);
+  const [pendingGuess, setPendingGuess] = useState(false);
+  const [color, setColor] = useState(DRAW_COLORS[0]);
+  const [width, setWidth] = useState(6);
+  const [liveStroke, setLiveStroke] = useState<StrokeLine | null>(null);
+  const [syncing, setSyncing] = useState(0);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const active = useRef<ActiveStroke | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const failed = useRef(false);
 
-  const isDrawing = useRef(false);
-  const currentPoints = useRef<number[]>([]);
+  useEffect(() => {
+    active.current = null;
+    setLiveStroke(null);
+    setGuessInput("");
+    setPendingGuess(false);
+    setConfirmClear(false);
+    failed.current = false;
+    if (timer.current) clearTimeout(timer.current);
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+      active.current = null;
+    };
+  }, [state?.phase, state?.currentRound, state?.drawerPlayerId, room?.startedAt]);
 
-  if (!state || !player) return null;
+  useEffect(() => {
+    if (
+      !active.current &&
+      liveStroke &&
+      state?.strokes.some((s) => s.id === liveStroke.id && s.revision >= liveStroke.revision)
+    )
+      setLiveStroke(null);
+  }, [state?.strokes, liveStroke]);
 
-  const amIDrawer = player.id === state.drawerPlayerId;
-  const hasGuessed = state.correctPlayerIds?.includes(player.id);
-  const lastGuess = state.guesses?.[player.id];
+  if (!state || !player || !room) return null;
+  const amDrawer = player.id === state.drawerPlayerId;
+  const solved = state.correctPlayerIds.includes(player.id);
+  const drawing = state.phase === "drawing";
+  const canDraw = drawing && amDrawer && state.strokes.length < MAX_STROKES;
+  const lastGuess = state.guesses[player.id];
 
-  const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!amIDrawer) return;
-    isDrawing.current = true;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 400;
-    const y = ((e.clientY - rect.top) / rect.height) * 400;
-    currentPoints.current = [Math.round(x), Math.round(y)];
-    setLivePoints([Math.round(x), Math.round(y)]);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!amIDrawer || !isDrawing.current) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 400;
-    const y = ((e.clientY - rect.top) / rect.height) * 400;
-    currentPoints.current.push(Math.round(x), Math.round(y));
-    setLivePoints([...currentPoints.current]);
-  };
-
-  const handlePointerUp = async () => {
-    if (!amIDrawer || !isDrawing.current) return;
-    isDrawing.current = false;
-    setLivePoints([]);
-    if (currentPoints.current.length >= 4) {
-      const stroke: StrokeLine = {
-        color: selectedColor,
-        width: selectedWidth,
-        points: currentPoints.current,
-      };
-      try {
-        await submitAction({ type: "addStroke", stroke });
-      } catch {
-        toast("線條沒送出去，再畫一次");
-      }
+  const flush = (current: ActiveStroke) => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
     }
-    currentPoints.current = [];
+    const stroke = { ...current.stroke, points: [...current.stroke.points] };
+    setSyncing((count) => count + 1);
+    // Captured at pointer-down so an old stroke cannot be submitted as a new round's action.
+    void current
+      .submit({ type: "addStroke", stroke, canvasVersion: current.version })
+      .catch(() => {
+        if (!failed.current) {
+          toast("畫筆同步失敗，請檢查連線後再畫一次");
+          failed.current = true;
+        }
+        setLiveStroke((line) => (line?.id === stroke.id ? null : line));
+      })
+      .finally(() => setSyncing((count) => Math.max(0, count - 1)));
   };
-
-  const handleUndo = async () => {
+  const coords = (e: PointerEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return [
+      Math.round(Math.max(0, Math.min(400, ((e.clientX - rect.left) / rect.width) * 400))),
+      Math.round(Math.max(0, Math.min(400, ((e.clientY - rect.top) / rect.height) * 400))),
+    ];
+  };
+  const pointerDown = (e: PointerEvent<SVGSVGElement>) => {
+    if (!canDraw || active.current || !e.isPrimary || e.button !== 0) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const stroke: StrokeLine = {
+      id: `${player.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      revision: 1,
+      color,
+      width,
+      points: coords(e),
+    };
+    active.current = { stroke, version: state.canvasVersion, submit: submitAction };
+    setLiveStroke(stroke);
+    flush(active.current);
+  };
+  const pointerMove = (e: PointerEvent<SVGSVGElement>) => {
+    const current = active.current;
+    if (!current || !e.isPrimary) return;
+    const [x, y] = coords(e);
+    let points = current.stroke.points;
+    if (Math.hypot(x - points[points.length - 2], y - points[points.length - 1]) < 2) return;
+    if (points.length >= MAX_STROKE_POINTS) {
+      points = points.filter((_, index) => Math.floor(index / 2) % 2 === 0);
+    }
+    current.stroke = { ...current.stroke, revision: current.stroke.revision + 1, points: [...points, x, y] };
+    setLiveStroke(current.stroke);
+    if (!timer.current)
+      timer.current = setTimeout(() => {
+        if (active.current === current) flush(current);
+      }, STREAM_MS);
+  };
+  const pointerUp = (e: PointerEvent<SVGSVGElement>) => {
+    if (!active.current || !e.isPrimary) return;
+    const current = active.current;
+    active.current = null;
+    flush(current);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+  const tool = async (type: "undoStroke" | "clearCanvas") => {
+    setSyncing((n) => n + 1);
+    setLiveStroke(null);
     vibrate(12);
     try {
-      await submitAction({ type: "undoStroke" });
+      await submitAction({ type });
+      setConfirmClear(false);
     } catch {
-      toast("復原失敗");
+      toast("畫布操作失敗，請再試一次");
+    } finally {
+      setSyncing((n) => Math.max(0, n - 1));
     }
   };
-
-  const handleClear = async () => {
-    vibrate(20);
+  const guess = async () => {
+    if (!guessInput.trim() || pendingGuess || !drawing || solved) return;
+    setPendingGuess(true);
     try {
-      await submitAction({ type: "clearCanvas" });
-    } catch {
-      toast("清除失敗，請再試一次");
-    }
-  };
-
-  const handleGuess = async () => {
-    const clean = guessInput.trim();
-    if (!clean) return;
-    vibrate(15);
-    try {
-      await submitAction({ type: "guessWord", word: clean });
+      await submitAction({ type: "guessWord", word: guessInput.trim() });
       setGuessInput("");
+      vibrate(12);
     } catch {
-      toast("送答失敗，請再試一次");
+      toast("答案未送出，請再試一次");
+    } finally {
+      setPendingGuess(false);
     }
-  };
-
-  const renderPath = (pts: number[]) => {
-    if (pts.length < 2) return "";
-    let d = `M ${pts[0]} ${pts[1]}`;
-    for (let i = 2; i < pts.length; i += 2) d += ` L ${pts[i]} ${pts[i + 1]}`;
-    return d;
   };
 
   return (
-    <PlayShell round={`第 ${state.currentRound} 回合`}>
-      <div className="text-center pt-2">
-        <header className="mb-3">
-          <span className="mb-1 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-pink-400">
-            <Palette className="h-3.5 w-3.5" /> 你畫我猜
-          </span>
-          {amIDrawer ? (
-            <div className="glass rounded-2xl border border-pink-400/40 bg-pink-500/10 p-3 shadow-lg">
-              <span className="block text-xs font-semibold text-pink-300">輪到你畫！請畫出以下題目：</span>
-              <span className="text-3xl font-black text-white tracking-wider">{state.prompt?.word}</span>
-              <span className="block text-[11px] text-white/50 mt-0.5">分類：{state.prompt?.category}</span>
-            </div>
-          ) : (
-            <div className="glass rounded-2xl border border-white/10 p-2.5">
-              <p className="text-xs text-white/60">
-                畫家正在作畫 · 提示分類：
-                <span className="font-bold text-pink-300 ml-1">{state.prompt?.category}</span>
-              </p>
-            </div>
-          )}
-        </header>
-
-        {amIDrawer ? (
-          <div className="space-y-3">
-            {/* Drawing Tools Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-              {/* Color Palette */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                {PALETTE.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setSelectedColor(c)}
-                    className={cn(
-                      "h-6 w-6 rounded-full border border-white/30 transition-transform active:scale-90",
-                      selectedColor === c && "ring-2 ring-white scale-110",
-                    )}
-                    style={{ backgroundColor: c }}
-                    aria-label={`顏色 ${c}`}
-                  />
-                ))}
-              </div>
-
-              {/* Brush Width & Actions */}
-              <div className="flex items-center gap-1">
-                {BRUSH_SIZES.map((b) => (
-                  <button
-                    key={b.width}
-                    type="button"
-                    onClick={() => setSelectedWidth(b.width)}
-                    className={cn(
-                      "rounded-lg px-2 py-1 text-xs font-medium transition-all",
-                      selectedWidth === b.width
-                        ? "bg-white/20 text-white font-bold"
-                        : "text-white/40 hover:text-white/70",
-                    )}
-                  >
-                    {b.label}
-                  </button>
-                ))}
-                <span className="h-4 w-px bg-white/20 mx-1" aria-hidden="true" />
-                <button
-                  type="button"
-                  onClick={() => void handleUndo()}
-                  disabled={state.strokes.length === 0}
-                  className="rounded-lg p-1.5 text-white/60 hover:text-white disabled:opacity-30 transition-all active:scale-90"
-                  aria-label="復原上一筆"
-                  title="復原"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleClear()}
-                  disabled={state.strokes.length === 0}
-                  className="rounded-lg p-1.5 text-white/60 hover:text-red-400 disabled:opacity-30 transition-all active:scale-90"
-                  aria-label="清除全畫布"
-                  title="清空"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Canvas */}
-            <div className="mx-auto aspect-square w-full touch-none overflow-hidden rounded-2xl border-2 border-white/20 bg-slate-950 shadow-inner">
-              <svg
-                className="h-full w-full cursor-crosshair"
-                viewBox="0 0 400 400"
-                role="img"
-                aria-label="繪畫畫布"
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={() => void handlePointerUp()}
-                onPointerLeave={() => void handlePointerUp()}
+    <PlayShell round={`${state.currentRound} / ${state.totalRounds}`}>
+      <div className="space-y-4 pt-4">
+        <RoundTimer
+          compact
+          timeLeft={state.timeLeft}
+          total={drawing ? state.drawDuration : state.phase === "briefing" ? 3 : 5}
+          endLabel={drawing ? "作畫結束" : "下一階段"}
+        />
+        {state.phase === "briefing" && (
+          <section className="rounded-2xl border border-pink-400/30 bg-pink-500/10 p-6 text-center" role="status">
+            <p className="mb-2 text-sm text-pink-200">
+              {amDrawer ? "準備輪到你畫！" : `${room.players[state.drawerPlayerId]?.nickname ?? "畫家"} 準備作畫`}
+            </p>
+            {amDrawer && <h2 className="mb-3 text-3xl font-black">{state.prompt.word}</h2>}
+            <p className="text-sm leading-relaxed text-white/70">
+              {amDrawer
+                ? "用圖畫表達，別寫出答案！每有人猜中，你得 5 分。"
+                : "看大螢幕的畫作，在手機輸入答案。越早猜中，得分越高！"}
+            </p>
+          </section>
+        )}
+        {drawing && (
+          <>
+            <header className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
+              {amDrawer ? (
+                <>
+                  <p className="text-xs text-pink-200">只有你看到的題目 · {state.prompt.category}</p>
+                  <h2 className="mt-1 text-2xl font-black">{state.prompt.word}</h2>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-white/70">
+                    提示：{state.prompt.category} · {Array.from(state.prompt.word).length} 個字
+                  </p>
+                  <p className="mt-2 text-2xl tracking-widest text-pink-200">
+                    {drawHint(state, room.settings.difficulty)}
+                  </p>
+                </>
+              )}
+            </header>
+            {amDrawer ? (
+              <>
+                <div className="flex gap-1 overflow-x-auto pb-1" aria-label="畫筆顏色">
+                  {DRAW_COLORS.map((c, index) => (
+                    <button
+                      key={c}
+                      type="button"
+                      aria-label={COLORS[index]}
+                      aria-pressed={color === c}
+                      onClick={() => setColor(c)}
+                      className={cn(
+                        "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border",
+                        color === c ? "border-white bg-white/15" : "border-transparent",
+                      )}
+                    >
+                      <span className="h-6 w-6 rounded-full border border-white/20" style={{ backgroundColor: c }} />
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex gap-1">
+                    {BRUSHES.map((b) => (
+                      <button
+                        key={b.width}
+                        type="button"
+                        aria-pressed={width === b.width}
+                        onClick={() => setWidth(b.width)}
+                        className={cn(
+                          "h-11 min-w-11 rounded-xl px-3 text-sm",
+                          width === b.width ? "bg-white/20 font-bold" : "bg-white/5 text-white/60",
+                        )}
+                      >
+                        {b.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label="復原上一筆"
+                      disabled={!state.strokes.length || !!active.current || syncing > 0}
+                      onClick={() => void tool("undoStroke")}
+                    >
+                      <RotateCcw className="h-5 w-5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label="清除全畫布"
+                      disabled={!state.strokes.length || !!active.current || syncing > 0}
+                      onClick={() => setConfirmClear(true)}
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </div>
+                <DrawingCanvas
+                  aria-label="繪畫畫布"
+                  className="aspect-square w-full touch-none select-none rounded-2xl border-2 border-white/20 bg-slate-950"
+                  strokes={state.strokes}
+                  liveStroke={liveStroke}
+                  onPointerDown={pointerDown}
+                  onPointerMove={pointerMove}
+                  onPointerUp={pointerUp}
+                  onPointerCancel={pointerUp}
+                />
+                <p className="text-center text-xs text-white/60">
+                  {state.strokes.length >= MAX_STROKES
+                    ? "畫布已滿，請復原或清除後繼續。"
+                    : syncing
+                      ? "正在同步畫筆…"
+                      : "邊畫邊同步到大螢幕 · 可在畫布外放開手指"}
+                </p>
+              </>
+            ) : solved ? (
+              <section
+                className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-6 text-center"
+                role="status"
               >
-                {state.strokes.map((s, idx) => {
-                  const d = renderPath(s.points);
-                  if (!d) return null;
-                  return (
-                    <path
-                      key={idx}
-                      d={d}
-                      stroke={s.color}
-                      strokeWidth={s.width}
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  );
-                })}
-
-                {/* Real-time active drawing stroke */}
-                {livePoints.length >= 2 && (
-                  <path
-                    d={renderPath(livePoints)}
-                    stroke={selectedColor}
-                    strokeWidth={selectedWidth}
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                )}
-              </svg>
-            </div>
-            <p className="text-[11px] text-white/40">手指在方框內拖曳即可作畫，線條即時同步到大螢幕！</p>
-          </div>
-        ) : (
-          <div className="space-y-4 py-4">
-            {hasGuessed ? (
-              <div className="py-8 glass rounded-3xl border border-emerald-500/40 bg-emerald-500/10 p-6">
-                <p className="mb-2 text-5xl animate-bounce" aria-hidden="true">
-                  🎉
-                </p>
-                <h3 className="text-2xl font-black text-emerald-400">你答對了！</h3>
-                <p className="mt-1 text-sm text-white/70">
-                  成功獲得 <span className="font-bold text-yellow-300">+15 積分</span>！
-                </p>
-                <p className="mt-3 text-xs text-white/40">等待其他玩家猜題或本回合結束…</p>
-              </div>
+                <h2 className="text-2xl font-black text-emerald-300">
+                  答對了！+{state.roundScores[player.id] ?? 0} 分
+                </h2>
+                <p className="mt-3 text-sm text-white/70">先別說出答案，讓其他人也猜猜看。</p>
+              </section>
             ) : (
               <form
                 className="space-y-3"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  void handleGuess();
+                  void guess();
                 }}
               >
-                <p className="text-xs text-white/60">觀看電視大螢幕上的畫作，猜出它是什麼：</p>
-                <label htmlFor="guess-input" className="sr-only">
-                  你的猜測
+                <label htmlFor="draw-guess" className="block text-sm text-white/70">
+                  看看大螢幕，你猜這是什麼？
                 </label>
                 <input
-                  id="guess-input"
-                  type="text"
+                  id="draw-guess"
+                  maxLength={40}
                   value={guessInput}
                   onChange={(e) => setGuessInput(e.target.value)}
-                  placeholder="輸入你的答案（例如：西瓜）"
                   autoComplete="off"
-                  className="w-full rounded-2xl border border-white/20 bg-white/5 p-4 text-center text-lg text-white font-medium transition-colors focus:border-pink-500 focus:outline-none shadow-inner"
+                  className="w-full rounded-2xl border border-white/20 bg-white/5 p-4 text-center text-lg"
+                  placeholder="輸入答案…"
                 />
-                <Button variant="accent" size="md" className="w-full font-bold shadow-lg" disabled={!guessInput.trim()} type="submit">
-                  送出答案 🚀
+                <Button
+                  variant="accent"
+                  type="submit"
+                  className="w-full"
+                  disabled={!guessInput.trim() || pendingGuess}
+                  loading={pendingGuess}
+                >
+                  送出答案
                 </Button>
-
-                {lastGuess && !hasGuessed && (
-                  <p className="text-xs text-amber-300/80 animate-shake">
-                    上一猜「{lastGuess}」不對喔，再想想看！
-                  </p>
-                )}
+                <p className="min-h-5 text-center text-sm text-amber-200" role="status">
+                  {lastGuess ? `「${lastGuess}」還不對，再試試！` : "猜中得 10–25 分，越快越高！"}
+                </p>
               </form>
             )}
-          </div>
+          </>
+        )}
+        {state.phase === "reveal" && (
+          <section className="rounded-2xl border border-pink-400/30 bg-pink-500/10 p-6 text-center" role="status">
+            <p className="text-sm text-pink-200">
+              {state.roundReason === "disconnected" ? "玩家離線，本回合提早結束" : "答案揭曉"}
+            </p>
+            <h2 className="my-3 text-3xl font-black">{state.prompt.word}</h2>
+            <p className="text-lg font-bold text-emerald-300">本回合 +{state.roundScores[player.id] ?? 0} 分</p>
+            <p className="mt-3 text-sm text-white/60">
+              {state.currentRound < state.totalRounds ? "下一位畫家準備中…" : "準備結算…"}
+            </p>
+          </section>
         )}
       </div>
+      <Modal open={confirmClear} onClose={() => setConfirmClear(false)} title="清除整張畫布？">
+        <p className="mb-4 text-sm text-white/70">這個動作無法復原。也可以只復原上一筆。</p>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={() => setConfirmClear(false)}>
+            取消
+          </Button>
+          <Button variant="danger" onClick={() => void tool("clearCanvas")} loading={syncing > 0}>
+            清除畫布
+          </Button>
+        </div>
+      </Modal>
     </PlayShell>
   );
 }

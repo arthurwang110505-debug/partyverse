@@ -1,5 +1,7 @@
 "use client";
 
+import { engineRoom } from "@/engine/participants";
+
 import { useState } from "react";
 import { useRoom } from "@/providers/RoomContext";
 import { useToast } from "@/providers/ToastProvider";
@@ -22,7 +24,7 @@ export default function PlayFireworkMaster() {
   const { room, player, submitAction } = useRoom();
   const { toast } = useToast();
   const state = room?.gameState as FireworkGameState | undefined;
-  const players = room?.players ?? {};
+  const players = room ? engineRoom(room).players : {};
 
   const [color, setColor] = useState(PALETTE[0]);
   const [shape, setShape] = useState<FireworkDesign["shape"]>("circle");
@@ -93,9 +95,7 @@ export default function PlayFireworkMaster() {
                     borderColor: color,
                   }}
                 >
-                  <span className="text-4xl">
-                    {SHAPES.find((s) => s.id === shape)?.icon ?? "✨"}
-                  </span>
+                  <span className="text-4xl">{SHAPES.find((s) => s.id === shape)?.icon ?? "✨"}</span>
                 </div>
 
                 <div>
@@ -181,9 +181,7 @@ export default function PlayFireworkMaster() {
                 <span className="text-3xl">👏</span>
                 <span className="text-sm font-bold mt-1">為煙火喝采</span>
                 {cheerCount > 0 && (
-                  <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded-full mt-1">
-                    +{cheerCount}
-                  </span>
+                  <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded-full mt-1">+{cheerCount}</span>
                 )}
               </button>
             </div>
@@ -228,4 +226,3 @@ export default function PlayFireworkMaster() {
     </PlayShell>
   );
 }
-

@@ -1,10 +1,11 @@
 "use client";
 
+import { engineRoom } from "@/engine/participants";
+
 import { useEffect } from "react";
 import { useRoom } from "@/providers/RoomContext";
-import { useToast } from "@/providers/ToastProvider";
 import type { UndercoverGameState } from "@/engine/whoIsUndercover";
-import { Button } from "@/components/ui/Button";
+import { HostGameControls } from "@/components/game/HostGameControls";
 import { HostShell } from "@/components/game/HostShell";
 import { PlayerChip } from "@/components/game/PlayerChip";
 import { RoundTimer } from "@/components/game/RoundTimer";
@@ -12,10 +13,9 @@ import { Confetti } from "@/components/game/Confetti";
 import { sfx } from "@/lib/sound";
 
 export default function HostUndercover() {
-  const { room, endRound, endGame } = useRoom();
-  const { toast } = useToast();
+  const { room } = useRoom();
   const state = room?.gameState as UndercoverGameState | undefined;
-  const players = room?.players ?? {};
+  const players = room ? engineRoom(room).players : {};
 
   const phase = state?.phase;
 
@@ -30,7 +30,6 @@ export default function HostUndercover() {
 
   if (!state) return null;
 
-  const fail = (e: unknown) => toast(e instanceof Error ? e.message : "操作失敗");
   const timed = state.phase === "viewing_words" || state.phase === "discussion" || state.phase === "voting";
 
   const livingPlayerIds = Object.keys(players).filter((id) => !state.eliminatedPlayerIds.includes(id));
@@ -89,7 +88,9 @@ export default function HostUndercover() {
               </div>
             ) : (
               <p className="text-white/60">
-                {state.phase === "discussion" ? "每人輪流用一句話隱晦描述你的詞，但別說破！" : "注意身邊好友的微表情與神態"}
+                {state.phase === "discussion"
+                  ? "每人輪流用一句話隱晦描述你的詞，但別說破！"
+                  : "注意身邊好友的微表情與神態"}
               </p>
             )}
           </div>
@@ -145,29 +146,15 @@ export default function HostUndercover() {
                 nickname={p.nickname}
                 out={isOut}
                 status={
-                  isOut
-                    ? "已淘汰 💀"
-                    : state.phase === "voting"
-                      ? hasVoted
-                        ? "已投票 ✓"
-                        : "思考中…"
-                      : "存活中 🛡️"
+                  isOut ? "已淘汰 💀" : state.phase === "voting" ? (hasVoted ? "已投票 ✓" : "思考中…") : "存活中 🛡️"
                 }
               />
             );
           })}
         </ul>
 
-        <div className="mt-8 flex justify-center gap-3">
-          <Button variant="ghost" size="md" onClick={() => endRound().catch(fail)}>
-            重開
-          </Button>
-          <Button variant="danger" size="md" onClick={() => endGame().catch(fail)}>
-            結算
-          </Button>
-        </div>
+        <HostGameControls />
       </div>
     </HostShell>
   );
 }
-

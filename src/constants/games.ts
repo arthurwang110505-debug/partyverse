@@ -6,7 +6,8 @@ export const GAMES: GameDefinition[] = [
     name: "臥底是誰？",
     nameEn: "Who Is Undercover?",
     description: "陣營心理戰，找出誰是臥底！",
-    longDescription: "每個玩家拿到秘密詞彙，大部分人相同，只有臥底拿到的詞不同。透過問答和辯論，平民要找臥底，臥底要隱藏身份混入平民。",
+    longDescription:
+      "每個玩家拿到秘密詞彙，大部分人相同，只有臥底拿到的詞不同。透過問答和辯論，平民要找臥底，臥底要隱藏身份混入平民。",
     minPlayers: 4,
     maxPlayers: 12,
     estimatedDuration: "5-10 分鐘",
@@ -22,7 +23,8 @@ export const GAMES: GameDefinition[] = [
     name: "炸彈倒數",
     nameEn: "Bomb Countdown",
     description: "超快節奏派對，炸彈誰來接？",
-    longDescription: "炸彈在玩家間快速傳遞！輪到你時要完成小挑戰（回答問題、速算、反應點擊）才能把炸彈傳給下一位。炸彈隨機爆炸，輸家出局，最後的倖存者勝出！",
+    longDescription:
+      "同一條引信持續倒數，答對得 10 分並傳出炸彈，引信不重置！答錯扣 1 秒，爆炸者本局出局，最後倖存者加 50 分。下局全員回歸，比較多局累積積分。",
     minPlayers: 3,
     maxPlayers: 15,
     estimatedDuration: "3-8 分鐘",
@@ -38,7 +40,8 @@ export const GAMES: GameDefinition[] = [
     name: "煙火大師",
     nameEn: "Firework Master",
     description: "創意競賽，設計你的專屬煙火！",
-    longDescription: "每位玩家在手機上設計專屬煙火（顏色、形狀、規模、特效），送出後在 TV 大螢幕上聯合施放壯觀煙火秀，大家投票評選最佳設計與最佳創意！",
+    longDescription:
+      "每位玩家在手機上設計專屬煙火（顏色、形狀、規模、特效），送出後在 TV 大螢幕上聯合施放壯觀煙火秀，大家投票評選最佳設計與最佳創意！",
     minPlayers: 4,
     maxPlayers: 20,
     estimatedDuration: "5-10 分鐘",
@@ -54,7 +57,8 @@ export const GAMES: GameDefinition[] = [
     name: "大家心知肚明",
     nameEn: "Everybody Knows",
     description: "社交投票，看看誰和大家不一樣",
-    longDescription: "主螢幕顯示趣味社交問題（如：「誰最容易在旅行中迷路？」），玩家在手機上匿名投票，大螢幕即時揭曉百分比統計與動態長條圖！",
+    longDescription:
+      "主螢幕顯示趣味社交問題（如：「誰最容易在旅行中迷路？」），玩家在手機上匿名投票，大螢幕即時揭曉百分比統計與動態長條圖！",
     minPlayers: 4,
     maxPlayers: 20,
     estimatedDuration: "5-10 分鐘",
@@ -70,7 +74,8 @@ export const GAMES: GameDefinition[] = [
     name: "你畫我猜",
     nameEn: "Draw & Guess",
     description: "塗鴉猜題，畫出你的想法！",
-    longDescription: "指定玩家在手機/平板畫板上繪圖，主螢幕即時同步畫筆線條。其他玩家在手機上輸入答案搶答，根據正確度與速度發放積分！",
+    longDescription:
+      "所有玩家公平輪流作畫，筆跡邊畫邊同步到大螢幕。其他人看分類與逐步提示猜題，越快猜中得分越高（10–25 分），每有人猜中畫家加 5 分。",
     minPlayers: 4,
     maxPlayers: 16,
     estimatedDuration: "5-10 分鐘",
@@ -86,7 +91,8 @@ export const GAMES: GameDefinition[] = [
     name: "大亂鬥",
     nameEn: "Real Battle",
     description: "手機當手把，主螢幕大亂鬥！",
-    longDescription: "TV / iPad 顯示角色與地圖，玩家將手機作為無線遊戲手把（虛擬搖桿/按鈕），操控小角色搶奪金幣、星星與道具，最後分數最高者勝出！",
+    longDescription:
+      "TV / iPad 顯示角色與地圖，玩家將手機作為無線遊戲手把（虛擬搖桿/按鈕），操控小角色搶奪金幣、星星與道具，最後分數最高者勝出！",
     minPlayers: 4,
     maxPlayers: 20,
     estimatedDuration: "3-10 分鐘",
@@ -102,7 +108,8 @@ export const GAMES: GameDefinition[] = [
     name: "密室推理",
     nameEn: "Mystery Room",
     description: "合作解謎，拼湊真相！",
-    longDescription: "每位玩家拿到不同的局部線索，大家必須透過口頭交流拼湊真相。主螢幕逐步揭露時間線與證物，合作解開案件！",
+    longDescription:
+      "每位玩家拿到不同的局部線索，大家必須透過口頭交流拼湊真相。主螢幕逐步揭露時間線與證物，合作解開案件！",
     minPlayers: 4,
     maxPlayers: 10,
     estimatedDuration: "10-20 分鐘",
@@ -118,7 +125,8 @@ export const GAMES: GameDefinition[] = [
     name: "AI 瞎扯王",
     nameEn: "AI Bullshit",
     description: "吹牛大賽，看誰最會扯！",
-    longDescription: "針對怪異問題，每位玩家在手機寫下煞有介事的假答案。系統混合真假答案後顯示於大螢幕，玩家投票猜測哪個才是真的！",
+    longDescription:
+      "針對怪異問題，每位玩家在手機寫下煞有介事的假答案。系統混合真假答案後顯示於大螢幕，玩家投票猜測哪個才是真的！",
     minPlayers: 4,
     maxPlayers: 20,
     estimatedDuration: "5-10 分鐘",
@@ -134,7 +142,8 @@ export const GAMES: GameDefinition[] = [
     name: "三秒聽歌",
     nameEn: "3 Second Song",
     description: "聽 3 秒猜歌名，音樂達人決戰！",
-    longDescription: "大螢幕播放 0.5 ~ 3 秒的歌曲片段（華語、J-Pop、K-Pop、西洋等），玩家在手機搶答，依速度與正確度給分。音樂達人就是你的！",
+    longDescription:
+      "大螢幕播放 0.5 ~ 3 秒的歌曲片段（華語、J-Pop、K-Pop、西洋等），玩家在手機搶答，依速度與正確度給分。音樂達人就是你的！",
     minPlayers: 4,
     maxPlayers: 20,
     estimatedDuration: "5-15 分鐘",
@@ -150,7 +159,8 @@ export const GAMES: GameDefinition[] = [
     name: "今晚誰是王",
     nameEn: "King Tonight",
     description: "快速挑戰，登基稱王！",
-    longDescription: "輪流由一位玩家當「國王」發動挑戰（手速、反應、記憶、Emoji 猜題），全員在手機上快速競技，獲勝者登基為新國王！",
+    longDescription:
+      "輪流由一位玩家當「國王」發動挑戰（手速、反應、記憶、Emoji 猜題），全員在手機上快速競技，獲勝者登基為新國王！",
     minPlayers: 4,
     maxPlayers: 20,
     estimatedDuration: "5-10 分鐘",
@@ -162,4 +172,3 @@ export const GAMES: GameDefinition[] = [
     difficulty: "簡單",
   },
 ];
-

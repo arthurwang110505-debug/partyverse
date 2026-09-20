@@ -1,10 +1,11 @@
 "use client";
 
+import { engineRoom } from "@/engine/participants";
+
 import { useEffect } from "react";
 import { useRoom } from "@/providers/RoomContext";
-import { useToast } from "@/providers/ToastProvider";
 import type { KingGameState } from "@/engine/kingTonight";
-import { Button } from "@/components/ui/Button";
+import { HostGameControls } from "@/components/game/HostGameControls";
 import { HostShell } from "@/components/game/HostShell";
 import { PlayerChip } from "@/components/game/PlayerChip";
 import { RoundTimer } from "@/components/game/RoundTimer";
@@ -12,10 +13,9 @@ import { Confetti } from "@/components/game/Confetti";
 import { sfx } from "@/lib/sound";
 
 export default function HostKingTonight() {
-  const { room, endRound, endGame } = useRoom();
-  const { toast } = useToast();
+  const { room } = useRoom();
   const state = room?.gameState as KingGameState | undefined;
-  const players = room?.players ?? {};
+  const players = room ? engineRoom(room).players : {};
 
   const phase = state?.phase;
   const roundWinnerId = state?.roundWinnerId;
@@ -31,13 +31,9 @@ export default function HostKingTonight() {
   if (!state) return null;
 
   const king = state.currentKingId ? players[state.currentKingId] : null;
-  const fail = (e: unknown) => toast(e instanceof Error ? e.message : "操作失敗");
 
   // Calculate highest tap count for relative bar width
-  const maxTaps = Math.max(
-    1,
-    ...Object.values(state.playerInputs).map((v) => (typeof v === "number" ? v : 0)),
-  );
+  const maxTaps = Math.max(1, ...Object.values(state.playerInputs).map((v) => (typeof v === "number" ? v : 0)));
 
   return (
     <HostShell>
@@ -135,9 +131,7 @@ export default function HostKingTonight() {
             <p className="mb-2 text-6xl animate-bounce" aria-hidden="true">
               👑
             </p>
-            <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-yellow-300">
-              勝者加冕
-            </span>
+            <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-yellow-300">勝者加冕</span>
             <h2 className="mb-2 text-3xl font-black text-white">
               {state.roundWinnerId ? players[state.roundWinnerId]?.nickname : "平手"} 登基為王！
             </h2>
@@ -157,16 +151,8 @@ export default function HostKingTonight() {
           ))}
         </ul>
 
-        <div className="mt-8 flex justify-center gap-3">
-          <Button variant="ghost" size="md" onClick={() => endRound().catch(fail)}>
-            重開
-          </Button>
-          <Button variant="danger" size="md" onClick={() => endGame().catch(fail)}>
-            結算
-          </Button>
-        </div>
+        <HostGameControls />
       </div>
     </HostShell>
   );
 }
-

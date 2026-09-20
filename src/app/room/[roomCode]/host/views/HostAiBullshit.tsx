@@ -1,10 +1,11 @@
 "use client";
 
+import { engineRoom } from "@/engine/participants";
+
 import { useEffect } from "react";
 import { useRoom } from "@/providers/RoomContext";
-import { useToast } from "@/providers/ToastProvider";
 import type { AIBullshitGameState } from "@/engine/aiBullshit";
-import { Button } from "@/components/ui/Button";
+import { HostGameControls } from "@/components/game/HostGameControls";
 import { HostShell } from "@/components/game/HostShell";
 import { PlayerChip } from "@/components/game/PlayerChip";
 import { RoundTimer } from "@/components/game/RoundTimer";
@@ -12,10 +13,9 @@ import { Confetti } from "@/components/game/Confetti";
 import { sfx } from "@/lib/sound";
 
 export default function HostAiBullshit() {
-  const { room, endRound, endGame } = useRoom();
-  const { toast } = useToast();
+  const { room } = useRoom();
   const state = room?.gameState as AIBullshitGameState | undefined;
-  const players = room?.players ?? {};
+  const players = room ? engineRoom(room).players : {};
 
   const phase = state?.phase;
 
@@ -29,7 +29,6 @@ export default function HostAiBullshit() {
 
   if (!state) return null;
 
-  const fail = (e: unknown) => toast(e instanceof Error ? e.message : "操作失敗");
   const livingPlayerCount = Object.keys(players).length;
   const submissionCount = Object.keys(state.submissions).length;
   const voteCount = Object.keys(state.votes).length;
@@ -43,15 +42,17 @@ export default function HostAiBullshit() {
           <p className="mb-2 text-sm font-semibold tracking-wider text-pink-400">
             第 {state.currentRound} / {state.totalRounds} 回合 · 荒謬冷知識 🤖
           </p>
-          <h1 className="px-4 text-2xl font-black leading-tight text-white md:text-4xl">
-            {state.prompt?.question}
-          </h1>
+          <h1 className="px-4 text-2xl font-black leading-tight text-white md:text-4xl">{state.prompt?.question}</h1>
         </header>
 
         {state.phase === "submitting" && (
           <div className="my-10">
             <div className="mx-auto mb-8 max-w-md">
-              <RoundTimer timeLeft={state.timeLeft} total={Math.max(20, room?.settings?.timer ?? 25)} endLabel="提交截止" />
+              <RoundTimer
+                timeLeft={state.timeLeft}
+                total={Math.max(20, room?.settings?.timer ?? 25)}
+                endLabel="提交截止"
+              />
             </div>
             <p className="mb-4 text-lg text-white/70">各位瞎扯王正在手機編造最逼真的假答案…</p>
 
@@ -89,7 +90,11 @@ export default function HostAiBullshit() {
         {state.phase === "voting" && (
           <div className="my-8">
             <div className="mx-auto mb-8 max-w-md">
-              <RoundTimer timeLeft={state.timeLeft} total={Math.max(15, room?.settings?.timer ?? 20)} endLabel="投票截止" />
+              <RoundTimer
+                timeLeft={state.timeLeft}
+                total={Math.max(15, room?.settings?.timer ?? 20)}
+                endLabel="投票截止"
+              />
             </div>
             <p className="mb-4 text-lg text-white/80">辨識真偽！哪一個才是真正的冷知識？</p>
 
@@ -112,7 +117,10 @@ export default function HostAiBullshit() {
 
             <div className="grid grid-cols-1 gap-4 text-left md:grid-cols-2">
               {state.options.map((opt, i) => (
-                <div key={opt.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-lg">
+                <div
+                  key={opt.id}
+                  className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-lg"
+                >
                   <span
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pink-500/20 font-bold text-pink-300"
                     aria-hidden="true"
@@ -143,9 +151,7 @@ export default function HostAiBullshit() {
                   <div
                     key={opt.id}
                     className={`rounded-2xl border p-4 text-sm transition-all shadow-md ${
-                      opt.isReal
-                        ? "border-emerald-500/50 bg-emerald-500/10"
-                        : "border-white/10 bg-white/5"
+                      opt.isReal ? "border-emerald-500/50 bg-emerald-500/10" : "border-white/10 bg-white/5"
                     }`}
                   >
                     <div className="mb-2 flex justify-between items-center font-bold">
@@ -164,16 +170,8 @@ export default function HostAiBullshit() {
           </div>
         )}
 
-        <div className="mt-8 flex justify-center gap-3">
-          <Button variant="ghost" size="md" onClick={() => endRound().catch(fail)}>
-            重開
-          </Button>
-          <Button variant="danger" size="md" onClick={() => endGame().catch(fail)}>
-            結算
-          </Button>
-        </div>
+        <HostGameControls />
       </div>
     </HostShell>
   );
 }
-
