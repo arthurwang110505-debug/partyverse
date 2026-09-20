@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft, Crown } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { addRecentRoom } from "@/hooks/useRecentRooms";
 import { GAMES } from "@/constants/games";
 import { DEFAULT_ROOM_SETTINGS, MAX_NICKNAME_LENGTH, NICKNAME_KEY } from "@/constants/room";
 import type { RoomSettings } from "@/types";
 import { sanitizeNickname } from "@/lib/utils";
+import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { ErrorNote } from "@/components/ui/ErrorNote";
@@ -54,6 +56,7 @@ export default function CreateRoomClient({ gameId }: Props) {
       const cleanName = sanitizeNickname(effectiveNickname);
       setSavedNickname(cleanName);
       const roomCode = await createRoom(game.id, cleanName, settings);
+      addRecentRoom({ code: roomCode, nickname: cleanName, role: "host" });
       router.push(`/room/${roomCode}/host`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "建立房間失敗，請再試一次");
@@ -62,7 +65,11 @@ export default function CreateRoomClient({ gameId }: Props) {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-ink px-4 py-24 text-white">
+    <main
+      className="flex min-h-screen items-center justify-center bg-ink px-4 py-28 text-white"
+      style={{ "--game-accent": game.color, "--game-gradient": game.gradient } as CSSProperties}
+    >
+      <Navbar />
       <div className="w-full max-w-md">
         <Link
           href={`/games/${game.id}`}
@@ -144,13 +151,14 @@ export default function CreateRoomClient({ gameId }: Props) {
 
           <Button
             type="submit"
+            variant="accent"
             size="md"
             disabled={!canSubmit}
-            className="w-full text-white"
-            style={{ background: game.gradient }}
+            loading={submitting}
+            className="w-full"
           >
             {submitting ? (
-              <span className="animate-pulse">建立房間中…</span>
+              "建立房間中…"
             ) : (
               <>
                 <Crown className="h-4 w-4" aria-hidden="true" /> 建立房間

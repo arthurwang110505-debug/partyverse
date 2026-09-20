@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRoom } from "@/providers/RoomContext";
+import { useToast } from "@/providers/ToastProvider";
 import { GAMES } from "@/constants/games";
 import type { BombGameState } from "@/engine/bombCountdown";
 import { Button } from "@/components/ui/Button";
-import { ErrorNote } from "@/components/ui/ErrorNote";
+import { HostShell } from "@/components/game/HostShell";
+import { PlayerChip } from "@/components/game/PlayerChip";
 import { cn } from "@/lib/utils";
 import { sfx } from "@/lib/sound";
 
@@ -21,11 +23,12 @@ import HostMysteryRoom from "./views/HostMysteryRoom";
 
 /**
  * The TV Big-Screen View Dispatcher.
- * Automatically displays the dedicated game board based on room.gameId.
+ * Every game view renders inside the shared `HostShell` (identity bar, sound
+ * toggle, tick/reveal audio bed). Only the bomb board below is bespoke.
  */
 export default function HostGameView() {
   const { room, endRound, endGame } = useRoom();
-  const [error, setError] = useState("");
+  const { toast } = useToast();
   const [flash, setFlash] = useState<string | null>(null);
   const lastEliminated = useRef<string | null>(null);
 
@@ -41,13 +44,8 @@ export default function HostGameView() {
   const eliminatedPlayers = Object.entries(players).filter(([id]) => eliminated.has(id));
   const holder = state?.bombHolderId ? players[state.bombHolderId] : undefined;
 
-  // Sound triggers on ticks & changes
-  useEffect(() => {
-    if (room?.status === "PLAYING") {
-      sfx.playTick(500, 0.04);
-    }
-  }, [room?.status, room?.gameState]);
-
+  // Bomb-specific sting: boom + name flash on elimination. (Generic tick and
+  // phase stings live in HostShell — including for this view.)
   useEffect(() => {
     if (!isBombGame) return;
     const id = state?.lastEliminatedId ?? null;
@@ -61,27 +59,29 @@ export default function HostGameView() {
     lastEliminated.current = id;
   }, [isBombGame, state?.lastEliminatedId, room?.players]);
 
-  // If running another game, delegate to dedicated views
-  if (gameId === "everybodyknows") return <HostWrapper><HostEverybodyKnows /></HostWrapper>;
-  if (gameId === "aibullshit") return <HostWrapper><HostAiBullshit /></HostWrapper>;
-  if (gameId === "whoisundercoveragent") return <HostWrapper><HostUndercover /></HostWrapper>;
-  if (gameId === "song3seconds") return <HostWrapper><HostSong3Seconds /></HostWrapper>;
-  if (gameId === "kingtonight") return <HostWrapper><HostKingTonight /></HostWrapper>;
-  if (gameId === "fireworkmaster") return <HostWrapper><HostFireworkMaster /></HostWrapper>;
-  if (gameId === "drawandguess") return <HostWrapper><HostDrawAndGuess /></HostWrapper>;
-  if (gameId === "realbattle") return <HostWrapper><HostRealBattle /></HostWrapper>;
-  if (gameId === "mysteryroom") return <HostWrapper><HostMysteryRoom /></HostWrapper>;
+  // Delegate non-bomb games to their dedicated views (each with its own HostShell)
+  if (gameId === "everybodyknows") return <HostEverybodyKnows />;
+  if (gameId === "aibullshit") return <HostAiBullshit />;
+  if (gameId === "whoisundercoveragent") return <HostUndercover />;
+  if (gameId === "song3seconds") return <HostSong3Seconds />;
+  if (gameId === "kingtonight") return <HostKingTonight />;
+  if (gameId === "fireworkmaster") return <HostFireworkMaster />;
+  if (gameId === "drawandguess") return <HostDrawAndGuess />;
+  if (gameId === "realbattle") return <HostRealBattle />;
+  if (gameId === "mysteryroom") return <HostMysteryRoom />;
 
   const timeLeft = state?.bombTimeLeft ?? 0;
   const critical = timeLeft <= 3;
 
+  const fail = (e: unknown) => {
+    const msg = e instanceof Error ? e.message : "操作失敗";
+    toast(msg);
+  };
+
   return (
-    <HostWrapper>
+    <HostShell>
       <div className="mx-auto max-w-5xl">
         <header className="mb-8 text-center">
-          <p className="mb-2 text-sm text-white/40">
-            <span aria-hidden="true">{game?.icon}</span> {game?.name}
-          </p>
           <h1 className="text-xl font-bold">
             第 {state?.currentRound ?? 1} / {state?.totalRounds ?? 1} 回合
           </h1>
@@ -108,8 +108,8 @@ export default function HostGameView() {
 
         <p
           className="mb-6 text-center text-7xl font-bold tabular-nums"
-          style={{ color: critical ? "#ef4444" : "#ffe600" }}
-          aria-live="off"
+          style={{ color: critical ? "#ef4444" : game?.color ?? "#ffe600" }}
+          aria-hidden="true"
         >
           {timeLeft}
         </p>
@@ -134,60 +134,28 @@ export default function HostGameView() {
 
         <ul className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4">
           {activePlayers.map(([id, p]) => (
-            <li
+            <PlayerChip
               key={id}
-              className={cn(
-                "rounded-xl border p-3 text-center transition-all",
-                id === state?.bombHolderId
-                  ? "border-violet-500/40 bg-violet-500/20"
-                  : "border-white/5 bg-white/5",
-              )}
-            >
-              <p className="mb-1 text-2xl" aria-hidden="true">
-                {p.avatar}
-              </p>
-              <p className="truncate text-sm font-medium">{p.nickname}</p>
-              <p className="text-xs text-white/40 tabular-nums">{state?.currentScores?.[id] ?? 0} 分</p>
-            </li>
+              avatar={p.avatar}
+              nickname={p.nickname}
+              score={state?.currentScores?.[id] ?? 0}
+              highlight={id === state?.bombHolderId}
+            />
           ))}
           {eliminatedPlayers.map(([id, p]) => (
-            <li key={id} className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-center opacity-50">
-              <p className="mb-1 text-2xl" aria-hidden="true">
-                💀
-              </p>
-              <p className="truncate text-sm font-medium">{p.nickname}</p>
-              <p className="text-xs text-red-400">出局</p>
-            </li>
+            <PlayerChip key={id} avatar={p.avatar} nickname={p.nickname} status="出局" out />
           ))}
         </ul>
 
-        <ErrorNote>{error}</ErrorNote>
-
         <div className="flex flex-wrap justify-center gap-2">
-          <Button
-            variant="ghost"
-            size="md"
-            onClick={() => endRound().catch((e) => setError(e instanceof Error ? e.message : "操作失敗"))}
-          >
+          <Button variant="ghost" size="md" onClick={() => endRound().catch(fail)}>
             重新開始這一局
           </Button>
-          <Button
-            variant="danger"
-            size="md"
-            onClick={() => endGame().catch((e) => setError(e instanceof Error ? e.message : "操作失敗"))}
-          >
+          <Button variant="danger" size="md" onClick={() => endGame().catch(fail)}>
             結束遊戲並結算
           </Button>
         </div>
       </div>
-    </HostWrapper>
-  );
-}
-
-function HostWrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="min-h-screen bg-ink p-4 text-white md:p-8">
-      {children}
-    </main>
+    </HostShell>
   );
 }

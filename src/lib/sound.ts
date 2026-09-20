@@ -1,12 +1,46 @@
 "use client";
 
-// Web Audio sound synthesizer (zero external dependencies, immediate audio)
+/*
+ * Web Audio sound synthesizer (zero external dependencies, immediate audio).
+ *
+ * A hosted party game *must* have an off switch: the TV view ticks and dings
+ * for an entire evening. `setMuted` persists the choice; every play method
+ * bails out silently while muted.
+ */
+const MUTE_KEY = "partyverse_muted";
+let muted = false;
+
+/** Read the persisted mute choice. Safe to call repeatedly; returns current state. */
+export function initMuted(): boolean {
+  try {
+    muted = window.localStorage.getItem(MUTE_KEY) === "1";
+  } catch {
+    // SSR or locked-down storage — leave the previous value alone.
+  }
+  return muted;
+}
+
+export function isMuted(): boolean {
+  return muted;
+}
+
+export function setMuted(value: boolean): boolean {
+  muted = value;
+  try {
+    window.localStorage.setItem(MUTE_KEY, value ? "1" : "0");
+  } catch {
+    // Persistence is best-effort; the in-memory flag still applies this session.
+  }
+  return muted;
+}
+
 class SoundEffects {
   private ctx: AudioContext | null = null;
 
   private init() {
     if (!this.ctx && typeof window !== "undefined") {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
       }
@@ -17,6 +51,7 @@ class SoundEffects {
   }
 
   playTick(frequency = 600, duration = 0.06) {
+    if (muted) return;
     try {
       this.init();
       if (!this.ctx) return;
@@ -36,6 +71,7 @@ class SoundEffects {
   }
 
   playBoom() {
+    if (muted) return;
     try {
       this.init();
       if (!this.ctx) return;
@@ -56,6 +92,7 @@ class SoundEffects {
   }
 
   playSuccess() {
+    if (muted) return;
     try {
       this.init();
       if (!this.ctx) return;
@@ -71,6 +108,30 @@ class SoundEffects {
         gain.connect(this.ctx!.destination);
         osc.start(now + idx * 0.08);
         osc.stop(now + idx * 0.08 + 0.25);
+      });
+    } catch {
+      // Audio failed
+    }
+  }
+
+  /** A soft two-note chime — used when a player joins the lobby. */
+  playChime() {
+    if (muted) return;
+    try {
+      this.init();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      [880, 1174.66].forEach((freq, idx) => {
+        const osc = this.ctx!.createOscillator();
+        const gain = this.ctx!.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, now + idx * 0.09);
+        gain.gain.setValueAtTime(0.18, now + idx * 0.09);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.09 + 0.3);
+        osc.connect(gain);
+        gain.connect(this.ctx!.destination);
+        osc.start(now + idx * 0.09);
+        osc.stop(now + idx * 0.09 + 0.3);
       });
     } catch {
       // Audio failed

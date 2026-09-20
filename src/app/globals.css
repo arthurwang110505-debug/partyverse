@@ -11,11 +11,32 @@
     scroll-behavior: smooth;
     /* Text stays legible if a user overrides the root size. */
     -webkit-text-size-adjust: 100%;
+    /*
+     * Stop pull-to-refresh from nuking a live game round. The page still
+     * scrolls normally; only the past-the-edge refresh gesture is disarmed.
+     */
+    overscroll-behavior-y: none;
   }
 
   body {
     @apply bg-ink text-white antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* Kill the grey flash iOS/Android put on tapped elements in the game views. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /*
+   * Game controllers tap buttons repeatedly and fast. `manipulation` disables
+   * the double-tap-to-zoom gesture (and its ~300ms delay) on interactive
+   * elements. The drawing canvas opts back out with its own `touch-none`.
+   */
+  a,
+  button,
+  [role="button"],
+  input,
+  select,
+  label {
+    touch-action: manipulation;
   }
 
   /*
@@ -49,6 +70,38 @@
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+}
+
+@layer utilities {
+  /*
+   * Safe-area helpers for notched phones. `viewportFit: "cover"` is set in
+   * the root viewport, so without these the fixed score dock and D-pad slide
+   * under the home indicator / into the rounded corners.
+   */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  /* A bottom-docked bar that clears the home indicator but keeps min padding. */
+  .dock-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+  /* Keyframe used by toast pop-ins (defined here to avoid a config change). */
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  .animate-toast-in {
+    animation: toast-in 0.18s ease-out;
   }
 }
 

@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { Copy, Crown, Power, Settings, Share2, Users, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Copy, Crown, Link2, Power, Settings, Share2, Users, X } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
 import { GAMES } from "@/constants/games";
 import type { RoomSettings } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { ErrorNote } from "@/components/ui/ErrorNote";
+import { Modal } from "@/components/ui/Modal";
+import { MuteToggle } from "@/components/game/MuteToggle";
+import { sfx } from "@/lib/sound";
 import { cn } from "@/lib/utils";
 
 const DIFFICULTIES: Array<{ value: RoomSettings["difficulty"]; label: string }> = [
@@ -22,6 +26,7 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
   const { room, startGame, kickPlayer, endRoom, updateSettings } = useRoom();
 
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
@@ -33,19 +38,6 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
   useEffect(() => setOrigin(window.location.origin), []);
   const joinUrl = origin ? `${origin}/join/${roomCode}` : "";
 
-  // Close overlays with Escape.
-  useEffect(() => {
-    if (!showQR && !showSettings && !confirmingEnd) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      setShowQR(false);
-      setShowSettings(false);
-      setConfirmingEnd(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [showQR, showSettings, confirmingEnd]);
-
   const game = GAMES.find((g) => g.id === room?.gameId);
   const playerList = Object.values(room?.players ?? {}).sort((a, b) =>
     a.isHost === b.isHost ? a.nickname.localeCompare(b.nickname) : a.isHost ? -1 : 1,
@@ -54,13 +46,23 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
   const minPlayers = game?.minPlayers ?? 2;
   const canStart = onlineCount >= minPlayers;
 
-  const handleCopy = async () => {
+  // The Jackbox delight loop: a chime when someone joins. It also confirms the
+  // QR scan worked — previously a join was silent and invisible until a glance.
+  const prevCount = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevCount.current !== null && playerList.length > prevCount.current) {
+      sfx.playChime();
+    }
+    prevCount.current = playerList.length;
+  }, [playerList.length]);
+
+  const copyText = async (text: string, setFlag: (v: boolean) => void, failure: string) => {
     try {
-      await navigator.clipboard.writeText(roomCode);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
+      setFlag(true);
+      setTimeout(() => setFlag(false), 2000);
     } catch {
-      setError("無法複製，請手動選取代碼");
+      setError(failure);
     }
   };
 
@@ -70,12 +72,20 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
       router.push("/");
     } catch (e) {
       setError(e instanceof Error ? e.message : "無法結束房間");
+      setConfirmingEnd(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-ink p-4 text-white md:p-8">
+    <main
+      className="min-h-[100dvh] bg-ink p-4 text-white md:p-8"
+      style={{ "--game-accent": game?.color, "--game-gradient": game?.gradient } as CSSProperties}
+    >
       <div className="mx-auto max-w-4xl">
+        <div className="mb-4 flex justify-end">
+          <MuteToggle />
+        </div>
+
         <header className="mb-8 text-center">
           <p className="glass mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm text-white/50">
             <span aria-hidden="true">{game?.icon}</span> {game?.name}
@@ -88,23 +98,41 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
           <h2 id="room-code-heading" className="mb-2 text-xs uppercase tracking-wider text-white/40">
             房間代碼
           </h2>
-          <p
-            className="mb-4 text-5xl font-bold tracking-[0.2em] md:text-6xl"
-            style={{ color: game?.color ?? "#a855f7" }}
-          >
+          <p className="mb-4 text-5xl font-bold tracking-[0.2em] [color:var(--game-accent,#a855f7)] md:text-6xl">
             {roomCode}
           </p>
 
           {joinUrl && (
-            <div className="mb-4 inline-block rounded-2xl bg-white p-4">
-              <QRCodeSVG value={joinUrl} size={160} level="H" aria-label={`加入房間 ${roomCode} 的 QR code`} />
-            </div>
+            <>
+              {/* 240px — readable from across a living room, not just up close */}
+              <div className="mb-4 inline-block rounded-2xl bg-white p-4">
+                <QRCodeSVG value={joinUrl} size={240} level="H" aria-label={`加入房間 ${roomCode} 的 QR code`} />
+              </div>
+              {/* Cameras fail; let people type the link by hand. */}
+              <p className="mb-4 break-all font-mono text-sm text-white/50">
+                <span className="mb-1 block text-xs uppercase tracking-wider text-white/30">或手動輸入網址</span>
+                {joinUrl}
+              </p>
+            </>
           )}
 
           <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <Button variant="ghost" size="md" onClick={handleCopy}>
+            <Button
+              variant="ghost"
+              size="md"
+              onClick={() => void copyText(roomCode, setCopied, "無法複製，請手動選取代碼")}
+            >
               <Copy className="h-4 w-4" aria-hidden="true" />
               {copied ? "已複製！" : "複製代碼"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="md"
+              disabled={!joinUrl}
+              onClick={() => void copyText(joinUrl, setCopiedLink, "無法複製連結")}
+            >
+              <Link2 className="h-4 w-4" aria-hidden="true" />
+              {copiedLink ? "已複製連結！" : "複製邀請連結"}
             </Button>
             <Button variant="ghost" size="md" onClick={() => setShowQR(true)} disabled={!joinUrl}>
               <Share2 className="h-4 w-4" aria-hidden="true" /> 全螢幕 QR
@@ -118,46 +146,57 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
             玩家（{onlineCount}/{playerList.length}）
           </h2>
           <ul className="space-y-2">
-            {playerList.map((p) => (
-              <li
-                key={p.id}
-                className={cn(
-                  "flex items-center justify-between rounded-xl p-3 transition-all",
-                  p.isConnected ? "bg-white/5" : "bg-white/5 opacity-40",
-                )}
-              >
-                <span className="flex items-center gap-3">
-                  <span className="text-xl" aria-hidden="true">
-                    {p.avatar}
-                  </span>
-                  <span className="text-sm font-medium">{p.nickname}</span>
-                  {p.isHost && <Crown className="h-3.5 w-3.5 text-yellow-400" aria-label="房主" />}
-                  <span
-                    className={cn("h-1.5 w-1.5 rounded-full", p.isConnected ? "bg-emerald-400" : "bg-red-500")}
-                    aria-label={p.isConnected ? "在線" : "離線"}
-                  />
-                </span>
-                <span className="flex items-center gap-2">
-                  {p.isHost && (
-                    <span className="rounded-full bg-yellow-400/10 px-2 py-0.5 text-xs font-medium text-yellow-400/80">
-                      房主
+            <AnimatePresence initial={false}>
+              {playerList.map((p) => (
+                <motion.li
+                  key={p.id}
+                  layout
+                  initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
+                  className={cn(
+                    "flex items-center justify-between rounded-xl p-3 transition-colors",
+                    p.isConnected ? "bg-white/5" : "bg-white/5 opacity-40",
+                  )}
+                >
+                  <span className="flex items-center gap-3">
+                    <span className="text-xl" aria-hidden="true">
+                      {p.avatar}
                     </span>
-                  )}
-                  {!p.isHost && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`移除 ${p.nickname}`}
-                      onClick={() => kickPlayer(p.id).catch((e) => setError(e instanceof Error ? e.message : "無法移除"))}
-                    >
-                      <X className="h-3.5 w-3.5" aria-hidden="true" />
-                    </Button>
-                  )}
-                </span>
-              </li>
-            ))}
+                    <span className="text-sm font-medium">{p.nickname}</span>
+                    {p.isHost && <Crown className="h-3.5 w-3.5 text-yellow-400" aria-label="房主" />}
+                    <span
+                      className={cn("h-1.5 w-1.5 rounded-full", p.isConnected ? "bg-emerald-400" : "bg-red-500")}
+                      aria-label={p.isConnected ? "在線" : "離線"}
+                    />
+                  </span>
+                  <span className="flex items-center gap-2">
+                    {p.isHost && (
+                      <span className="rounded-full bg-yellow-400/10 px-2 py-0.5 text-xs font-medium text-yellow-400/80">
+                        房主
+                      </span>
+                    )}
+                    {!p.isHost && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`移除 ${p.nickname}`}
+                        onClick={() =>
+                          kickPlayer(p.id).catch((e) => setError(e instanceof Error ? e.message : "無法移除"))
+                        }
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                    )}
+                  </span>
+                </motion.li>
+              ))}
+            </AnimatePresence>
             {playerList.length === 0 && (
-              <li className="py-8 text-center text-sm text-white/30">還沒有玩家，快分享代碼！</li>
+              <li className="py-8 text-center">
+                <p className="text-sm text-white/50">還沒有玩家，快分享代碼！</p>
+                <p className="mt-1 text-xs text-white/40">掃描 QR code 或輸入代碼加入，人數到齊就能開始。</p>
+              </li>
             )}
           </ul>
         </section>
@@ -166,11 +205,11 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
 
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           <Button
-            variant="ghost"
+            variant="accent"
             size="md"
             disabled={!canStart}
             className="col-span-2 md:col-span-1"
-            style={canStart ? { background: "linear-gradient(135deg, #22c55e, #16a34a)" } : undefined}
+            aria-describedby={canStart ? undefined : "start-hint"}
             onClick={() => startGame().catch((e) => setError(e instanceof Error ? e.message : "無法開始"))}
           >
             <Crown className="h-4 w-4" aria-hidden="true" /> 開始遊戲
@@ -183,49 +222,39 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
           </Button>
         </div>
 
-        {!canStart && (
-          <p className="mt-4 text-center text-sm text-white/40" role="status">
-            這款遊戲至少需要 {minPlayers} 位玩家才能開始
-          </p>
-        )}
+        <p id="start-hint" className="mt-4 text-center text-sm text-white/40" role="status">
+          {canStart ? (
+            <>{onlineCount} 人就緒，可以開始！</>
+          ) : (
+            <>
+              <span aria-hidden="true" className="mr-1 tracking-widest">
+                {Array.from({ length: minPlayers }, (_, i) => (i < onlineCount ? "●" : "○")).join("")}
+              </span>
+              {onlineCount} / {minPlayers} 位玩家 — 這款遊戲至少要 {minPlayers} 人才能開始
+              <span className="sr-only">還差 {minPlayers - onlineCount} 人</span>
+            </>
+          )}
+        </p>
       </div>
 
       {/* Fullscreen QR */}
-      {showQR && joinUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/95 p-8"
-          role="dialog"
-          aria-modal="true"
-          aria-label="全螢幕 QR code"
-        >
-          <div className="text-center">
-            <div className="mb-6 inline-block rounded-3xl bg-white p-8">
-              <QRCodeSVG value={joinUrl} size={300} level="H" />
-            </div>
-            <p className="mb-2 text-3xl font-bold tracking-[0.2em]" style={{ color: game?.color ?? "#a855f7" }}>
-              {roomCode}
-            </p>
-            <p className="text-sm text-white/40">掃一下就能加入派對</p>
-            <Button variant="ghost" size="md" className="mt-8" onClick={() => setShowQR(false)}>
-              關閉
-            </Button>
+      <Modal open={showQR && Boolean(joinUrl)} onClose={() => setShowQR(false)} label="全螢幕 QR code">
+        <div className="text-center">
+          <div className="mb-6 inline-block rounded-3xl bg-white p-8">
+            {joinUrl && <QRCodeSVG value={joinUrl} size={300} level="H" />}
           </div>
+          <p className="mb-2 text-3xl font-bold tracking-[0.2em] [color:var(--game-accent,#a855f7)]">{roomCode}</p>
+          <p className="text-sm text-white/40">掃一下就能加入派對</p>
+          <Button variant="ghost" size="md" className="mt-8" onClick={() => setShowQR(false)}>
+            關閉
+          </Button>
         </div>
-      )}
+      </Modal>
 
       {/* Settings */}
-      {showSettings && room && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/95 p-6"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="settings-title"
-        >
-          <div className="glass-card w-full max-w-sm rounded-2xl p-6">
-            <h2 id="settings-title" className="mb-4 text-lg font-bold">
-              房間設定
-            </h2>
-
+      <Modal open={showSettings && Boolean(room)} onClose={() => setShowSettings(false)} title="房間設定">
+        {room && (
+          <>
             <fieldset className="mb-4">
               <legend className="mb-2 text-sm font-medium text-white/60">難度</legend>
               <div className="grid grid-cols-3 gap-2">
@@ -263,38 +292,24 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
             <Button variant="ghost" size="md" className="w-full" onClick={() => setShowSettings(false)}>
               完成
             </Button>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
-      {/* End-room confirmation — replaces window.confirm(), which blocks the
-          main thread and cannot be styled or announced. */}
-      {confirmingEnd && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/95 p-6"
-          role="alertdialog"
-          aria-modal="true"
-          aria-labelledby="end-title"
-          aria-describedby="end-desc"
-        >
-          <div className="glass-card w-full max-w-sm rounded-2xl p-6 text-center">
-            <h2 id="end-title" className="mb-2 text-lg font-bold">
-              要結束這間房嗎？
-            </h2>
-            <p id="end-desc" className="mb-6 text-sm text-white/50">
-              所有玩家都會被移出，房間代碼也會立刻失效。這個動作無法復原。
-            </p>
-            <div className="flex gap-2">
-              <Button variant="ghost" size="md" className="flex-1" onClick={() => setConfirmingEnd(false)}>
-                取消
-              </Button>
-              <Button variant="danger" size="md" className="flex-1" onClick={() => void handleEnd()}>
-                結束房間
-              </Button>
-            </div>
-          </div>
+      {/* End-room confirmation */}
+      <Modal open={confirmingEnd} onClose={() => setConfirmingEnd(false)} title="要結束這間房嗎？" role="alertdialog">
+        <p className="mb-6 text-sm text-white/50">
+          所有玩家都會被移出，房間代碼也會立刻失效。這個動作無法復原。
+        </p>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="md" className="flex-1" onClick={() => setConfirmingEnd(false)}>
+            取消
+          </Button>
+          <Button variant="danger" size="md" className="flex-1" onClick={() => void handleEnd()}>
+            結束房間
+          </Button>
         </div>
-      )}
+      </Modal>
     </main>
   );
 }

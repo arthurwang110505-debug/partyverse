@@ -6,8 +6,10 @@ import Link from "next/link";
 import { ArrowLeft, Users } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { addRecentRoom } from "@/hooks/useRecentRooms";
 import { MAX_NICKNAME_LENGTH, NICKNAME_KEY } from "@/constants/room";
 import { sanitizeNickname } from "@/lib/utils";
+import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { ErrorNote } from "@/components/ui/ErrorNote";
@@ -36,6 +38,7 @@ export default function JoinRoomClient({ roomCode }: Props) {
       const cleanName = sanitizeNickname(effectiveNickname);
       setSavedNickname(cleanName);
       await joinRoom(roomCode, cleanName);
+      addRecentRoom({ code: roomCode, nickname: cleanName, role: "player" });
       router.push(`/room/${roomCode}/play`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "加入失敗，請再試一次");
@@ -44,7 +47,8 @@ export default function JoinRoomClient({ roomCode }: Props) {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-ink p-4 text-white">
+    <main className="flex min-h-screen items-center justify-center bg-ink p-4 pt-28 text-white">
+      <Navbar />
       <div className="w-full max-w-sm">
         <Link
           href="/join"
@@ -78,7 +82,7 @@ export default function JoinRoomClient({ roomCode }: Props) {
 
           <ErrorNote>{error}</ErrorNote>
 
-          <Button type="submit" variant="ghost" size="md" disabled={!canSubmit} className="w-full">
+          <Button type="submit" variant="accent" size="md" disabled={!canSubmit} loading={submitting} className="w-full">
             <Users className="h-4 w-4" aria-hidden="true" />
             {submitting ? "加入中…" : "加入派對"}
           </Button>
