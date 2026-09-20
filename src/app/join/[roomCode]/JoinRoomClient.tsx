@@ -48,9 +48,9 @@ export default function JoinRoomClient({ roomCode }: Props) {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-ink p-4 pt-28 text-white">
+    <main className="flex min-h-dvh items-center justify-center bg-ink px-safe py-24 text-white sm:py-28">
       <Navbar />
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm min-w-0">
         <Link
           href="/join"
           className="mb-8 inline-flex items-center gap-2 text-sm text-white/40 transition-colors hover:text-white/70"
@@ -59,12 +59,12 @@ export default function JoinRoomClient({ roomCode }: Props) {
         </Link>
 
         <div className="mb-8 text-center">
-          <p className="mb-2 text-5xl font-bold tracking-[0.2em] text-white">{roomCode}</p>
+          <p className="mb-2 text-4xl font-bold tracking-[0.14em] sm:text-5xl sm:tracking-[0.2em] text-white">{roomCode}</p>
           <p className="text-sm text-white/40">輸入名字就能加入</p>
         </div>
 
         <form
-          className="glass-card space-y-4 rounded-2xl p-6"
+          className="glass-card space-y-4 rounded-2xl p-4 sm:p-6"
           onSubmit={(e) => {
             e.preventDefault();
             void handleJoin();

@@ -42,13 +42,13 @@ export function PlayShell({ children, className, round }: PlayShellProps) {
     >
       <FloatingReactions />
 
-      <div className="mx-auto w-full max-w-md px-4 pt-4 pt-safe relative z-10">
-        <div className="glass flex items-center justify-between gap-2 rounded-2xl border border-white/10 px-3.5 py-2.5 shadow-lg shadow-black/40 ring-1 ring-white/5">
+      <div className="relative z-10 mx-auto w-full max-w-md px-safe pt-4 pt-safe">
+        <div className="glass flex min-w-0 items-center justify-between gap-2 rounded-2xl border border-white/10 px-3 py-2.5 shadow-lg shadow-black/40 ring-1 ring-white/5 sm:px-3.5">
           <span className="flex min-w-0 items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/20 text-lg ring-1 ring-cyan-500/30" aria-hidden="true">
               {player?.avatar}
             </span>
-            <span className="flex items-center gap-1 truncate text-sm font-bold text-white">
+            <span className="flex min-w-0 items-center gap-1 truncate text-sm font-bold text-white">
               {player?.nickname}
               {player?.isHost && <Crown className="h-3.5 w-3.5 shrink-0 text-yellow-400" aria-label="房主" />}
             </span>
@@ -67,10 +67,10 @@ export function PlayShell({ children, className, round }: PlayShellProps) {
         </div>
       </div>
 
-      <div className={cn("mx-auto w-full max-w-md flex-1 px-4 pb-28 relative z-10", className)}>{children}</div>
+      <div className={cn("relative z-10 mx-auto w-full max-w-md flex-1 px-safe pb-28", className)}>{children}</div>
 
       {/* Bottom dock — sits above the iPhone home indicator thanks to dock-safe. */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex items-center justify-center gap-2 px-4 dock-safe">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex items-center justify-center gap-2 px-safe dock-safe">
         <p className="pointer-events-auto glass rounded-full border border-white/10 px-4 py-2 text-sm font-bold tabular-nums shadow-xl bg-black/60 backdrop-blur-md">
           得分：<span className="font-black text-cyan-300">{score}</span>
         </p>

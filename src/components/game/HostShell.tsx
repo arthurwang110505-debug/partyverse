@@ -54,29 +54,29 @@ export function HostShell({ children, className, wide = true }: HostShellProps) 
 
   return (
     <main
-      className="min-h-[100dvh] bg-ink p-4 text-white md:p-8 relative"
+      className="relative min-h-[100dvh] bg-ink px-safe py-4 text-white md:py-8"
       style={{ "--game-accent": game?.color, "--game-gradient": game?.gradient } as CSSProperties}
     >
       <FloatingReactions />
 
       <div
         className={cn(
-          "mx-auto mb-6 flex items-center justify-between gap-3 relative z-10",
+          "relative z-10 mx-auto mb-5 flex flex-col items-stretch justify-between gap-3 sm:mb-6 sm:flex-row sm:items-center",
           wide ? "max-w-5xl" : "max-w-3xl",
         )}
       >
-        <p className="glass inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-1.5 text-sm text-white/60">
+        <p className="glass inline-flex min-w-0 items-center justify-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/60 sm:justify-start sm:px-4 sm:text-sm">
           {game && (
             <span aria-hidden="true">{game.icon}</span>
           )}
-          <span className="font-medium text-white/80">{game?.name ?? "PARTYVERSE"}</span>
+          <span className="truncate font-medium text-white/80">{game?.name ?? "PARTYVERSE"}</span>
           <span className="text-white/25" aria-hidden="true">
             ·
           </span>
-          <span className="font-bold tracking-widest text-white/70">房間 {room?.id}</span>
+          <span className="shrink-0 font-bold tracking-widest text-white/70">房間 {room?.id}</span>
         </p>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           <ConnectionBadge className="hidden sm:inline-flex text-[11px] px-2.5 py-0.5" />
           <MuteToggle />
         </div>

@@ -67,19 +67,19 @@ export default function CreateRoomClient({ gameId }: Props) {
 
   return (
     <main
-      className="flex min-h-screen items-center justify-center bg-ink px-4 py-28 text-white"
+      className="flex min-h-dvh items-center justify-center bg-ink px-safe py-24 text-white sm:py-28"
       style={{ "--game-accent": game.color, "--game-gradient": game.gradient } as CSSProperties}
     >
       <Navbar />
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md min-w-0">
         <Link
           href={`/games/${game.id}`}
-          className="mb-8 inline-flex items-center gap-2 text-sm text-white/40 transition-colors hover:text-white/70"
+          className="mb-6 inline-flex sm:mb-6 sm:mb-8 items-center gap-2 text-sm text-white/40 transition-colors hover:text-white/70"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> 返回遊戲介紹
         </Link>
 
-        <motion.header initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+        <motion.header initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-6 sm:mb-8">
           <h1 className="mb-2 flex items-center gap-3 text-2xl font-bold">
             <span aria-hidden="true" className="text-3xl">
               {game.icon}
@@ -92,7 +92,7 @@ export default function CreateRoomClient({ gameId }: Props) {
         </motion.header>
 
         <form
-          className="glass-card space-y-5 rounded-2xl p-6"
+          className="glass-card space-y-5 rounded-2xl p-4 sm:p-6"
           onSubmit={(e) => {
             e.preventDefault();
             void handleCreate();
@@ -111,7 +111,7 @@ export default function CreateRoomClient({ gameId }: Props) {
 
           <fieldset>
             <legend className="mb-2 block text-sm font-medium text-white/60">難度</legend>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
               {DIFFICULTIES.map((option) => {
                 const active = settings.difficulty === option.value;
                 return (

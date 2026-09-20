@@ -88,18 +88,18 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
 
   return (
     <main
-      className="min-h-[100dvh] bg-ink p-4 text-white md:p-8 relative"
+      className="relative min-h-[100dvh] bg-ink px-safe py-4 text-white md:py-8"
       style={{ "--game-accent": game?.color, "--game-gradient": game?.gradient } as CSSProperties}
     >
       <FloatingReactions />
 
       <div className="mx-auto max-w-4xl relative z-10">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
           <ConnectionBadge />
           <MuteToggle />
         </div>
 
-        <header className="mb-8 text-center">
+        <header className="mb-6 text-center sm:mb-8">
           <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
             <p className="glass inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm text-white/70">
               <span aria-hidden="true">{game?.icon}</span> {game?.name}
@@ -107,23 +107,23 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
               <span className="text-xs text-white/50">{game?.estimatedDuration}</span>
             </p>
           </div>
-          <h1 className="mb-2 text-4xl font-bold tracking-tight md:text-5xl">遊戲大廳</h1>
+          <h1 className="mb-2 text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">遊戲大廳</h1>
           <p className="text-sm text-white/40">把代碼或 QR code 分享給朋友，手機掃描即可加入</p>
         </header>
 
         {/* Room Code & QR Card */}
-        <section className="glass-card mb-6 rounded-2xl p-6 text-center" aria-labelledby="room-code-heading">
+        <section className="glass-card mb-6 rounded-2xl p-4 text-center sm:p-6" aria-labelledby="room-code-heading">
           <h2 id="room-code-heading" className="mb-2 text-xs uppercase tracking-wider text-white/40">
             房間代碼
           </h2>
-          <p className="mb-4 text-5xl font-bold tracking-[0.2em] [color:var(--game-accent,#a855f7)] md:text-6xl">
+          <p className="mb-4 text-4xl font-bold tracking-[0.14em] [color:var(--game-accent,#a855f7)] sm:text-5xl sm:tracking-[0.2em] md:text-6xl">
             {roomCode}
           </p>
 
           {joinUrl && (
             <>
-              <div className="mb-4 inline-block rounded-2xl bg-white p-4 shadow-xl">
-                <QRCodeSVG value={joinUrl} size={240} level="H" aria-label={`加入房間 ${roomCode} 的 QR code`} />
+              <div className="mb-4 inline-flex max-w-full rounded-2xl bg-white p-3 shadow-xl sm:p-4">
+                <QRCodeSVG className="h-auto w-[70vw] max-w-[240px]" value={joinUrl} size={240} level="H" aria-label={`加入房間 ${roomCode} 的 QR code`} />
               </div>
               <p className="mb-4 break-all font-mono text-sm text-white/60">
                 <span className="mb-1 block text-xs uppercase tracking-wider text-white/30">手機瀏覽器直接輸入網址</span>
@@ -132,7 +132,7 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
             </>
           )}
 
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <div className="mt-4 grid grid-cols-1 justify-center gap-2 min-[420px]:grid-cols-2 md:flex md:flex-wrap">
             <Button
               variant="ghost"
               size="md"
@@ -167,7 +167,7 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
 
         {/* 3-Step Quick Guide */}
         {game && (
-          <section className="glass mb-6 rounded-2xl border border-white/10 p-5 text-left" aria-label="遊戲簡介">
+          <section className="glass mb-6 rounded-2xl border border-white/10 p-4 text-left sm:p-5" aria-label="遊戲簡介">
             <h3 className="mb-1 text-sm font-semibold text-white/80 flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-violet-400" aria-hidden="true" />
               玩法簡介 · {game.name}
@@ -201,7 +201,7 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
 
         {/* Player List */}
         <section className="glass mb-6 rounded-2xl border border-white/10 p-5" aria-labelledby="players-heading">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
             <h2 id="players-heading" className="flex items-center gap-2 text-base font-semibold">
               <Users className="h-4 w-4 text-violet-400" aria-hidden="true" />
               玩家名單（{onlineCount}/{playerList.length} 在線 · {readyCount} 人就緒）
@@ -223,17 +223,17 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
                   className={cn(
-                    "flex items-center justify-between rounded-xl p-3 transition-colors border",
+                    "flex flex-col items-stretch justify-between gap-3 rounded-xl p-3 transition-colors border sm:flex-row sm:items-center",
                     p.isConnected ? "bg-white/5 border-white/10" : "bg-white/5 opacity-40 border-transparent",
                     p.isReady && p.isConnected && "border-emerald-500/30 bg-emerald-500/5",
                   )}
                 >
-                  <span className="flex items-center gap-3">
+                  <span className="flex min-w-0 items-center gap-3">
                     <span className="text-2xl" aria-hidden="true">
                       {p.avatar}
                     </span>
                     <span className="flex items-center gap-2">
-                      <span className="text-sm font-semibold">{p.nickname}</span>
+                      <span className="truncate text-sm font-semibold">{p.nickname}</span>
                       {p.isHost && <Crown className="h-3.5 w-3.5 text-yellow-400" aria-label="房主" />}
                     </span>
                     <span
@@ -283,7 +283,7 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
 
         <ErrorNote className="mb-4">{error}</ErrorNote>
 
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:grid-cols-4">
           <Button
             variant="accent"
             size="md"
@@ -326,10 +326,10 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
       {/* Fullscreen QR */}
       <Modal open={showQR && Boolean(joinUrl)} onClose={() => setShowQR(false)} label="全螢幕 QR code">
         <div className="text-center">
-          <div className="mb-6 inline-block rounded-3xl bg-white p-8 shadow-2xl">
-            {joinUrl && <QRCodeSVG value={joinUrl} size={300} level="H" />}
+          <div className="mb-6 inline-flex max-w-full rounded-3xl bg-white p-4 shadow-2xl sm:p-8">
+            {joinUrl && <QRCodeSVG className="h-auto w-[70vw] max-w-[300px]" value={joinUrl} size={300} level="H" />}
           </div>
-          <p className="mb-2 text-3xl font-bold tracking-[0.2em] [color:var(--game-accent,#a855f7)]">{roomCode}</p>
+          <p className="mb-2 text-2xl font-bold tracking-[0.14em] [color:var(--game-accent,#a855f7)] sm:text-3xl sm:tracking-[0.2em]">{roomCode}</p>
           <p className="text-sm text-white/40">手機相機掃描，立即加入</p>
           <Button variant="ghost" size="md" className="mt-8" onClick={() => setShowQR(false)}>
             關閉
@@ -387,7 +387,7 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
         <p className="mb-6 text-sm text-white/50">
           所有玩家都會被移出，房間代碼也會立刻失效。這個動作無法復原。
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 min-[380px]:flex-row">
           <Button variant="ghost" size="md" className="flex-1" onClick={() => setConfirmingEnd(false)}>
             取消
           </Button>

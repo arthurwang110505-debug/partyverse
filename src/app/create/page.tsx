@@ -15,7 +15,7 @@ export default function CreateSelectorPage() {
   const playableGames = GAMES.filter((g) => isPlayable(g.id));
 
   return (
-    <main className="min-h-screen bg-ink px-4 pb-20 pt-28 text-white">
+    <main className="min-h-dvh bg-ink px-safe pb-16 pt-24 sm:pb-20 sm:pt-28 text-white">
       <Navbar />
       <div className="mx-auto max-w-4xl">
         <Link
@@ -25,12 +25,12 @@ export default function CreateSelectorPage() {
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> 返回首頁
         </Link>
 
-        <header className="mb-10 text-center">
+        <header className="mb-8 text-center sm:mb-10">
           <p className="glass mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm text-violet-400">
             <Crown className="h-4 w-4" aria-hidden="true" />
             建立遊戲房間
           </p>
-          <h1 className="mb-2 text-3xl font-bold md:text-4xl">選擇你想主持的遊戲</h1>
+          <h1 className="mb-2 text-balance text-2xl font-bold sm:text-3xl md:text-4xl">選擇你想主持的遊戲</h1>
           <p className="text-sm text-white/40">選定遊戲後即可設定人數與規則，獲得專屬房間代碼與 QR Code</p>
         </header>
 
@@ -39,7 +39,7 @@ export default function CreateSelectorPage() {
             <Link
               key={game.id}
               href={`/create/${game.id}`}
-              className="glass-card group flex flex-col justify-between rounded-2xl p-6 transition-all hover:-translate-y-1 hover:border-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              className="glass-card group flex flex-col justify-between rounded-2xl p-5 sm:p-6 transition-all hover:-translate-y-1 hover:border-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               <div>
                 <div className="mb-4 flex items-center justify-between">

@@ -7,7 +7,7 @@ export type ButtonVariant = "primary" | "glass" | "ghost" | "danger" | "accent";
 export type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all " +
+  "inline-flex min-w-0 items-center justify-center gap-2 rounded-xl font-semibold transition-all " +
   "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-ink " +
   "disabled:cursor-not-allowed disabled:opacity-50";
 
@@ -28,7 +28,7 @@ const variants: Record<ButtonVariant, string> = {
 const sizes: Record<ButtonSize, string> = {
   sm: "px-3 py-2 text-xs",
   md: "px-4 py-2.5 text-sm",
-  lg: "px-8 py-4 text-base",
+  lg: "px-5 py-3.5 text-sm sm:px-8 sm:py-4 sm:text-base",
   /** Square button for a single icon. Always pass `aria-label`. */
   icon: "h-10 w-10 p-0",
 };

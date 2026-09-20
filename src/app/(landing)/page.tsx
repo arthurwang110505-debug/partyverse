@@ -20,7 +20,7 @@ function LedMatrixBlock({
   const isCyan = color === "cyan";
   return (
     <div
-      className={`grid gap-1 p-1 select-none pointer-events-none ${className}`}
+      className={`grid gap-0.5 p-1 select-none pointer-events-none sm:gap-1 ${className}`}
       style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
       aria-hidden="true"
     >
@@ -31,7 +31,7 @@ function LedMatrixBlock({
         return (
           <div
             key={i}
-            className={`h-1.5 w-1.5 rounded-sm transition-all duration-300 ${
+            className={`h-1 w-1 rounded-sm transition-all duration-300 sm:h-1.5 sm:w-1.5 ${
               active
                 ? isCyan
                   ? bright
@@ -56,7 +56,7 @@ export default function Home() {
     .slice(0, 4);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#030612] text-white selection:bg-[#ff007f] selection:text-white">
+    <div className="relative min-h-dvh overflow-x-clip bg-[#030612] text-white selection:bg-[#ff007f] selection:text-white">
       <Navbar />
 
       {/* CRT SCANLINES & SCANNING LASER BEAM OVERLAY */}
@@ -64,19 +64,19 @@ export default function Home() {
       <div className="pointer-events-none fixed inset-x-0 h-2 bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent blur-sm z-40 animate-scan-beam" aria-hidden="true" />
 
       {/* HERO SECTION — CYBERPUNK / NEON GLITCH ART */}
-      <section className="relative flex min-h-screen items-center justify-center overflow-hidden pt-28 pb-20">
+      <section className="relative flex min-h-dvh items-center justify-center overflow-hidden px-safe pb-14 pt-24 sm:pb-20 sm:pt-28">
         {/* Deep Cyber Ambient Lighting Spheres */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
           {/* Cyan Glow Left */}
-          <div className="absolute -left-28 top-1/4 h-[700px] w-[700px] rounded-full bg-cyan-500/25 blur-[160px]" />
-          <div className="absolute left-1/3 -top-24 h-[500px] w-[500px] rounded-full bg-blue-700/20 blur-[180px]" />
+          <div className="absolute -left-40 top-1/4 h-[70vmax] max-h-[700px] w-[70vmax] max-w-[700px] rounded-full bg-cyan-500/25 blur-[100px] sm:blur-[160px]" />
+          <div className="absolute left-1/4 -top-32 h-[55vmax] max-h-[500px] w-[55vmax] max-w-[500px] rounded-full bg-blue-700/20 blur-[110px] sm:blur-[180px]" />
 
           {/* Neon Pink Glow Right */}
-          <div className="absolute -right-28 top-1/3 h-[700px] w-[700px] rounded-full bg-[#ff007f]/25 blur-[160px]" />
-          <div className="absolute right-1/4 bottom-10 h-[550px] w-[550px] rounded-full bg-rose-600/20 blur-[180px]" />
+          <div className="absolute -right-40 top-1/3 h-[70vmax] max-h-[700px] w-[70vmax] max-w-[700px] rounded-full bg-[#ff007f]/25 blur-[100px] sm:blur-[160px]" />
+          <div className="absolute right-1/4 bottom-10 h-[55vmax] max-h-[550px] w-[55vmax] max-w-[550px] rounded-full bg-rose-600/20 blur-[110px] sm:blur-[180px]" />
 
           {/* Center Nexus Purple/Magenta */}
-          <div className="absolute left-1/2 top-1/2 h-[800px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-950/40 blur-[180px]" />
+          <div className="absolute left-1/2 top-1/2 h-[80vmax] max-h-[800px] w-[80vmax] max-w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-950/40 blur-[120px] sm:blur-[180px]" />
 
           {/* Cyberpunk Grid Background */}
           <div
@@ -89,12 +89,12 @@ export default function Home() {
           />
         </div>
 
-        <div className="relative z-10 mx-auto max-w-5xl px-4 text-center">
+        <div className="relative z-10 mx-auto w-full max-w-5xl px-0 text-center sm:px-4">
           {/* Top Cyber System Status & Corner LED Blocks */}
           <div className="mb-6 flex flex-wrap items-center justify-center gap-3">
             <LedMatrixBlock color="cyan" rows={3} cols={6} className="hidden sm:grid" />
 
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/40 bg-black/60 px-4 py-1.5 text-xs font-mono tracking-widest text-cyan-300 shadow-[0_0_15px_rgba(0,240,255,0.25)] backdrop-blur-md">
+            <div className="inline-flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-full border border-cyan-400/40 bg-black/60 px-3 py-1.5 text-[10px] font-mono tracking-wider text-cyan-300 shadow-[0_0_15px_rgba(0,240,255,0.25)] backdrop-blur-md sm:gap-2 sm:px-4 sm:text-xs sm:tracking-widest">
               <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
               <Terminal className="h-3.5 w-3.5 text-cyan-400" />
               <span>{"//"} SYSTEM: ONLINE_GLITCH_MODE</span>
@@ -106,7 +106,7 @@ export default function Home() {
           </div>
 
           {/* Subtitle Cyber Badge */}
-          <div className="mb-6 inline-flex flex-wrap items-center justify-center gap-2 font-mono text-xs">
+          <div className="mb-6 inline-flex max-w-full flex-wrap items-center justify-center gap-2 font-mono text-[10px] sm:text-xs">
             <span className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/60 bg-cyan-950/60 px-3 py-1 font-bold text-cyan-300 shadow-[0_0_15px_rgba(0,240,255,0.3)]">
               <Monitor className="h-3.5 w-3.5 text-cyan-400" />
               [ 01_HOST: 客廳大螢幕 ]
@@ -122,20 +122,20 @@ export default function Home() {
           <div className="relative my-4 select-none">
             {/* Background Glitch Ghost Shift Layers */}
             <div
-              className="absolute inset-0 flex items-center justify-center opacity-70 blur-[1px] pointer-events-none translate-x-1 -translate-y-0.5 text-cyan-400/80 font-black text-7xl sm:text-8xl md:text-9xl leading-[0.85] tracking-tight"
+              className="absolute inset-0 flex items-center justify-center opacity-70 blur-[1px] pointer-events-none translate-x-1 -translate-y-0.5 text-cyan-400/80 font-black text-[clamp(3rem,15vw,8rem)] leading-[0.85] tracking-tight"
               aria-hidden="true"
             >
               PARTYVERSE
             </div>
             <div
-              className="absolute inset-0 flex items-center justify-center opacity-70 blur-[1px] pointer-events-none -translate-x-1 translate-y-0.5 text-[#ff007f]/80 font-black text-7xl sm:text-8xl md:text-9xl leading-[0.85] tracking-tight"
+              className="absolute inset-0 flex items-center justify-center opacity-70 blur-[1px] pointer-events-none -translate-x-1 translate-y-0.5 text-[#ff007f]/80 font-black text-[clamp(3rem,15vw,8rem)] leading-[0.85] tracking-tight"
               aria-hidden="true"
             >
               PARTYVERSE
             </div>
 
             {/* Foreground Main Pure White Core + Neon Halos */}
-            <h1 className="relative text-7xl font-black leading-[0.85] tracking-tight sm:text-8xl md:text-9xl">
+            <h1 className="relative text-[clamp(3rem,15vw,8rem)] font-black leading-[0.85] tracking-tight">
               <span className="block neon-text-cyan animate-cyber-glitch" lang="en">
                 PARTY
               </span>
@@ -146,7 +146,7 @@ export default function Home() {
           </div>
 
           {/* Cyberpunk Terminal Description */}
-          <p className="mx-auto mt-6 mb-10 max-w-2xl font-mono text-sm leading-relaxed text-cyan-100/70 sm:text-base md:text-lg">
+          <p className="mx-auto mt-6 mb-8 max-w-2xl text-balance font-mono text-sm leading-relaxed text-cyan-100/70 sm:mb-10 sm:text-base md:text-lg">
             <span className="text-cyan-400">&gt;</span> 一間房，十款遊戲。
             <span className="text-white font-bold bg-cyan-500/20 px-1 border border-cyan-400/40 mx-1">
               螢光青
@@ -161,11 +161,11 @@ export default function Home() {
           </p>
 
           {/* CYBERPUNK NEON CALL-TO-ACTION BUTTONS */}
-          <div className="flex flex-col items-center justify-center gap-5 sm:flex-row">
+          <div className="mx-auto flex max-w-xl flex-col items-stretch justify-center gap-3 sm:max-w-none sm:flex-row sm:items-center sm:gap-5">
             {/* Cyan Cyber Button */}
             <Link
               href="/games"
-              className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-xl border-2 border-cyan-400 bg-cyan-950/70 px-8 py-4 font-mono font-black text-white shadow-[0_0_25px_rgba(0,240,255,0.4),inset_0_0_15px_rgba(0,240,255,0.2)] transition-all duration-200 hover:scale-105 hover:bg-cyan-500 hover:text-black hover:shadow-[0_0_40px_rgba(0,240,255,0.8)] active:scale-95 sm:w-auto"
+              className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-xl border-2 border-cyan-400 bg-cyan-950/70 px-4 py-3.5 text-sm font-mono sm:px-8 sm:py-4 sm:text-base font-black text-white shadow-[0_0_25px_rgba(0,240,255,0.4),inset_0_0_15px_rgba(0,240,255,0.2)] transition-all duration-200 hover:scale-105 hover:bg-cyan-500 hover:text-black hover:shadow-[0_0_40px_rgba(0,240,255,0.8)] active:scale-95 sm:w-auto"
             >
               {/* Corner tech notches */}
               <span className="absolute top-0 left-0 h-2 w-2 border-t-2 border-l-2 border-white" />
@@ -179,7 +179,7 @@ export default function Home() {
             {/* Neon Pink Cyber Button */}
             <Link
               href="/join"
-              className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-xl border-2 border-[#ff007f] bg-pink-950/70 px-8 py-4 font-mono font-black text-white shadow-[0_0_25px_rgba(255,0,127,0.4),inset_0_0_15px_rgba(255,0,127,0.2)] transition-all duration-200 hover:scale-105 hover:bg-[#ff007f] hover:text-white hover:shadow-[0_0_40px_rgba(255,0,127,0.8)] active:scale-95 sm:w-auto"
+              className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-xl border-2 border-[#ff007f] bg-pink-950/70 px-4 py-3.5 text-sm font-mono sm:px-8 sm:py-4 sm:text-base font-black text-white shadow-[0_0_25px_rgba(255,0,127,0.4),inset_0_0_15px_rgba(255,0,127,0.2)] transition-all duration-200 hover:scale-105 hover:bg-[#ff007f] hover:text-white hover:shadow-[0_0_40px_rgba(255,0,127,0.8)] active:scale-95 sm:w-auto"
             >
               {/* Corner tech notches */}
               <span className="absolute top-0 left-0 h-2 w-2 border-t-2 border-l-2 border-white" />
@@ -192,14 +192,14 @@ export default function Home() {
           </div>
 
           {/* DUAL TERMINAL HARDWARE SHOWCASE WITH LED MATRICES */}
-          <div className="relative mx-auto mt-16 max-w-4xl rounded-3xl border-2 border-cyan-500/30 bg-[#060a1c]/80 p-6 shadow-[0_0_50px_rgba(0,0,0,0.8)] backdrop-blur-2xl sm:p-8">
+          <div className="relative mx-auto mt-12 w-full max-w-4xl rounded-2xl border-2 border-cyan-500/30 bg-[#060a1c]/80 p-3 shadow-[0_0_50px_rgba(0,0,0,0.8)] backdrop-blur-2xl sm:mt-16 sm:rounded-3xl sm:p-6 lg:p-8">
             {/* Tech Header bar */}
-            <div className="mb-6 flex items-center justify-between border-b border-white/10 pb-3 text-xs font-mono text-white/50">
+            <div className="mb-5 flex flex-col items-start justify-between gap-2 border-b border-white/10 pb-3 text-[10px] font-mono text-white/50 sm:mb-6 sm:flex-row sm:items-center sm:text-xs">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
                 <span className="text-cyan-300 font-bold">TERMINAL_GRID // DUAL_CORE_BRIDGE</span>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <span className="text-pink-400">LATENCY: &lt;12ms</span>
                 <span className="hidden sm:inline">PORT: 3000 // WS_ACTIVE</span>
               </div>
@@ -207,10 +207,10 @@ export default function Home() {
 
             <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
               {/* Left: TV Display Console (Electric Cyan Neon) */}
-              <div className="relative w-full flex-1 rounded-2xl border-2 border-cyan-400/60 bg-gradient-to-b from-[#071328] to-[#040817] p-5 text-left shadow-[0_0_25px_rgba(0,240,255,0.15)] overflow-hidden">
+              <div className="relative w-full min-w-0 flex-1 overflow-hidden rounded-2xl border-2 border-cyan-400/60 bg-gradient-to-b from-[#071328] to-[#040817] p-4 text-left shadow-[0_0_25px_rgba(0,240,255,0.15)] sm:p-5">
                 <LedMatrixBlock color="cyan" rows={2} cols={8} className="absolute top-2 right-2 opacity-50" />
 
-                <div className="mb-4 flex items-center justify-between border-b border-cyan-500/30 pb-2">
+                <div className="mb-4 flex flex-col items-start justify-between gap-2 border-b border-cyan-500/30 pb-2 min-[420px]:flex-row">
                   <div className="flex items-center gap-2">
                     <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#00f0ff]" />
                     <span className="font-mono text-xs font-black uppercase tracking-wider text-cyan-300">
@@ -223,7 +223,7 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-3 font-mono">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-black text-white">💣 炸彈倒數 · 核心警報</p>
                     <span className="rounded bg-[#ff007f]/20 px-2 py-0.5 text-xs font-black text-pink-400 border border-[#ff007f]/40 animate-pulse">
                       04 SEC
@@ -234,7 +234,7 @@ export default function Home() {
                     <div className="h-full w-4/5 bg-gradient-to-r from-cyan-400 to-blue-500 shadow-[0_0_10px_#00f0ff]" />
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-cyan-200/60 pt-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-cyan-200/60">
                     <span className="flex items-center gap-1.5 font-bold text-cyan-300">
                       <Users className="h-3.5 w-3.5" /> 6 節點在線
                     </span>
@@ -254,10 +254,10 @@ export default function Home() {
               </div>
 
               {/* Right: Phone Gamepad Terminal (Neon Hot Pink) */}
-              <div className="relative w-full flex-1 rounded-2xl border-2 border-[#ff007f]/60 bg-gradient-to-b from-[#1c0817] to-[#0a0410] p-5 text-left shadow-[0_0_25px_rgba(255,0,127,0.15)] overflow-hidden">
+              <div className="relative w-full min-w-0 flex-1 overflow-hidden rounded-2xl border-2 border-[#ff007f]/60 bg-gradient-to-b from-[#1c0817] to-[#0a0410] p-4 text-left shadow-[0_0_25px_rgba(255,0,127,0.15)] sm:p-5">
                 <LedMatrixBlock color="pink" rows={2} cols={8} className="absolute top-2 right-2 opacity-50" />
 
-                <div className="mb-4 flex items-center justify-between border-b border-[#ff007f]/30 pb-2">
+                <div className="mb-4 flex flex-col items-start justify-between gap-2 border-b border-[#ff007f]/30 pb-2 min-[420px]:flex-row">
                   <div className="flex items-center gap-2">
                     <span className="h-2.5 w-2.5 rounded-full bg-[#ff007f] shadow-[0_0_8px_#ff007f]" />
                     <span className="font-mono text-xs font-black uppercase tracking-wider text-pink-300">
@@ -293,7 +293,7 @@ export default function Home() {
           </div>
 
           {/* CYBER STATS DASHBOARD */}
-          <div className="mt-16 grid grid-cols-2 gap-4 sm:grid-cols-4 md:gap-6 font-mono">
+          <div className="mt-12 grid grid-cols-1 gap-3 font-mono min-[420px]:grid-cols-2 sm:grid-cols-4 md:gap-6">
             {[
               { value: `${GAMES.length} PROTOCOLS`, label: "精選派對遊戲", accent: "text-cyan-300", glow: "shadow-cyan-500/20" },
               { value: `${playableCount} ONLINE`, label: "現已全數開放", accent: "text-emerald-300", glow: "shadow-emerald-500/20" },
@@ -331,7 +331,7 @@ export default function Home() {
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
             {/* Step 1: Cyan Tube */}
-            <div className="relative rounded-3xl border-2 border-cyan-400/40 bg-gradient-to-b from-[#06142a] to-[#040816] p-8 shadow-[0_0_20px_rgba(0,240,255,0.15)] transition-all hover:-translate-y-1 hover:border-cyan-400">
+            <div className="relative rounded-3xl border-2 border-cyan-400/40 bg-gradient-to-b from-[#06142a] to-[#040816] p-6 sm:p-8 shadow-[0_0_20px_rgba(0,240,255,0.15)] transition-all hover:-translate-y-1 hover:border-cyan-400">
               <LedMatrixBlock color="cyan" rows={2} cols={5} className="absolute top-4 right-4 opacity-40" />
               <span className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/20 text-cyan-300 ring-2 ring-cyan-400/40 shadow-[0_0_15px_#00f0ff]">
                 <Monitor className="h-6 w-6" />
@@ -346,7 +346,7 @@ export default function Home() {
             </div>
 
             {/* Step 2: Purple Nexus */}
-            <div className="relative rounded-3xl border-2 border-purple-500/40 bg-gradient-to-b from-[#190a2a] to-[#070416] p-8 shadow-[0_0_20px_rgba(168,85,247,0.15)] transition-all hover:-translate-y-1 hover:border-purple-400">
+            <div className="relative rounded-3xl border-2 border-purple-500/40 bg-gradient-to-b from-[#190a2a] to-[#070416] p-6 sm:p-8 shadow-[0_0_20px_rgba(168,85,247,0.15)] transition-all hover:-translate-y-1 hover:border-purple-400">
               <LedMatrixBlock color="pink" rows={2} cols={5} className="absolute top-4 right-4 opacity-40" />
               <span className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-500/20 text-purple-300 ring-2 ring-purple-400/40 shadow-[0_0_15px_#c084fc]">
                 <QrCode className="h-6 w-6" />
@@ -361,7 +361,7 @@ export default function Home() {
             </div>
 
             {/* Step 3: Neon Hot Pink Tube */}
-            <div className="relative rounded-3xl border-2 border-[#ff007f]/40 bg-gradient-to-b from-[#25081b] to-[#0a0412] p-8 shadow-[0_0_20px_rgba(255,0,127,0.15)] transition-all hover:-translate-y-1 hover:border-[#ff007f]">
+            <div className="relative rounded-3xl border-2 border-[#ff007f]/40 bg-gradient-to-b from-[#25081b] to-[#0a0412] p-6 sm:p-8 shadow-[0_0_20px_rgba(255,0,127,0.15)] transition-all hover:-translate-y-1 hover:border-[#ff007f]">
               <LedMatrixBlock color="pink" rows={2} cols={5} className="absolute top-4 right-4 opacity-40" />
               <span className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ff007f]/20 text-pink-300 ring-2 ring-[#ff007f]/40 shadow-[0_0_15px_#ff007f]">
                 <Zap className="h-6 w-6" />
@@ -417,7 +417,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
             {(
               [
                 { category: "PARTY", label: "派對破冰", icon: "🎉", desc: "簡單嗨翻", border: "hover:border-cyan-400 hover:shadow-[0_0_20px_rgba(0,240,255,0.3)]" },
@@ -432,7 +432,7 @@ export default function Home() {
                 <Link
                   key={entry.category}
                   href="/games"
-                  className={`group rounded-3xl border border-white/10 bg-black/40 p-6 text-center transition-all hover:-translate-y-1.5 hover:bg-black/60 ${entry.border}`}
+                  className={`group rounded-2xl border border-white/10 bg-black/40 p-4 text-center transition-all sm:rounded-3xl sm:p-6 hover:-translate-y-1.5 hover:bg-black/60 ${entry.border}`}
                 >
                   <p className="mb-3 text-4xl transition-transform group-hover:scale-110" aria-hidden="true">
                     {entry.icon}
@@ -448,7 +448,7 @@ export default function Home() {
           </div>
 
           {/* Bottom Cyber Banner */}
-          <div className="relative mt-16 rounded-3xl border-2 border-cyan-400/40 bg-gradient-to-r from-[#071730]/80 via-[#1e0724]/80 to-[#220718]/80 p-8 sm:p-12 text-center shadow-[0_0_40px_rgba(0,0,0,0.8)] overflow-hidden">
+          <div className="relative mt-12 overflow-hidden rounded-2xl border-2 border-cyan-400/40 bg-gradient-to-r from-[#071730]/80 via-[#1e0724]/80 to-[#220718]/80 p-5 text-center shadow-[0_0_40px_rgba(0,0,0,0.8)] sm:mt-16 sm:rounded-3xl sm:p-12">
             <LedMatrixBlock color="cyan" rows={3} cols={12} className="absolute -top-1 -left-2 opacity-30 hidden sm:grid" />
             <LedMatrixBlock color="pink" rows={3} cols={12} className="absolute -bottom-1 -right-2 opacity-30 hidden sm:grid" />
 
@@ -487,7 +487,7 @@ export default function Home() {
             </p>
             <p className="text-xs font-mono text-white/50">One Room. Ten Games. Infinite Cyber Chaos.</p>
           </div>
-          <div className="flex items-center gap-4 text-xs font-mono text-white/40">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-center text-xs font-mono text-white/40 md:justify-end">
             <span>SYS_VERSION: 2.1.0</span>
             <span>•</span>
             <span>© {new Date().getFullYear()} PartyVerse Cyberpunk Edition</span>

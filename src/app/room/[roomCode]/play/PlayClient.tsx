@@ -45,12 +45,12 @@ export default function PlayClient({ roomCode }: Props) {
   };
 
   return (
-    <main className="min-h-[100dvh] bg-ink p-4 pb-safe text-white relative">
+    <main className="relative min-h-[100dvh] bg-ink px-safe pb-safe pt-4 text-white">
       <FloatingReactions />
 
-      <div className="mx-auto max-w-md pt-4 relative z-10 flex flex-col min-h-[92dvh]">
+      <div className="relative z-10 mx-auto flex min-h-[92dvh] max-w-md flex-col">
         {/* Header */}
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => setConfirmLeave(true)}
@@ -68,7 +68,7 @@ export default function PlayClient({ roomCode }: Props) {
 
         {/* Game Info Card */}
         {game && (
-          <div className="glass-card mb-4 rounded-2xl p-5 text-center border border-white/10">
+          <div className="glass-card mb-4 rounded-2xl border border-white/10 p-4 text-center sm:p-5">
             <span className="mb-2 inline-block text-4xl" aria-hidden="true">
               {game.icon}
             </span>
@@ -82,12 +82,12 @@ export default function PlayClient({ roomCode }: Props) {
 
         {/* Player Identity Card */}
         {player && (
-          <div className="glass mb-4 flex items-center gap-3 rounded-2xl border border-white/10 p-4">
+          <div className="glass mb-4 flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 p-4">
             <span className="text-3xl" aria-hidden="true">
               {player.avatar}
             </span>
-            <span className="flex-1">
-              <span className="flex items-center gap-2 font-semibold">
+            <span className="min-w-0 flex-1">
+              <span className="flex min-w-0 items-center gap-2 font-semibold">
                 {player.nickname}
                 {player.isHost && <Crown className="h-4 w-4 text-yellow-400" aria-label="房主" />}
               </span>
@@ -149,7 +149,7 @@ export default function PlayClient({ roomCode }: Props) {
             <Sparkles className="h-3 w-3 text-pink-400" aria-hidden="true" />
             點擊表情，發送即時氣氛到大螢幕：
           </p>
-          <div className="grid grid-cols-6 gap-2">
+          <div className="grid grid-cols-3 gap-2 min-[380px]:grid-cols-6">
             {REACTIONS.map((emoji) => (
               <button
                 key={emoji}
@@ -168,11 +168,11 @@ export default function PlayClient({ roomCode }: Props) {
       {/* Confirm Leave Modal */}
       <Modal open={confirmLeave} onClose={() => setConfirmLeave(false)} title="確定要離開房間嗎？" role="alertdialog">
         <p className="mb-6 text-sm text-white/60">離開後你的名額將會釋出，需要重新輸入代碼才能加入。</p>
-        <div className="flex gap-2">
-          <Button variant="ghost" size="md" className="flex-1" onClick={() => setConfirmLeave(false)}>
+        <div className="flex flex-col gap-2 min-[380px]:flex-row">
+          <Button variant="ghost" size="md" className="min-w-0 flex-1" onClick={() => setConfirmLeave(false)}>
             留下
           </Button>
-          <Button variant="danger" size="md" className="flex-1" onClick={() => void handleConfirmLeave()}>
+          <Button variant="danger" size="md" className="min-w-0 flex-1" onClick={() => void handleConfirmLeave()}>
             離開房間
           </Button>
         </div>

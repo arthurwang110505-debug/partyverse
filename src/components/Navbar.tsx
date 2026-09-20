@@ -33,23 +33,23 @@ export default function Navbar() {
 
   return (
     <nav
-      className={cn("fixed inset-x-0 top-0 z-50 px-4 py-4 transition-all duration-300", scrolled && "py-3")}
+      className={cn("fixed inset-x-0 top-0 z-50 px-safe py-3 transition-all duration-300 sm:py-4", scrolled && "py-2 sm:py-3")}
       aria-label="主導覽"
     >
       <div
         className={cn(
-          "mx-auto flex max-w-7xl items-center justify-between rounded-2xl px-5 py-3 transition-all duration-300",
+          "mx-auto flex max-w-7xl items-center justify-between gap-3 rounded-2xl px-3 py-2.5 transition-all duration-300 sm:px-5 sm:py-3",
           scrolled ? "glass-strong" : "glass",
         )}
       >
-        <Link href="/" className="group flex items-center gap-2.5">
+        <Link href="/" className="group flex min-w-0 items-center gap-2 sm:gap-2.5">
           <span
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-rose-500 shadow-lg shadow-blue-500/25 ring-1 ring-white/20 transition-transform group-hover:scale-105"
+            className="flex h-8 w-8 shrink-0 items-center justify-center sm:h-9 sm:w-9 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-rose-500 shadow-lg shadow-blue-500/25 ring-1 ring-white/20 transition-transform group-hover:scale-105"
             aria-hidden="true"
           >
             <Gamepad2 className="h-5 w-5 text-white" />
           </span>
-          <span lang="en" className="text-lg font-black tracking-wider">
+          <span lang="en" className="truncate text-base font-black tracking-wider sm:text-lg">
             <span className="text-cyan-400">PARTY</span>
             <span className="text-rose-500">VERSE</span>
           </span>
@@ -88,14 +88,14 @@ export default function Navbar() {
           aria-expanded={mobileOpen}
           aria-controls="mobile-menu"
           aria-label={mobileOpen ? "關閉選單" : "開啟選單"}
-          className="rounded-xl p-2 transition-colors hover:bg-white/10 md:hidden"
+          className="shrink-0 rounded-xl p-2 transition-colors hover:bg-white/10 md:hidden"
         >
           {mobileOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
         </button>
       </div>
 
       {mobileOpen && (
-        <div id="mobile-menu" className="glass-strong mt-2 flex flex-col gap-1 rounded-2xl p-3 md:hidden">
+        <div id="mobile-menu" className="glass-strong mx-auto mt-2 flex max-w-7xl flex-col gap-1 rounded-2xl p-3 md:hidden">
           {LINKS.map((link) => (
             <Link
               key={link.href}

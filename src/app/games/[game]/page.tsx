@@ -51,7 +51,7 @@ export default function GameDetailPage({ params }: Props) {
 
   return (
     <main
-      className="min-h-screen bg-ink px-4 pb-16 pt-32 text-white"
+      className="min-h-dvh bg-ink px-safe pb-14 pt-24 text-white sm:pb-16 sm:pt-32"
       style={{ "--game-accent": game.color, "--game-gradient": game.gradient } as CSSProperties}
     >
       <Navbar />
@@ -63,17 +63,17 @@ export default function GameDetailPage({ params }: Props) {
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> 返回遊戲列表
         </Link>
 
-        <article className="glass-card rounded-3xl p-8">
-          <header className="mb-6 flex items-start gap-4">
+        <article className="glass-card rounded-2xl p-5 sm:rounded-3xl sm:p-8">
+          <header className="mb-6 flex flex-col items-start gap-4 min-[420px]:flex-row">
             <span
-              className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl text-4xl"
+              className="flex h-16 w-16 shrink-0 sm:h-20 sm:w-20 items-center justify-center rounded-2xl text-3xl sm:text-4xl"
               style={{ background: `${game.color}20`, border: `1px solid ${game.color}30` }}
               aria-hidden="true"
             >
               {game.icon}
             </span>
             <div>
-              <h1 className="mb-1 text-3xl font-bold">{game.name}</h1>
+              <h1 className="mb-1 text-2xl font-bold sm:text-3xl">{game.name}</h1>
               <p lang="en" className="text-sm text-white/40">
                 {game.nameEn}
               </p>
@@ -82,7 +82,7 @@ export default function GameDetailPage({ params }: Props) {
 
           <p className="mb-6 text-base leading-relaxed text-white/60">{game.longDescription}</p>
 
-          <dl className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <dl className="mb-6 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-4">
             {[
               { term: "分類", detail: game.category, icon: null },
               { term: "難度", detail: game.difficulty, icon: <Gauge className="h-3.5 w-3.5" aria-hidden="true" /> },

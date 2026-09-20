@@ -31,15 +31,15 @@ export default function GamesPage() {
   }, [filter, debouncedSearch, showPlayableOnly]);
 
   return (
-    <div className="min-h-screen bg-ink text-white">
+    <div className="min-h-dvh bg-ink text-white">
       <Navbar />
-      <div className="mx-auto max-w-7xl px-4 pb-24 pt-32">
-        <header className="mb-10">
-          <h1 className="mb-3 text-4xl font-bold md:text-5xl">全部遊戲</h1>
+      <div className="mx-auto max-w-7xl px-safe pb-20 pt-24 sm:pb-24 sm:pt-32">
+        <header className="mb-8 sm:mb-10">
+          <h1 className="mb-3 text-3xl font-bold sm:text-4xl md:text-5xl">全部遊戲</h1>
           <p className="text-base text-white/40">挑一款遊戲，和朋友開房同樂</p>
         </header>
 
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row">
+        <div className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" aria-hidden="true" />
             <label htmlFor="game-search" className="sr-only">
@@ -71,7 +71,7 @@ export default function GamesPage() {
         </div>
 
         <div
-          className="mb-8 flex gap-2 overflow-x-auto pb-1"
+          className="mb-8 -mx-1 flex gap-2 overflow-x-auto px-1 pb-2"
           role="group"
           aria-label="依分類篩選"
         >

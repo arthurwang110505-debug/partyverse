@@ -59,16 +59,16 @@ export default function JoinClient() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-ink p-4 pt-28 text-white">
+    <main className="flex min-h-dvh items-center justify-center bg-ink px-safe py-24 text-white sm:py-28">
       <Navbar />
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm min-w-0">
         <div className="mb-8">
           <h1 className="mb-2 text-2xl font-bold">加入派對</h1>
           <p className="text-sm text-white/40">輸入房主給你的房間代碼</p>
         </div>
 
         <form
-          className="glass-card space-y-4 rounded-2xl p-6"
+          className="glass-card space-y-4 rounded-2xl p-4 sm:p-6"
           onSubmit={(e) => {
             e.preventDefault();
             void handleJoin();
@@ -83,7 +83,7 @@ export default function JoinClient() {
             maxLength={ROOM_CODE_LENGTH}
             autoComplete="off"
             inputMode="text"
-            inputClassName="text-center text-2xl font-bold tracking-[0.3em] uppercase"
+            inputClassName="text-center text-xl font-bold tracking-[0.22em] uppercase sm:text-2xl sm:tracking-[0.3em]"
             hint={`${ROOM_CODE_LENGTH} 位英數字，不含 0/O、1/I/L`}
           />
 
@@ -125,7 +125,7 @@ export default function JoinClient() {
                         ? router.push(`/room/${r.code}/host`)
                         : void handleRejoin(r.code, r.nickname)
                     }
-                    className="glass flex w-full items-center gap-3 rounded-xl border border-white/10 px-4 py-3 text-left transition-all hover:bg-white/10 disabled:opacity-50"
+                    className="glass flex w-full min-w-0 items-center gap-3 rounded-xl border border-white/10 px-4 py-3 text-left transition-all hover:bg-white/10 disabled:opacity-50"
                   >
                     <span className="text-base font-bold tracking-widest text-violet-300">{r.code}</span>
                     <span className="flex-1 truncate text-sm text-white/60">

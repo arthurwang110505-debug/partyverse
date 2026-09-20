@@ -33,10 +33,10 @@ export default function GameCard({ game, compact = false }: GameCardProps) {
       href={`/games/${game.id}`}
       className="group block h-full rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
     >
-      <article className="relative h-full rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm transition-all duration-300 group-hover:-translate-y-1 group-hover:border-white/20">
-        <div className="mb-4 flex items-start justify-between gap-2">
+      <article className="relative h-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm transition-all duration-300 group-hover:-translate-y-1 group-hover:border-white/20 sm:p-5">
+        <div className="mb-4 flex items-start justify-between gap-3">
           <span
-            className="flex h-14 w-14 items-center justify-center rounded-xl text-2xl"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl sm:h-14 sm:w-14"
             style={{ background: `${game.color}20`, border: `1px solid ${game.color}30` }}
             aria-hidden="true"
           >
@@ -73,7 +73,7 @@ export default function GameCard({ game, compact = false }: GameCardProps) {
           {game.description}
         </p>
 
-        <div className="mb-4 flex items-center gap-3 text-xs text-white/40">
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/40">
           <span className="flex items-center gap-1">
             <Users className="h-3 w-3" aria-hidden="true" />
             {game.minPlayers}–{game.maxPlayers}人

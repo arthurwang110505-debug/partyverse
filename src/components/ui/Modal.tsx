@@ -77,7 +77,7 @@ export function Modal({ open, onClose, title, label, role = "dialog", className,
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-ink/95 p-6"
+      className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-ink/95 p-3 py-6 sm:p-6"
       onMouseDown={(e) => {
         // Only the backdrop itself closes — clicks inside the panel must not.
         if (e.target === e.currentTarget) onClose();
@@ -91,7 +91,7 @@ export function Modal({ open, onClose, title, label, role = "dialog", className,
         aria-labelledby={title ? "modal-title" : undefined}
         tabIndex={-1}
         className={cn(
-          "glass-card w-full max-w-sm rounded-2xl p-6 outline-none motion-safe:animate-toast-in",
+          "glass-card max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl p-4 outline-none motion-safe:animate-toast-in sm:p-6",
           className,
         )}
       >

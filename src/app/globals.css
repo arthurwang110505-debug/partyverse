@@ -3,8 +3,11 @@
 @tailwind utilities;
 
 @layer base {
-  * {
+  *,
+  *::before,
+  *::after {
     @apply border-white/10;
+    box-sizing: border-box;
   }
 
   html {
@@ -20,9 +23,26 @@
 
   body {
     @apply bg-ink text-white antialiased;
+    min-width: 320px;
+    overflow-x: hidden;
+    overflow-x: clip;
     font-feature-settings: "rlig" 1, "calt" 1;
     /* Kill the grey flash iOS/Android put on tapped elements in the game views. */
     -webkit-tap-highlight-color: transparent;
+  }
+
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
   }
 
   /*
@@ -194,9 +214,16 @@
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }
+  .px-safe {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
   /* A bottom-docked bar that clears the home indicator but keeps min padding. */
   .dock-safe {
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+  .text-balance {
+    text-wrap: balance;
   }
   /* Keyframe used by toast pop-ins (defined here to avoid a config change). */
   @keyframes toast-in {
