@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Search } from "lucide-react";
 import { GAMES } from "@/constants/games";
 import GameCard from "@/components/GameCard";
+import Navbar from "@/components/Navbar";
 import { CATEGORIES, type Category } from "@/types";
 import { isPlayable } from "@/engine";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -32,6 +32,7 @@ export default function GamesPage() {
 
   return (
     <div className="min-h-screen bg-ink text-white">
+      <Navbar />
       <div className="mx-auto max-w-7xl px-4 pb-24 pt-32">
         <header className="mb-10">
           <h1 className="mb-3 text-4xl font-bold md:text-5xl">全部遊戲</h1>
@@ -93,22 +94,25 @@ export default function GamesPage() {
         </div>
 
         <p className="mb-6 text-sm text-white/40" role="status" aria-live="polite">
-          共 {filtered.length} 款遊戲
+          {/*
+           * Searching is debounced 150ms; saying so beats re-fading the whole
+           * grid on every keystroke (the old AnimatePresence keyed on the
+           * search string — the entire page flickered with each character).
+           */}
+          {search !== debouncedSearch ? "搜尋中…" : `共 ${filtered.length} 款遊戲`}
         </p>
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={`${filter}-${debouncedSearch}-${showPlayableOnly}`}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-          >
-            {filtered.map((game) => (
-              <GameCard key={game.id} game={game} />
-            ))}
-          </motion.div>
-        </AnimatePresence>
+        <div
+          aria-busy={search !== debouncedSearch}
+          className={cn(
+            "grid grid-cols-1 gap-4 transition-opacity duration-150 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+            search !== debouncedSearch && "opacity-60",
+          )}
+        >
+          {filtered.map((game) => (
+            <GameCard key={game.id} game={game} />
+          ))}
+        </div>
 
         {filtered.length === 0 && (
           <div className="py-24 text-center">
@@ -116,7 +120,7 @@ export default function GamesPage() {
               🔍
             </p>
             <p className="text-lg text-white/40">找不到遊戲</p>
-            <p className="mt-1 text-sm text-white/25">換個關鍵字或分類試試</p>
+            <p className="mt-1 text-sm text-white/40">換個關鍵字或分類試試</p>
           </div>
         )}
       </div>

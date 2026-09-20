@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { CSSProperties } from "react";
 import { ArrowLeft, Clock, Gauge, Users } from "lucide-react";
 import { GAMES } from "@/constants/games";
 import { isPlayable } from "@/engine";
+import Navbar from "@/components/Navbar";
 import { LinkButton } from "@/components/ui/Button";
 
 interface Props {
@@ -48,7 +50,11 @@ export default function GameDetailPage({ params }: Props) {
   const playable = isPlayable(game.id);
 
   return (
-    <main className="min-h-screen bg-ink px-4 pb-16 pt-24 text-white">
+    <main
+      className="min-h-screen bg-ink px-4 pb-16 pt-32 text-white"
+      style={{ "--game-accent": game.color, "--game-gradient": game.gradient } as CSSProperties}
+    >
+      <Navbar />
       <div className="mx-auto max-w-3xl">
         <Link
           href="/games"
@@ -111,12 +117,7 @@ export default function GameDetailPage({ params }: Props) {
 
           {playable ? (
             <div className="flex flex-col gap-3 sm:flex-row">
-              <LinkButton
-                href={`/create/${game.id}`}
-                size="md"
-                className="flex-1"
-                style={{ background: game.gradient }}
-              >
+              <LinkButton href={`/create/${game.id}`} variant="accent" size="md" className="flex-1">
                 建立房間
               </LinkButton>
               <LinkButton href="/join" variant="glass" size="md" className="flex-1">

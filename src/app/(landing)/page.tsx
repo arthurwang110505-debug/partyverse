@@ -155,20 +155,55 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ALL GAMES */}
+      {/* BROWSE BY CATEGORY — the full catalog lives on /games; repeating it here
+          just duplicated 10 cards and 200px of scroll. */}
       <section className="bg-white/[0.02] px-4 py-24">
         <div className="mx-auto max-w-7xl">
           <div className="mb-12 text-center">
-            <h2 className="mb-3 text-3xl font-bold md:text-4xl">全部遊戲</h2>
+            <h2 className="mb-3 text-3xl font-bold md:text-4xl">依派對氣氛挑遊戲</h2>
             <p className="mx-auto max-w-md text-base text-white/40">
-              {GAMES.length} 款為團體設計的遊戲，從快速破冰到激烈對抗。目前已有 {playableCount} 款開放遊玩，其餘持續開發中。
+              {GAMES.length} 款為團體設計的遊戲，目前已有 {playableCount} 款開放遊玩。依今晚的氣氛選一類開始。
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {GAMES.map((game) => (
-              <GameCard key={game.id} game={game} />
-            ))}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            {(
+              [
+                { category: "PARTY", label: "派對破冰", icon: "🎉" },
+                { category: "SOCIAL", label: "社交互動", icon: "🧠" },
+                { category: "CREATIVE", label: "創意發揮", icon: "🎨" },
+                { category: "MYSTERY", label: "推理懸疑", icon: "🕵️" },
+                { category: "MUSIC", label: "音樂節奏", icon: "🎵" },
+              ] as const
+            ).map((entry) => {
+              const count = GAMES.filter((g) => g.category === entry.category).length;
+              return (
+                <Link
+                  key={entry.category}
+                  href="/games"
+                  className="glass-card group rounded-2xl p-5 text-center transition-all hover:-translate-y-1 hover:border-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+                >
+                  <p className="mb-2 text-3xl" aria-hidden="true">
+                    {entry.icon}
+                  </p>
+                  <p className="mb-1 text-sm font-semibold">{entry.label}</p>
+                  <p className="text-xs text-white/40">
+                    {count} 款 <span className="sr-only">遊戲</span>
+                    <ArrowRight
+                      className="inline h-3 w-3 transition-transform group-hover:translate-x-0.5"
+                      aria-hidden="true"
+                    />
+                  </p>
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="mt-10 text-center">
+            <LinkButton href="/games" variant="ghost" size="md" prefetch>
+              瀏覽全部 {GAMES.length} 款遊戲
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </LinkButton>
           </div>
         </div>
       </section>
@@ -179,9 +214,9 @@ export default function Home() {
             <p className="mb-1 text-base font-bold" lang="en">
               PARTYVERSE
             </p>
-            <p className="text-sm text-white/30">One Room. Ten Games. Infinite Chaos.</p>
+            <p className="text-sm text-white/50">One Room. Ten Games. Infinite Chaos.</p>
           </div>
-          <p className="text-xs text-white/30">© {new Date().getFullYear()} PartyVerse</p>
+          <p className="text-xs text-white/40">© {new Date().getFullYear()} PartyVerse</p>
         </div>
       </footer>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { RoomProvider } from "@/providers/RoomContext";
+import { ToastProvider } from "@/providers/ToastProvider";
 import type { ReactNode } from "react";
 
 /**
@@ -8,5 +9,9 @@ import type { ReactNode } from "react";
  * Kept as a separate component so `layout.tsx` can stay a server component.
  */
 export function Providers({ children }: { children: ReactNode }) {
-  return <RoomProvider>{children}</RoomProvider>;
+  return (
+    <RoomProvider>
+      <ToastProvider>{children}</ToastProvider>
+    </RoomProvider>
+  );
 }

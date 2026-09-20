@@ -18,7 +18,7 @@ export default function PlayClient({ roomCode }: Props) {
   const onlineCount = playerList.filter((p) => p.isConnected).length;
 
   return (
-    <main className="min-h-screen bg-ink p-4 text-white">
+    <main className="min-h-[100dvh] bg-ink p-4 pb-safe text-white">
       <div className="mx-auto max-w-md pt-8">
         <div className="mb-6 flex items-center justify-between">
           <Link

@@ -47,7 +47,7 @@ export function RoomGate({
         <p className="animate-pulse text-white/50" role="status">
           連接房間中…
         </p>
-        <p className="text-xs text-white/25">如果一直停在這裡，房間可能已經結束了。</p>
+        <p className="text-xs text-white/40">如果一直停在這裡，房間可能已經結束了。</p>
         <LinkButton href="/join" variant="ghost" size="sm">
           加入其他房間
         </LinkButton>

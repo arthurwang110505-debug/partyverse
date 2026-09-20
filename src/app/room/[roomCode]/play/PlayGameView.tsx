@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRoom } from "@/providers/RoomContext";
-import { GAMES } from "@/constants/games";
-import { HOST_STALE_MS } from "@/constants/room";
+import { useToast } from "@/providers/ToastProvider";
 import type { BombGameState } from "@/engine/bombCountdown";
+import { HOST_STALE_MS } from "@/constants/room";
 import { Button } from "@/components/ui/Button";
 import { ErrorNote } from "@/components/ui/ErrorNote";
+import { PlayShell } from "@/components/game/PlayShell";
 import { cn } from "@/lib/utils";
 import { sfx, vibrate } from "@/lib/sound";
 
@@ -22,10 +23,13 @@ import PlayMysteryRoom from "./views/PlayMysteryRoom";
 
 /**
  * Mobile Controller View Dispatcher.
- * Automatically loads the game-specific interactive controller.
+ * Every game-specific view (and the bomb fallback below) renders inside the
+ * shared `PlayShell`, so identity / score / room / sound chrome is identical
+ * across all ten games.
  */
 export default function PlayGameView() {
   const { room, player, isHost, submitAction, claimHost } = useRoom();
+  const { toast } = useToast();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
@@ -34,7 +38,6 @@ export default function PlayGameView() {
 
   // Default: Bomb Countdown Controller
   const state = room?.gameState as BombGameState | undefined;
-  const game = GAMES.find((g) => g.id === room?.gameId);
 
   const isMyTurn = Boolean(player && state?.bombHolderId === player.id);
   const isEliminated = Boolean(player && state?.eliminatedPlayers.includes(player.id));
@@ -54,16 +57,16 @@ export default function PlayGameView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.bombHolderId, state?.bombTimeLeft]);
 
-  // Specific game views
-  if (gameId === "everybodyknows") return <PlayWrapper><PlayEverybodyKnows /></PlayWrapper>;
-  if (gameId === "aibullshit") return <PlayWrapper><PlayAiBullshit /></PlayWrapper>;
-  if (gameId === "whoisundercoveragent") return <PlayWrapper><PlayUndercover /></PlayWrapper>;
-  if (gameId === "song3seconds") return <PlayWrapper><PlaySong3Seconds /></PlayWrapper>;
-  if (gameId === "kingtonight") return <PlayWrapper><PlayKingTonight /></PlayWrapper>;
-  if (gameId === "fireworkmaster") return <PlayWrapper><PlayFireworkMaster /></PlayWrapper>;
-  if (gameId === "drawandguess") return <PlayWrapper><PlayDrawAndGuess /></PlayWrapper>;
-  if (gameId === "realbattle") return <PlayWrapper><PlayRealBattle /></PlayWrapper>;
-  if (gameId === "mysteryroom") return <PlayWrapper><PlayMysteryRoom /></PlayWrapper>;
+  // Specific game views (each renders its own PlayShell)
+  if (gameId === "everybodyknows") return <PlayEverybodyKnows />;
+  if (gameId === "aibullshit") return <PlayAiBullshit />;
+  if (gameId === "whoisundercoveragent") return <PlayUndercover />;
+  if (gameId === "song3seconds") return <PlaySong3Seconds />;
+  if (gameId === "kingtonight") return <PlayKingTonight />;
+  if (gameId === "fireworkmaster") return <PlayFireworkMaster />;
+  if (gameId === "drawandguess") return <PlayDrawAndGuess />;
+  if (gameId === "realbattle") return <PlayRealBattle />;
+  if (gameId === "mysteryroom") return <PlayMysteryRoom />;
 
   const answer = async (value: string) => {
     setPending(true);
@@ -73,6 +76,7 @@ export default function PlayGameView() {
       sfx.playSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : "送出失敗，請再試一次");
+      toast("送出失敗，請再試一次");
       setPending(false);
     }
   };
@@ -83,15 +87,8 @@ export default function PlayGameView() {
   const critical = timeLeft <= 3;
 
   return (
-    <PlayWrapper>
-      <div className="mx-auto max-w-md p-4 pt-8">
-        <header className="mb-6 text-center">
-          <p className="mb-1 text-sm text-white/40">
-            <span aria-hidden="true">{game?.icon}</span> {game?.name}
-          </p>
-          <p className="text-sm font-bold tracking-widest">房間 {room.id}</p>
-        </header>
-
+    <PlayShell round={`第 ${state?.currentRound ?? 1} / ${state?.totalRounds ?? 1} 回合`}>
+      <div className="pt-6">
         {hostStale && (
           <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-center">
             <p className="mb-2 text-sm text-amber-300">房主似乎已經離線，遊戲暫停中</p>
@@ -109,7 +106,7 @@ export default function PlayGameView() {
                 critical ? "bg-red-500" : timeLeft <= 5 ? "bg-orange-500" : "bg-white/10",
               )}
               style={{ boxShadow: critical ? "0 0 60px rgba(239,68,68,0.6)" : "none" }}
-              aria-live="off"
+              aria-hidden="true"
             >
               {timeLeft}
             </p>
@@ -129,7 +126,6 @@ export default function PlayGameView() {
             </p>
             <h2 className="mb-2 text-2xl font-bold text-red-400">你出局了</h2>
             <p className="text-sm text-white/40">看看誰能撐到最後</p>
-            <p className="mt-6 text-sm text-white/50">目前得分：{state?.currentScores?.[player.id] ?? 0}</p>
           </section>
         ) : state?.phase === "result" ? (
           <section className="py-12 text-center">
@@ -181,21 +177,7 @@ export default function PlayGameView() {
             <p className="text-sm text-white/40">準備中…</p>
           </section>
         )}
-
-        {state && (
-          <p className="glass fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/10 px-4 py-2 text-sm font-medium">
-            得分：{state.currentScores?.[player.id] ?? 0}
-          </p>
-        )}
       </div>
-    </PlayWrapper>
-  );
-}
-
-function PlayWrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="min-h-screen bg-ink pb-24 text-white">
-      {children}
-    </main>
+    </PlayShell>
   );
 }
