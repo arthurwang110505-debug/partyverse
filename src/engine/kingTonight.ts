@@ -10,6 +10,9 @@ export interface KingChallenge {
   instruction: string;
   targetCount?: number;
   triggerDelayMs?: number;
+  question?: string;
+  options?: string[];
+  correctAnswer?: string;
 }
 
 export const MINI_CHALLENGES: KingChallenge[] = [
@@ -22,13 +25,30 @@ export const MINI_CHALLENGES: KingChallenge[] = [
   {
     type: "reaction_tap",
     title: "拔刀反應！",
-    instruction: "等螢幕變綠並出現「斬」時立刻點擊！搶先者為王！",
-    triggerDelayMs: 2500,
+    instruction: "專注凝視！等畫面信號亮綠並出現「斬」時立刻拔刀搶先點擊！",
+    triggerDelayMs: 2200,
   },
   {
     type: "emoji_math",
     title: "Emoji 搶答！",
     instruction: "🍎 + 🍌 = 5，🍎 = 2，那 🍌 是多少？快速搶答！",
+    question: "🍎 + 🍌 = 5，🍎 = 2，🍌 = ？",
+    options: ["2", "3", "4"],
+    correctAnswer: "3",
+  },
+  {
+    type: "tap_mash",
+    title: "光速指壓！",
+    instruction: "第二輪點擊大亂鬥！連打頻率最高者奪得王座！",
+    targetCount: 35,
+  },
+  {
+    type: "emoji_math",
+    title: "算術急轉彎！",
+    instruction: "🍕 + 🍕 = 8，🍕 × 🍔 = 20，🍔 是多少？",
+    question: "🍕 + 🍕 = 8，🍕 × 🍔 = 20，🍔 = ？",
+    options: ["4", "5", "6"],
+    correctAnswer: "5",
   },
 ];
 
@@ -113,11 +133,17 @@ export const KingTonightEngine: GameEngine<KingGameState> = {
         };
       }
     } else if (state.challenge.type === "reaction_tap") {
-      if (act?.type === "react" && typeof act.reactionTimeMs === "number") {
+      const ms =
+        act?.type === "react" && typeof act.reactionTimeMs === "number"
+          ? act.reactionTimeMs
+          : act?.type === "tap"
+            ? 350
+            : null;
+      if (ms !== null) {
         if (state.playerInputs[playerId] !== undefined) return state; // Only first tap
         return {
           ...state,
-          playerInputs: { ...state.playerInputs, [playerId]: act.reactionTimeMs },
+          playerInputs: { ...state.playerInputs, [playerId]: ms },
         };
       }
     } else if (state.challenge.type === "emoji_math") {
@@ -239,9 +265,9 @@ function resolveRound(state: KingGameState, _room: Room<KingGameState>): KingGam
       }
     }
   } else if (state.challenge.type === "emoji_math") {
-    // Correct answer is "3"
+    const target = state.challenge.correctAnswer ?? "3";
     for (const [id, ans] of Object.entries(state.playerInputs)) {
-      if (ans === "3") {
+      if (ans === target) {
         bestPlayerId = id;
         break;
       }

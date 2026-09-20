@@ -17,6 +17,14 @@ export const TRIVIA_PROMPTS: TriviaPrompt[] = [
   { id: "t6", question: "企鵝求婚時，會送給心儀對象什麼定情禮物？", realAnswer: "一顆精挑細選的光滑鵝卵石" },
   { id: "t7", question: "北韓在 2012 年官方媒體宣稱考古學家發現了什麼神話生物的巢穴？", realAnswer: "獨角獸" },
   { id: "t8", question: "早期製造保齡球的主要天然原料是什麼？", realAnswer: "癒創木（重鐵木）" },
+  { id: "t9", question: "在瑞士，法律規定只單獨飼養一隻什麼動物屬於虐待違法行為？", realAnswer: "天竺鼠" },
+  { id: "t10", question: "澳洲在 1932 年曾出動正規皇家砲兵部隊圍剿攻打什麼動物？", realAnswer: "鴯鶓（澳洲鴕鳥）" },
+  { id: "t11", question: "在 1830 年代的美國，番茄醬最初是被當作什麼藥品販賣？", realAnswer: "治療消化不良與腹瀉藥" },
+  { id: "t12", question: "劍橋大學發明世界上第一台網路即時攝影機，是為了監視什麼？", realAnswer: "茶水間的咖啡壺是否空了" },
+  { id: "t13", question: "章魚在極度無聊或壓力過大時會做出的奇異行為是什麼？", realAnswer: "自己吃掉自己的一隻觸手" },
+  { id: "t14", question: "早期英國水手用來預測暴風雨的風暴瓶裡，裝了哪種活體生物？", realAnswer: "醫用水蛭" },
+  { id: "t15", question: "在 17 世紀荷蘭鬱金香狂熱時，最珍貴的一顆球莖價值相當於什麼？", realAnswer: "阿姆斯特丹的一座豪宅運河房" },
+  { id: "t16", question: "太空人登上月球時，阿波羅 14 號太空人在月球表面進行了什麼運動？", realAnswer: "揮桿打高爾夫球" },
 ];
 
 export type AIBullshitPhase = "submitting" | "voting" | "reveal" | "result";
