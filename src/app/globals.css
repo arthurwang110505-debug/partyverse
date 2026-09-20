@@ -71,6 +71,115 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   }
+
+  /* Cyberpunk Neon Glow & Glitch Elements */
+  .neon-text-cyan {
+    color: #ffffff;
+    text-shadow:
+      0 0 2px #ffffff,
+      0 0 8px #00f0ff,
+      0 0 20px #00f0ff,
+      0 0 40px #00b4d8,
+      0 0 70px #0077b6;
+  }
+
+  .neon-text-pink {
+    color: #ffffff;
+    text-shadow:
+      0 0 2px #ffffff,
+      0 0 8px #ff007f,
+      0 0 20px #ff007f,
+      0 0 40px #e11d48,
+      0 0 70px #be123c;
+  }
+
+  .neon-box-cyan {
+    border-color: rgba(0, 240, 255, 0.7);
+    box-shadow:
+      0 0 15px rgba(0, 240, 255, 0.4),
+      inset 0 0 15px rgba(0, 240, 255, 0.15);
+  }
+
+  .neon-box-pink {
+    border-color: rgba(255, 0, 127, 0.7);
+    box-shadow:
+      0 0 15px rgba(255, 0, 127, 0.4),
+      inset 0 0 15px rgba(255, 0, 127, 0.15);
+  }
+
+  .scanlines {
+    background: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0),
+      rgba(255, 255, 255, 0) 50%,
+      rgba(0, 0, 0, 0.35) 50%,
+      rgba(0, 0, 0, 0.35)
+    );
+    background-size: 100% 4px;
+  }
+
+  .led-matrix-cyan {
+    background-image: radial-gradient(rgba(0, 240, 255, 0.35) 1.5px, transparent 1.5px);
+    background-size: 8px 8px;
+  }
+
+  .led-matrix-pink {
+    background-image: radial-gradient(rgba(255, 0, 127, 0.35) 1.5px, transparent 1.5px);
+    background-size: 8px 8px;
+  }
+}
+
+@keyframes cyber-glitch {
+  0%, 100% {
+    transform: translate(0, 0);
+    filter: drop-shadow(-2px 0 0 #00f0ff) drop-shadow(2px 0 0 #ff007f);
+  }
+  10% {
+    transform: translate(-2px, 1px);
+    filter: drop-shadow(-4px 0 0 #00f0ff) drop-shadow(4px 0 0 #ff007f);
+  }
+  20% {
+    transform: translate(2px, -1px);
+    filter: drop-shadow(3px 0 0 #00f0ff) drop-shadow(-3px 0 0 #ff007f);
+  }
+  30% {
+    transform: translate(-1px, 2px);
+    filter: drop-shadow(-2px 0 0 #ff007f) drop-shadow(2px 0 0 #00f0ff);
+  }
+  40% {
+    transform: translate(1px, -1px);
+    filter: drop-shadow(-3px 0 0 #00f0ff) drop-shadow(3px 0 0 #ff007f);
+  }
+  65% {
+    transform: translate(-2px, 0);
+    filter: drop-shadow(4px 0 0 #00f0ff) drop-shadow(-4px 0 0 #ff007f);
+  }
+  85% {
+    transform: translate(2px, 1px);
+    filter: drop-shadow(-2px 0 0 #00f0ff) drop-shadow(2px 0 0 #ff007f);
+  }
+}
+
+@keyframes scan-beam-move {
+  0% {
+    top: -10%;
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.4;
+  }
+  100% {
+    top: 110%;
+    opacity: 0.8;
+  }
+}
+
+.animate-cyber-glitch {
+  animation: cyber-glitch 3.5s infinite steps(2, start);
+}
+
+.animate-scan-beam {
+  animation: scan-beam-move 4s linear infinite;
 }
 
 @layer utilities {
