@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Copy, Crown, Link2, Power, Settings, Share2, Users, X } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
 import { GAMES } from "@/constants/games";
-import type { RoomSettings } from "@/types";
+import type { Player, RoomSettings } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { ErrorNote } from "@/components/ui/ErrorNote";
 import { Modal } from "@/components/ui/Modal";
@@ -23,7 +23,7 @@ const DIFFICULTIES: Array<{ value: RoomSettings["difficulty"]; label: string }> 
 
 export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
   const router = useRouter();
-  const { room, startGame, kickPlayer, endRoom, updateSettings } = useRoom();
+  const { room, startGame, kickPlayer, endRoom, updateSettings, isLocalMode } = useRoom();
 
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -39,12 +39,21 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
   const joinUrl = origin ? `${origin}/join/${roomCode}` : "";
 
   const game = GAMES.find((g) => g.id === room?.gameId);
-  const playerList = Object.values(room?.players ?? {}).sort((a, b) =>
-    a.isHost === b.isHost ? a.nickname.localeCompare(b.nickname) : a.isHost ? -1 : 1,
-  );
+  const playerList = Object.values(room?.players ?? {})
+    .filter((p): p is Player => Boolean(p && typeof p === "object"))
+    .sort((a, b) =>
+      a.isHost === b.isHost ? (a.nickname || "").localeCompare(b.nickname || "") : a.isHost ? -1 : 1,
+    );
   const onlineCount = playerList.filter((p) => p.isConnected).length;
-  const minPlayers = game?.minPlayers ?? 2;
+  const minPlayers = Math.max(1, game?.minPlayers ?? 2);
   const canStart = onlineCount >= minPlayers;
+  const currentSettings = room?.settings ?? {
+    timer: 15,
+    difficulty: "easy" as const,
+    rounds: 3,
+    soundEnabled: true,
+    ageMode: "family" as const,
+  };
 
   // The Jackbox delight loop: a chime when someone joins. It also confirms the
   // QR scan worked — previously a join was silent and invisible until a glance.
@@ -87,9 +96,17 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
         </div>
 
         <header className="mb-8 text-center">
-          <p className="glass mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm text-white/50">
-            <span aria-hidden="true">{game?.icon}</span> {game?.name}
-          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
+            <p className="glass inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm text-white/50">
+              <span aria-hidden="true">{game?.icon}</span> {game?.name}
+            </p>
+            {isLocalMode && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                本地展示模式（支援跨分頁連線）
+              </span>
+            )}
+          </div>
           <h1 className="mb-2 text-4xl font-bold md:text-5xl">遊戲大廳</h1>
           <p className="text-sm text-white/40">把代碼或 QR code 分享給朋友</p>
         </header>
@@ -228,10 +245,10 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
           ) : (
             <>
               <span aria-hidden="true" className="mr-1 tracking-widest">
-                {Array.from({ length: minPlayers }, (_, i) => (i < onlineCount ? "●" : "○")).join("")}
+                {Array.from({ length: Math.max(0, minPlayers) }, (_, i) => (i < onlineCount ? "●" : "○")).join("")}
               </span>
               {onlineCount} / {minPlayers} 位玩家 — 這款遊戲至少要 {minPlayers} 人才能開始
-              <span className="sr-only">還差 {minPlayers - onlineCount} 人</span>
+              <span className="sr-only">還差 {Math.max(0, minPlayers - onlineCount)} 人</span>
             </>
           )}
         </p>
@@ -262,8 +279,8 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
                   <Button
                     key={d.value}
                     size="sm"
-                    aria-pressed={room.settings.difficulty === d.value}
-                    variant={room.settings.difficulty === d.value ? "primary" : "ghost"}
+                    aria-pressed={currentSettings.difficulty === d.value}
+                    variant={currentSettings.difficulty === d.value ? "primary" : "ghost"}
                     onClick={() =>
                       updateSettings({ difficulty: d.value }).catch((e) =>
                         setError(e instanceof Error ? e.message : "無法更新"),
@@ -277,14 +294,14 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
             </fieldset>
 
             <label htmlFor="timer-input" className="mb-2 block text-sm font-medium text-white/60">
-              每題秒數：{room.settings.timer}
+              每題秒數：{currentSettings.timer}
             </label>
             <input
               id="timer-input"
               type="range"
               min={3}
               max={30}
-              value={room.settings.timer}
+              value={currentSettings.timer}
               onChange={(e) => void updateSettings({ timer: Number(e.target.value) }).catch(() => undefined)}
               className="mb-6 w-full accent-violet-500"
             />
