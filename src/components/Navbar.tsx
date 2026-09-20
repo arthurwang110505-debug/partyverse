@@ -44,33 +44,40 @@ export default function Navbar() {
       >
         <Link href="/" className="group flex items-center gap-2.5">
           <span
-            className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 shadow-lg shadow-violet-500/20"
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-rose-500 shadow-lg shadow-blue-500/25 ring-1 ring-white/20 transition-transform group-hover:scale-105"
             aria-hidden="true"
           >
-            <Gamepad2 className="h-4 w-4 text-white" />
+            <Gamepad2 className="h-5 w-5 text-white" />
           </span>
-          <span lang="en" className="text-base font-bold tracking-wide">
-            PARTYVERSE
+          <span lang="en" className="text-lg font-black tracking-wider">
+            <span className="text-cyan-400">PARTY</span>
+            <span className="text-rose-500">VERSE</span>
           </span>
         </Link>
 
         {/* Desktop nav */}
-        <div className="hidden items-center gap-1 md:flex">
+        <div className="hidden items-center gap-2 md:flex">
           {LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-xl px-4 py-2 text-sm text-white/60 transition-all hover:bg-white/5 hover:text-white"
+              className="rounded-xl px-4 py-2 text-sm text-white/70 transition-all hover:bg-white/10 hover:text-white"
             >
               {link.label}
             </Link>
           ))}
           <span className="mx-1 h-4 w-px bg-white/10" aria-hidden="true" />
           <Link
-            href="/games"
-            className="ml-1 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium transition-all hover:bg-white/15"
+            href="/join"
+            className="rounded-xl border border-rose-500/40 bg-rose-500/15 px-4 py-2 text-sm font-bold text-rose-300 shadow-sm shadow-rose-500/20 transition-all hover:bg-rose-500/25 hover:text-white"
           >
-            開始遊戲
+            加入房間
+          </Link>
+          <Link
+            href="/games"
+            className="rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-2 text-sm font-bold text-white shadow-md shadow-cyan-500/25 transition-all hover:brightness-110"
+          >
+            挑選遊戲開房
           </Link>
         </div>
 
