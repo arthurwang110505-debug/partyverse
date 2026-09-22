@@ -139,11 +139,11 @@ export const GAMES: GameDefinition[] = [
   },
   {
     id: "song3seconds",
-    name: "三秒聽歌",
-    nameEn: "3 Second Song",
-    description: "聽 3 秒猜歌名，音樂達人決戰！",
+    name: "三秒猜歌",
+    nameEn: "3 Second Song Guess",
+    description: "歌詞閃現 3 秒開搶，音樂達人決戰！",
     longDescription:
-      "大螢幕播放 0.5 ~ 3 秒的歌曲片段（華語、J-Pop、K-Pop、西洋等），玩家在手機搶答，依速度與正確度給分。音樂達人就是你的！",
+      "大螢幕 3 秒倒數後閃現一句關鍵歌詞（華語、J-Pop、西洋等），手機四選一搶答歌名！每 2 秒多解鎖 1 個字——拖得越久越容易，所以手速就是你的得分！答對 10 分，越快再最高加 15 分。",
     minPlayers: 4,
     maxPlayers: 20,
     estimatedDuration: "5-15 分鐘",

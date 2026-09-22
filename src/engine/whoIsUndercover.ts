@@ -249,19 +249,63 @@ function tallyVotesAndResolve(
 
   let maxCount = 0;
   let targetOut: string | null = null;
+  let tied = false;
   for (const [id, count] of Object.entries(counts)) {
     if (count > maxCount) {
       maxCount = count;
       targetOut = id;
+      tied = false;
+    } else if (count === maxCount) {
+      // A tie is a stalemate: no one is executed, so the table can argue again.
+      tied = true;
     }
   }
+  if (tied) targetOut = null;
 
   const eliminated = targetOut ? [...state.eliminatedPlayerIds, targetOut] : state.eliminatedPlayerIds;
   const livingPlayers = Object.keys(room.players).filter((id) => !eliminated.includes(id));
+  const connectedLiving = livingPlayers.filter((id) => room.players[id]?.isConnected !== false);
   const undercoverCaught = targetOut === state.undercoverPlayerId;
   const undercoverSurvives = livingPlayers.length <= 2 && livingPlayers.includes(state.undercoverPlayerId);
 
   const scores = { ...state.currentScores };
+
+  // Once at most one connected seat survives the rounds can no longer decide
+  // anything: the spy wins if they hold it, otherwise the table does.
+  const forcedEnd = !undercoverCaught && !undercoverSurvives && connectedLiving.length <= 1;
+  if (forcedEnd) {
+    if (connectedLiving.includes(state.undercoverPlayerId)) {
+      scores[state.undercoverPlayerId] = (scores[state.undercoverPlayerId] ?? 0) + 50;
+      return {
+        ...state,
+        votes,
+        eliminatedPlayerIds: eliminated,
+        lastVotedOutId: targetOut,
+        phase: "result",
+        winnerTeam: "undercover",
+        winnerId: state.undercoverPlayerId,
+        currentScores: scores,
+        timeLeft: 0,
+      };
+    }
+    for (const id of Object.keys(room.players)) {
+      if (id !== state.undercoverPlayerId) {
+        scores[id] = (scores[id] ?? 0) + 20;
+      }
+    }
+    const entries = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+    return {
+      ...state,
+      votes,
+      eliminatedPlayerIds: eliminated,
+      lastVotedOutId: targetOut,
+      phase: "result",
+      winnerTeam: "civilians",
+      winnerId: entries[0]?.[0] ?? null,
+      currentScores: scores,
+      timeLeft: 0,
+    };
+  }
 
   if (undercoverCaught) {
     // Civilians win!

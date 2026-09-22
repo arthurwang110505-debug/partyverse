@@ -25,6 +25,14 @@ export const TRIVIA_PROMPTS: TriviaPrompt[] = [
   { id: "t14", question: "早期英國水手用來預測暴風雨的風暴瓶裡，裝了哪種活體生物？", realAnswer: "醫用水蛭" },
   { id: "t15", question: "在 17 世紀荷蘭鬱金香狂熱時，最珍貴的一顆球莖價值相當於什麼？", realAnswer: "阿姆斯特丹的一座豪宅運河房" },
   { id: "t16", question: "太空人登上月球時，阿波羅 14 號太空人在月球表面進行了什麼運動？", realAnswer: "揮桿打高爾夫球" },
+  { id: "t17", question: "蜂蜜為何幾乎永不腐敗？考古學家曾在哪裡挖出仍可食用的蜂蜜？", realAnswer: "3000 年前的古埃及墓穴" },
+  { id: "t18", question: "香蕉從植物學角度來說，其實屬於哪一類食物？", realAnswer: "漿果（草莓反而不是）" },
+  { id: "t19", question: "澳洲曾為阻止哪种動物入侵而修建了超過 3000 公里的圍牆？", realAnswer: "袋鼠" },
+  { id: "t20", question: "拿破崙身高其實約 170cm，但同時代的人為何覺得他很矮？", realAnswer: "法國與英國的長度單位不同" },
+  { id: "t21", question: "熱帶氣旋「颶風」與「颱風」到底是什麼關係？", realAnswer: "同一種風暴，僅因海域不同而叫法不同" },
+  { id: "t22", question: "鯨魚其實是用哪部分器官來「聽」聲音的？", realAnswer: "下顎骨骼傳導" },
+  { id: "t23", question: "古代中國人發明指南針，最早是用來做什麼的？", realAnswer: "看風水與占卜" },
+  { id: "t24", question: "目前已知最古老的「遊戲機」考古發現，是用什麼材料做的？", realAnswer: "羅馬石膏棋盤（約西元 300 年）" },
 ];
 
 export type AIBullshitPhase = "submitting" | "voting" | "reveal" | "result";

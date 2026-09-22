@@ -72,6 +72,15 @@ export interface TapAction {
   type: "tap";
 }
 
+/**
+ * Batched taps: the phone counts locally and flushes every few hundred ms,
+ * so a mashing player costs ~2-3 room transactions/sec instead of one per tap.
+ */
+export interface TapsAction {
+  type: "taps";
+  count: number;
+}
+
 export interface ReactAction {
   type: "react";
   reactionTimeMs: number;
@@ -82,7 +91,10 @@ export interface ChoiceAction {
   answer: string;
 }
 
-export type KingAction = TapAction | ReactAction | ChoiceAction;
+export type KingAction = TapAction | TapsAction | ReactAction | ChoiceAction;
+
+/** Per-action tap cap: a human phone cannot honestly flush more than this. */
+export const MAX_TAP_BATCH = 40;
 
 function initialScores(players: Room["players"]): Record<string, number> {
   const scores: Record<string, number> = {};
@@ -130,6 +142,15 @@ export const KingTonightEngine: GameEngine<KingGameState> = {
         return {
           ...state,
           playerInputs: { ...state.playerInputs, [playerId]: cur + 1 },
+        };
+      }
+      if (act?.type === "taps" && typeof act.count === "number" && Number.isInteger(act.count)) {
+        const add = Math.max(0, Math.min(MAX_TAP_BATCH, act.count));
+        if (add === 0) return state;
+        const cur = typeof state.playerInputs[playerId] === "number" ? (state.playerInputs[playerId] as number) : 0;
+        return {
+          ...state,
+          playerInputs: { ...state.playerInputs, [playerId]: cur + add },
         };
       }
     } else if (state.challenge.type === "reaction_tap") {

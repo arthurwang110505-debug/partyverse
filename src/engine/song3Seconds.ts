@@ -7,7 +7,8 @@ export interface SongItem {
   title: string;
   artist: string;
   category: string;
-  hint: string;
+  /** The iconic line that flashes on the TV and gets un-masked over time. */
+  lyric: string;
   options: string[];
 }
 
@@ -17,23 +18,23 @@ export const SONG_LIST: SongItem[] = [
     title: "告白氣球",
     artist: "周杰倫",
     category: "華語流行",
-    hint: "塞納河畔 左岸的咖啡 我手一杯 品嚐你的美…",
-    options: ["告白氣球", "青花瓷", "簡單愛", "七里香"],
+    lyric: "塞納河畔 左岸的咖啡",
+    options: ["告白氣球", "青花瓷", "七里香", "簡單愛"],
   },
   {
     id: "s2",
     title: "如果可以",
     artist: "韋禮安",
     category: "電影主題曲",
-    hint: "如果可以 我想和你看每場煙火…",
-    options: ["如果可以", "女孩", "慢慢等", "還是會"],
+    lyric: "如果可以 我想和你看每場煙火",
+    options: ["如果可以", "慢慢等", "還是會", "女孩"],
   },
   {
     id: "s3",
     title: "愛你",
     artist: "王心凌",
     category: "甜蜜經典",
-    hint: "話不能亂說 經過了這麼多 才能夠看透…",
+    lyric: "話不能亂說 經過了這麼多",
     options: ["愛你", "睫毛彎彎", "心電心", "第一次愛的人"],
   },
   {
@@ -41,7 +42,7 @@ export const SONG_LIST: SongItem[] = [
     title: "想見你想見你想見你",
     artist: "八三夭",
     category: "影視金曲",
-    hint: "想見你 只想見你 未來過去 我只想見你…",
+    lyric: "想見你 只想見你 未來過去",
     options: ["想見你想見你想見你", "東區東區", "最後的831", "致青春"],
   },
   {
@@ -49,16 +50,64 @@ export const SONG_LIST: SongItem[] = [
     title: "Lemon",
     artist: "米津玄師",
     category: "日語流行",
-    hint: "夢ならばどれほどよかったでしょう…",
-    options: ["Lemon", "打上花火", "Kick Back", "紅蓮華"],
+    lyric: "夢ならばどれほどよかったでしょう",
+    options: ["Lemon", "紅蓮華", "打上花火", "Kick Back"],
   },
   {
     id: "s6",
     title: "怪美的",
     artist: "蔡依林",
     category: "流行舞曲",
-    hint: "垂涎的邪惡 陪我喝醉翻了幾趟…",
+    lyric: "垂涎的邪惡 陪我喝醉翻了幾趟",
     options: ["怪美的", "玫瑰少年", "大藝術家", "舞娘"],
+  },
+  {
+    id: "s7",
+    title: "夜曲",
+    artist: "周杰倫",
+    category: "華語流行",
+    lyric: "窗外的麻雀 在電線桿上多嘴",
+    options: ["夜曲", "告白氣球", "園遊會", "蘭亭序"],
+  },
+  {
+    id: "s8",
+    title: "光年之外",
+    artist: "鄧紫棋",
+    category: "電影主題曲",
+    lyric: "當我抬起頭 才發覺 聖潔的遠方",
+    options: ["光年之外", "泡沫", "多遠都要在一起", "喜欢你"],
+  },
+  {
+    id: "s9",
+    title: "愛你一萬年",
+    artist: "劉若英",
+    category: "影視金曲",
+    lyric: "我願愛你一萬年 直到天荒地老",
+    options: ["愛你一萬年", "後來", "我在他鄉", "約定"],
+  },
+  {
+    id: "s10",
+    title: "稻香",
+    artist: "周杰倫",
+    category: "田園治癒",
+    lyric: "回家吧 回到最初的美好",
+    options: ["稻香", "晴天", "聽媽媽的話", "菊花台"],
+  },
+  {
+    id: "s11",
+    title: "孤勇者",
+    artist: "陳奕迅",
+    category: "影視金曲",
+    lyric: "愛你不執著 被愛不孤單",
+    options: ["孤勇者", "海闊天空", "浮誇", "紅梅開"],
+  },
+  {
+    id: "s12",
+    title: "Dynamite",
+    artist: "BTS",
+    category: "西洋流行",
+    lyric: "I got love in my heart, don't know how to say it",
+    options: ["Dynamite", "Butter", "Permission to Dance", "Blueberry Nights"],
   },
 ];
 
@@ -70,6 +119,8 @@ export interface SongGameState {
   totalRounds: number;
   timeLeft: number;
   currentSong: SongItem;
+  /** How many characters of the lyric are un-masked on the TV (and phones). */
+  lyricRevealed: number;
   /** playerId -> chosen song title */
   playerAnswers: Record<string, string>;
   /** playerId -> response time in ms for speed bonus */
@@ -96,6 +147,20 @@ function getSong(roundIndex: number): SongItem {
   return SONG_LIST[(roundIndex - 1) % SONG_LIST.length];
 }
 
+/** First-mask how much of the lyric depends on the room difficulty. */
+export function initialLyricRevealed(song: SongItem, difficulty: string): number {
+  const letters = Array.from(song.lyric);
+  const ratio = difficulty === "easy" ? 0.4 : difficulty === "hard" ? 0.15 : 0.25;
+  return Math.max(1, Math.floor(letters.length * ratio));
+}
+
+/** Per-character mask, stable across TV and phone renderers. */
+export function lyricMask(song: SongItem, revealed: number): Array<{ char: string; shown: boolean }> {
+  const letters = Array.from(song.lyric);
+  const cap = Math.max(0, Math.min(letters.length, revealed));
+  return letters.map((char, index) => ({ char, shown: index < cap }));
+}
+
 export const Song3SecondsEngine: GameEngine<SongGameState> = {
   createGame(room) {
     const song = getSong(1);
@@ -105,6 +170,7 @@ export const Song3SecondsEngine: GameEngine<SongGameState> = {
       totalRounds: Math.min(room.settings?.rounds ?? 4, SONG_LIST.length),
       timeLeft: 3, // 3 seconds "listen / countdown"
       currentSong: song,
+      lyricRevealed: initialLyricRevealed(song, room.settings?.difficulty ?? "easy"),
       playerAnswers: {},
       answerTimes: {},
       roundStartTime: Date.now() + 3000,
@@ -163,10 +229,17 @@ export const Song3SecondsEngine: GameEngine<SongGameState> = {
 
     if (state.phase === "answering") {
       const nextTime = state.timeLeft - 1;
+      // Every two seconds the TV un-masks one more lyric character: the
+      // longer nobody answers, the easier the song becomes.
+      const letters = Array.from(state.currentSong.lyric).length;
+      const nextRevealed =
+        nextTime > 0 && nextTime % 2 === 0
+          ? Math.min(letters, (state.lyricRevealed ?? 0) + 1)
+          : state.lyricRevealed;
       if (nextTime <= 0) {
         return tallySongRound(state, state.playerAnswers, state.answerTimes);
       }
-      return { ...state, timeLeft: nextTime };
+      return { ...state, timeLeft: nextTime, lyricRevealed: nextRevealed };
     }
 
     if (state.phase === "reveal") {
@@ -183,12 +256,14 @@ export const Song3SecondsEngine: GameEngine<SongGameState> = {
           };
         } else {
           const nextRound = state.currentRound + 1;
+          const song = getSong(nextRound);
           return {
             ...state,
             phase: "listen",
             currentRound: nextRound,
             timeLeft: 3,
-            currentSong: getSong(nextRound),
+            currentSong: song,
+            lyricRevealed: initialLyricRevealed(song, room.settings?.difficulty ?? "easy"),
             playerAnswers: {},
             answerTimes: {},
             roundStartTime: Date.now() + 3000,
@@ -217,7 +292,7 @@ export const Song3SecondsEngine: GameEngine<SongGameState> = {
         id: "music_master",
         name: "金曲快手",
         icon: "🎵",
-        description: "以極限速度聽音辨歌稱霸排行榜",
+        description: "以極限速度解鎖歌詞並稱霸排行榜",
         playerId: winnerId,
       });
     }

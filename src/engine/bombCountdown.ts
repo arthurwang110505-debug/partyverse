@@ -59,7 +59,8 @@ const CHALLENGES: Record<ChallengeType, Array<Omit<BombChallenge, "id" | "type" 
 };
 
 const TYPES_BY_DIFFICULTY: Record<string, ChallengeType[]> = {
-  easy: ["reaction", "quiz"],
+  // Speed taps open the round: one big GO button to get the fuse moving.
+  easy: ["speed", "reaction", "quiz"],
   medium: ["reaction", "quiz", "math"],
   hard: ["reaction", "math", "math"],
 };

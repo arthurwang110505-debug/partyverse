@@ -51,6 +51,24 @@ function initialScores(players: Room["players"]): Record<string, number> {
   return scores;
 }
 
+const SHAPES: FireworkDesign["shape"][] = ["circle", "star", "heart", "ring"];
+const TRAILS: FireworkDesign["trailEffect"][] = ["sparkle", "smoke", "glitter"];
+
+/** Coerce a submitted design to safe, in-range values. */
+export function sanitizeDesign(input: Partial<FireworkDesign> | null | undefined): FireworkDesign {
+  const base = DEFAULT_DESIGN;
+  return {
+    color:
+      input?.color && /^#[0-9a-fA-F]{6}$/.test(input.color) ? input.color : base.color,
+    shape: input?.shape && (SHAPES as string[]).includes(input.shape) ? input.shape : base.shape,
+    trailEffect: input?.trailEffect && (TRAILS as string[]).includes(input.trailEffect) ? input.trailEffect : base.trailEffect,
+    density:
+      typeof input?.density === "number" && Number.isFinite(input.density)
+        ? Math.round(Math.min(80, Math.max(5, input.density)))
+        : base.density,
+  };
+}
+
 export const FireworkMasterEngine: GameEngine<FireworkGameState> = {
   createGame(room) {
     return {
@@ -75,9 +93,9 @@ export const FireworkMasterEngine: GameEngine<FireworkGameState> = {
 
     if (state.phase === "designing") {
       const act = action as SubmitDesignAction;
-      if (act?.type !== "submitDesign" || !act.design) return state;
+      if (act?.type !== "submitDesign") return state;
 
-      const designs = { ...state.designs, [playerId]: act.design };
+      const designs = { ...state.designs, [playerId]: sanitizeDesign(act.design) };
       const livingIds = Object.keys(room.players).filter((id) => room.players[id]?.isConnected !== false);
       const allSubmitted = livingIds.every((id) => Boolean(designs[id]));
 

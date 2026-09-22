@@ -128,6 +128,22 @@ export default function PlayUndercover() {
           </div>
         )}
 
+        {state.phase === "eliminated" && state.lastVotedOutId && (
+          <div className="glass animate-scale-in rounded-2xl border border-red-500/30 bg-red-950/40 p-4">
+            <p className="text-sm font-semibold text-red-300">
+              {players[state.lastVotedOutId]?.nickname} 被處決出局
+            </p>
+            <p className="mt-1 text-xs text-white/60 leading-relaxed">觀戰大螢幕，看看誰是臥底…</p>
+          </div>
+        )}
+
+        {state.phase === "eliminated" && !state.lastVotedOutId && (
+          <div className="glass animate-scale-in rounded-2xl border border-amber-500/30 bg-amber-950/40 p-4">
+            <p className="text-sm font-semibold text-amber-300">⚖️ 平票！這回合沒有人被處決</p>
+            <p className="mt-1 text-xs text-white/60 leading-relaxed">臥底還在你們中間，準備繼續投票…</p>
+          </div>
+        )}
+
         {state.phase === "voting" && (
           <div className="py-2">
             <p className="mb-3 text-xs font-semibold text-white/80">

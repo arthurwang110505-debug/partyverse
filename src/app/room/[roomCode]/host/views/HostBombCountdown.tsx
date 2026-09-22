@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useRoom } from "@/providers/RoomContext";
 import { participantIds } from "@/engine/participants";
 import type { BombGameState } from "@/engine/bombCountdown";
@@ -7,10 +8,29 @@ import { HostShell } from "@/components/game/HostShell";
 import { RoundTimer } from "@/components/game/RoundTimer";
 import { PlayerChip } from "@/components/game/PlayerChip";
 import { HostGameControls } from "@/components/game/HostGameControls";
+import { sfx } from "@/lib/sound";
 
 export default function HostBombCountdown() {
   const { room } = useRoom();
   const state = room?.gameState as BombGameState | undefined;
+
+  // Pop when the bomb lands in a new hand; urgent ticks on the final 3 seconds.
+  const prevHolderRef = useRef<string | null>(null);
+  const phase = state?.phase;
+  const holderId = state?.bombHolderId ?? null;
+  const timeLeft = state?.bombTimeLeft;
+  useEffect(() => {
+    if (phase === "challenge" && holderId && holderId !== prevHolderRef.current) {
+      sfx.playPop();
+    }
+    prevHolderRef.current = holderId;
+  }, [phase, holderId]);
+  useEffect(() => {
+    if (phase === "challenge" && timeLeft !== undefined && timeLeft <= 3 && timeLeft > 0) {
+      sfx.playTick(1200, 0.06);
+    }
+  }, [phase, timeLeft]);
+
   if (!room || !state) return null;
   const holder = room.players[state.bombHolderId];
   const ids = participantIds(room);

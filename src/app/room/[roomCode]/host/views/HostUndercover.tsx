@@ -108,6 +108,16 @@ export default function HostUndercover() {
           </div>
         )}
 
+        {state.phase === "eliminated" && !state.lastVotedOutId && (
+          <div className="my-10 inline-block animate-scale-in rounded-3xl border border-amber-500/40 bg-amber-950/40 p-8 shadow-2xl">
+            <p className="mb-2 text-6xl" aria-hidden="true">
+              ⚖️
+            </p>
+            <h2 className="mb-2 text-2xl font-black text-amber-400">平票！這回合沒有人被處決</h2>
+            <p className="text-sm text-white/70">臥底還在你們中間，稍後繼續投票…</p>
+          </div>
+        )}
+
         {state.phase === "result" && (
           <div className="my-10 inline-block animate-scale-in rounded-3xl border border-purple-500/40 bg-purple-950/50 p-8 shadow-2xl">
             <p className="mb-2 text-6xl" aria-hidden="true">

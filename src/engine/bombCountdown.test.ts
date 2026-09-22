@@ -4,11 +4,17 @@ import { testRoom } from "@/test/fixtures";
 import type { Room } from "@/types";
 
 function activeRoom(count = 4): Room<BombGameState> {
-  const room = testRoom("bombcountdown", count) as unknown as Room<BombGameState>;
-  room.settings.timer = 10;
-  room.gameState = BombEngine.createGame(room);
-  for (let i = 0; i < 3; i++) room.gameState = BombEngine.updateGameState(room);
-  return room;
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const room = testRoom("bombcountdown", count) as unknown as Room<BombGameState>;
+    room.settings.timer = 10;
+    room.gameState = BombEngine.createGame(room);
+    for (let i = 0; i < 3; i++) room.gameState = BombEngine.updateGameState(room);
+    // The "speed" challenge is a single GO button with no wrong option, so
+    // re-roll until the fuse starts on a challenge with a choice.
+    const c = room.gameState.challenge;
+    if (c && c.options.some((option) => option !== c.correctAnswer)) return room;
+  }
+  throw new Error("could not roll a choice challenge");
 }
 function tick(room: Room<BombGameState>, count = 1) {
   for (let i = 0; i < count; i++) room.gameState = BombEngine.updateGameState(room);
