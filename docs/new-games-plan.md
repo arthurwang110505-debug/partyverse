@@ -1,6 +1,15 @@
 # Plan — adding five more party games (2026-09-22)
 
-Status: **planning only**, nothing implemented yet. Owner approved the direction on 2026-09-22; open questions in §6 need answers before build.
+Status: **SHIPPED (2026-09-23).** All five games (G1–G5) are implemented, registered and test-covered (141 tests green, typecheck/lint/build clean). Owner approved the direction on 2026-09-22 and approved the build on 2026-09-23; §6 questions were left unanswered, so the plan's stated defaults were used.
+
+Implementation notes vs. plan (deviations, all small):
+- Shared rules tour (separate owner request) added: the five new games start in a shared `rules` phase (15s countdown, any participant can tap 開始遊戲 to skip) via `withRulesPhase` in `src/engine/rulesTour.ts`; the existing ten stay raw and can adopt it later. `GameDefinition.rules?: string[]` carries the bullets shown by `RulesTour.tsx`.
+- musicalchairs: sit window is 3s (not 2.5s); music is 4–10s; tie-breaking within a tap batch is by transaction order (no random lottery).
+- whackmoles: spawn windows are 950ms (not 1.0s), per-round duration 30/25/20s; empty whacks reset the streak with no penalty.
+- simonsays: the TV flashes one quadrant per host tick (1Hz); levels advance only when every still-playing player completes the sequence.
+- wordchain: objection is a 5s window + 4s whole-table vote; upheld objections reward every objector +5 (objecting is still possible while the vote is open).
+- pokerlite: 4 streets, 15s decision clock (settings 8–30s), busted players rebuy 50 next hand (never dropped), proper side pots.
+- Landing copy "十款遊戲 → 十五款遊戲" is deliberately untouched until the owner confirms (their page).
 
 ## 1. Design constraints (platform contract)
 

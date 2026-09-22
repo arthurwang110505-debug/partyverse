@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Room, RoomSettings } from "@/types";
 import { advanceRoomGame, applyRoomAction, startRoomGame } from "@/lib/gameSession";
 import { testRoom } from "@/test/fixtures";
 import { playableGameIds } from "./index";
+import { simonSequence } from "./simonSays";
 
 /**
  * Full-match simulations: every game starts from a LOBBY and must reach
@@ -317,7 +318,161 @@ describe("full match playthroughs (all games reach results)", () => {
     expect(scores["p1"]).toBe(35); // 20 team + 15 finder
   });
 
-  it("registers exactly the ten investigated games", () => {
+  it("musicalchairs: slowest tapper falls each round, last stand wins", () => {
+    const room = playMatch(
+      "musicalchairs",
+      (r, runner) => {
+        const s = r.gameState as { phase: string; survivors: string[]; sitOrder: Record<string, number> };
+        if (s.phase !== "sit") return;
+        for (const id of playerIds(r)) {
+          if (s.survivors.includes(id) && s.sitOrder[id] === undefined) runner.submit(id, { type: "sit" });
+        }
+      },
+    );
+    const s = room.gameState as { lastStandId: string | null; currentScores: Record<string, number> };
+    // p1-p4 tap in seat order, so p4, p3, p2 fall in turn and p1 stays.
+    expect(s.lastStandId).toBe("p1");
+    expect(s.currentScores["p1"]).toBe(70); // +10, +10, +50
+    expect(s.currentScores["p4"]).toBe(0);
+  });
+
+  it("whackmoles: players whack the active mole and the best hand wins", () => {
+    // The mole windows live on the wall clock, so run this match on fake
+    // time that advances in lock-step with the host ticks.
+    const realNow = Date.now();
+    vi.useFakeTimers().setSystemTime(realNow);
+    try {
+      const room = playMatch(
+        "whackmoles",
+        (r, runner) => {
+          // Keep the (frozen) wall clock in lock-step with the host ticks so
+          // the engine's Date.now()-based spawn windows line up.
+          vi.setSystemTime(runner.now);
+          const s = r.gameState as {
+            phase: string;
+            spawns: Array<{ cell: number; startAt: number; endAt: number; hitBy: string[] }>;
+            hits: Record<string, number>;
+          };
+          if (s.phase !== "hunting") return;
+          const now = runner.now;
+          const spawn = s.spawns.find((sp) => now >= sp.startAt && now < sp.endAt && sp.hitBy.length === 0);
+          if (!spawn) return;
+          const whacker = playerIds(r).find((id) => (s.hits[id] ?? 0) < 5) ?? playerIds(r)[0];
+          runner.submit(whacker, { type: "whack", cell: spawn.cell });
+        },
+        { settings: { rounds: 2 } },
+      );
+      const scores = (room.gameState as { currentScores: Record<string, number>; winnerId: string | null }).currentScores;
+      const winner = (room.gameState as { winnerId: string | null }).winnerId;
+      expect(Math.max(...Object.values(scores))).toBeGreaterThan(0);
+      expect(winner).toBeTruthy();
+      expect(scores[winner ?? ""]).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("simonsays: everyone repeats the sequence, levels grow, a brain wins", () => {
+    const room = playMatch(
+      "simonsays",
+      (r, runner) => {
+        const s = r.gameState as {
+          phase: string;
+          seqSeed: number;
+          level: number;
+          playerProgress: Record<string, number>;
+          outThisRound: string[];
+        };
+        if (s.phase !== "repeat") return;
+        const seq = simonSequence(s.seqSeed, s.level);
+        for (const id of playerIds(r)) {
+          if (s.outThisRound.includes(id)) continue;
+          runner.submit(id, { type: "tap", quadrant: seq[s.playerProgress[id] ?? 0] });
+        }
+      },
+      { settings: { rounds: 2 } },
+    );
+    const scores = (room.gameState as { currentScores: Record<string, number> }).currentScores;
+    // Each player at least completed level 3 in both rounds: 3+3 points minimum.
+    for (const id of playerIds(room)) expect(scores[id]).toBeGreaterThanOrEqual(6);
+  });
+
+  it("wordchain: links score, an objection is upheld, rounds roll on", () => {
+    let objected = false;
+    const room = playMatch(
+      "wordchain",
+      (r, runner) => {
+        const s = r.gameState as {
+          phase: string;
+          requiredChar: string;
+          chain: string[];
+          pending: { playerId: string; word: string } | null;
+          objectors: string[];
+          votes: Record<string, boolean>;
+          currentRound: number;
+        };
+        if (s.phase === "chaining") {
+          const word = s.requiredChar + String.fromCharCode(0x4e00 + ((runner.ticks * 131) % 20000));
+          if (!s.chain.includes(word)) runner.submit("p1", { type: "submitWord", word });
+          if (!objected && s.currentRound === 1 && s.pending?.playerId === "p1") {
+            objected = true;
+            runner.submit("p2", { type: "object" });
+          }
+          return;
+        }
+        if (s.phase === "voting" && s.pending) {
+          for (const id of playerIds(r)) {
+            if (id === s.pending.playerId || s.votes[id] !== undefined) continue;
+            runner.submit(id, { type: "voteWord", valid: false }); // the table overrules
+          }
+        }
+      },
+      { settings: { rounds: 3, timer: 12 } },
+    );
+    const s = room.gameState as { currentScores: Record<string, number>; winnerId: string | null };
+    expect(s.currentScores["p1"]).toBeGreaterThan(10); // many confirmed links
+    expect(s.currentScores["p2"]).toBe(5); // the upheld objection
+    expect(s.winnerId).toBeTruthy();
+  });
+
+  it("pokerlite: a full hand cycle of bets, showdown and chip carry-over", () => {
+    let lastHand = 0;
+    let p3Raised = false;
+    const room = playMatch(
+      "pokerlite",
+      (r, runner) => {
+        const s = r.gameState as {
+          phase: string;
+          handNumber: number;
+          toAct: string | null;
+          toCall: Record<string, number>;
+          currentBet: number;
+          chips: Record<string, number>;
+        };
+        if (s.phase !== "betting" || !s.toAct) return;
+        if (s.handNumber !== lastHand) {
+          lastHand = s.handNumber;
+          p3Raised = false;
+        }
+        const id = s.toAct;
+        if ((s.toCall[id] ?? 0) > 0) {
+          runner.submit(id, { type: "call" });
+        } else if (id === "p3" && !p3Raised) {
+          p3Raised = true;
+          runner.submit(id, { type: "raise", to: s.currentBet + 2 + 4 });
+        } else {
+          runner.submit(id, { type: "check" });
+        }
+      },
+      { settings: { rounds: 3 } },
+    );
+    const s = room.gameState as { chips: Record<string, number>; winnerId: string | null };
+    for (const id of playerIds(room)) expect(s.chips[id] ?? 0).toBeGreaterThanOrEqual(0);
+    expect(Object.values(s.chips).some((c) => c > 100)).toBe(true); // someone banked a pot
+    expect(s.winnerId).toBeTruthy();
+  });
+
+  it("registers exactly the fifteen games", () => {
     expect(playableGameIds().sort()).toEqual(
       [
         "aibullshit",
@@ -330,6 +485,11 @@ describe("full match playthroughs (all games reach results)", () => {
         "realbattle",
         "song3seconds",
         "whoisundercoveragent",
+        "musicalchairs",
+        "whackmoles",
+        "simonsays",
+        "wordchain",
+        "pokerlite",
       ].sort(),
     );
   });

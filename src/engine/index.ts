@@ -11,11 +11,20 @@ import { FIREWORK_GAME_ID, FireworkMasterEngine } from "./fireworkMaster";
 import { DRAW_GAME_ID, DrawAndGuessEngine } from "./drawAndGuess";
 import { BATTLE_GAME_ID, RealBattleEngine } from "./realBattle";
 import { MYSTERY_GAME_ID, MysteryRoomEngine } from "./mysteryRoom";
+import { CHAIRS_GAME_ID, MusicalChairsEngine } from "./musicalChairs";
+import { MOLES_GAME_ID, WhackMolesEngine } from "./whackMoles";
+import { SIMON_GAME_ID, SimonSaysEngine } from "./simonSays";
+import { CHAIN_GAME_ID, WordChainEngine } from "./wordChain";
+import { POKER_GAME_ID, PokerLiteEngine } from "./pokerLite";
+import { DEFAULT_RULES_TOUR_SECONDS, withRulesPhase } from "./rulesTour";
 
 /**
  * The registry of all games with playable engines.
  * Normalize database collections at every engine boundary.
  */
+// The five newer modes open with the shared, skippable rules tour
+// (`withRulesPhase`). The original ten keep their previous start behavior;
+// wrap them the same way if the tour should cover them too.
 const engines: Record<string, GameEngine<any>> = {
   [BOMB_GAME_ID]: BombEngine as GameEngine<any>,
   [EVERYBODY_GAME_ID]: EverybodyKnowsEngine as GameEngine<any>,
@@ -27,6 +36,11 @@ const engines: Record<string, GameEngine<any>> = {
   [DRAW_GAME_ID]: DrawAndGuessEngine as GameEngine<any>,
   [BATTLE_GAME_ID]: RealBattleEngine as GameEngine<any>,
   [MYSTERY_GAME_ID]: MysteryRoomEngine as GameEngine<any>,
+  [CHAIRS_GAME_ID]: withRulesPhase(MusicalChairsEngine, DEFAULT_RULES_TOUR_SECONDS) as GameEngine<any>,
+  [MOLES_GAME_ID]: withRulesPhase(WhackMolesEngine, DEFAULT_RULES_TOUR_SECONDS) as GameEngine<any>,
+  [SIMON_GAME_ID]: withRulesPhase(SimonSaysEngine, DEFAULT_RULES_TOUR_SECONDS) as GameEngine<any>,
+  [CHAIN_GAME_ID]: withRulesPhase(WordChainEngine, DEFAULT_RULES_TOUR_SECONDS) as GameEngine<any>,
+  [POKER_GAME_ID]: withRulesPhase(PokerLiteEngine, DEFAULT_RULES_TOUR_SECONDS) as GameEngine<any>,
 };
 
 function prepare(room: Room<any>): Room<any> {

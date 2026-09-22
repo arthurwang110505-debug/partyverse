@@ -85,6 +85,38 @@ const PROFILES: Record<string, Partial<GameSettingsProfile>> = {
     maxRounds: 1,
     defaultRounds: 1,
   },
+  musicalchairs: { hasTimer: false, defaultRounds: 1, maxRounds: 1 },
+  whackmoles: {
+    hasTimer: false,
+    roundsLabel: "回合數",
+    defaultRounds: 3,
+    maxRounds: 5,
+  },
+  simonsays: {
+    hasTimer: false,
+    roundsLabel: "回合數",
+    defaultRounds: 3,
+    maxRounds: 5,
+  },
+  wordchain: {
+    timerLabel: "接龍秒數",
+    timerHint: "每個回合的接龍時間；卡關兩次會換提示詞。",
+    timerMin: 10,
+    timerMax: 60,
+    defaultTimer: 20,
+    defaultRounds: 5,
+    maxRounds: 10,
+  },
+  pokerlite: {
+    timerLabel: "決策秒數",
+    timerHint: "每個下注決策的秒數，逾時自動跟注或過牌。",
+    timerMin: 8,
+    timerMax: 30,
+    defaultTimer: 15,
+    roundsLabel: "局數",
+    defaultRounds: 5,
+    maxRounds: 10,
+  },
 };
 export function gameSettingsProfile(gameId: string): GameSettingsProfile {
   return { ...BASE, ...PROFILES[gameId] };

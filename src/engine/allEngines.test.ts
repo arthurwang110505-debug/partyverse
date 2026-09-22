@@ -10,6 +10,11 @@ import { FireworkMasterEngine, FIREWORK_GAME_ID } from "./fireworkMaster";
 import { DrawAndGuessEngine, DRAW_GAME_ID } from "./drawAndGuess";
 import { RealBattleEngine, BATTLE_GAME_ID } from "./realBattle";
 import { MysteryRoomEngine, MYSTERY_CASES, MYSTERY_GAME_ID } from "./mysteryRoom";
+import { CHAIRS_GAME_ID } from "./musicalChairs";
+import { MOLES_GAME_ID } from "./whackMoles";
+import { SIMON_GAME_ID } from "./simonSays";
+import { CHAIN_GAME_ID } from "./wordChain";
+import { POKER_GAME_ID } from "./pokerLite";
 
 function createMockRoom(gameId: string): Room<any> {
   return {
@@ -34,9 +39,9 @@ function createMockRoom(gameId: string): Room<any> {
   };
 }
 
-describe("All 10 Games Engine Registry", () => {
-  it("registers all 10 games as playable", () => {
-    expect(playableGameIds()).toHaveLength(10);
+describe("All 15 Games Engine Registry", () => {
+  it("registers all 15 games as playable", () => {
+    expect(playableGameIds()).toHaveLength(15);
     const ids = [
       "bombcountdown",
       EVERYBODY_GAME_ID,
@@ -48,6 +53,11 @@ describe("All 10 Games Engine Registry", () => {
       DRAW_GAME_ID,
       BATTLE_GAME_ID,
       MYSTERY_GAME_ID,
+      CHAIRS_GAME_ID,
+      MOLES_GAME_ID,
+      SIMON_GAME_ID,
+      CHAIN_GAME_ID,
+      POKER_GAME_ID,
     ];
     for (const id of ids) {
       expect(isPlayable(id)).toBe(true);
