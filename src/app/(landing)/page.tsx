@@ -103,7 +103,7 @@ export default function Home() {
           {/* MASSIVE GLITCH NEON TITLE */}
           <div className="relative my-4 select-none">
             {/* Foreground Main Pure White Core + Neon Halos */}
-            <h1 className="relative text-[clamp(3.75rem,18vw,8rem)] font-black leading-[0.9] tracking-tight">
+            <h1 className="relative text-[clamp(3.75rem,18vw,8rem)] font-black leading-[0.9] tracking-tight animate-cyber-glitch">
               <span className="block neon-text-cyan" lang="en">
                 PARTY
               </span>

@@ -6,7 +6,7 @@ Date: 2026-09-20. Scope: mobile/navigation, shared lifecycle blockers, Bomb Coun
 
 - One **遊戲** and one **加入房間** action in each navigation layout; hero CTAs remain intentional.
 - Fluid hero widths, wrapping status rows, safe-area navigation and 44px menu targets. The 320px hero previously measured 349px wide despite the document hiding its overflow.
-- Static radial lighting replaces very large filtered backgrounds. Decorative animation, scanlines and backdrop filters are disabled for phone/coarse-pointer landing layouts.
+- Static radial lighting replaces very large filtered backgrounds. (The phone/coarse-pointer animation kill-switch added here was removed on 2026-09-22 at the owner's request — the landing keeps its full animation set on every device; only the OS `prefers-reduced-motion` setting still suppresses it.)
 - The sample controller is clearly marked as an illustration, not clickable game controls.
 - Firebase/room providers now live under create/join/room layouts; visiting marketing pages does not start authentication, room subscriptions or host clocks.
 
