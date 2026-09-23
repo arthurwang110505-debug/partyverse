@@ -9,7 +9,12 @@ import { KingTonightEngine, KING_GAME_ID } from "./kingTonight";
 import { FireworkMasterEngine, FIREWORK_GAME_ID } from "./fireworkMaster";
 import { DrawAndGuessEngine, DRAW_GAME_ID } from "./drawAndGuess";
 import { RealBattleEngine, BATTLE_GAME_ID } from "./realBattle";
-import { MysteryRoomEngine, MYSTERY_GAME_ID } from "./mysteryRoom";
+import { MysteryRoomEngine, MYSTERY_CASES, MYSTERY_GAME_ID } from "./mysteryRoom";
+import { CHAIRS_GAME_ID } from "./musicalChairs";
+import { MOLES_GAME_ID } from "./whackMoles";
+import { SIMON_GAME_ID } from "./simonSays";
+import { CHAIN_GAME_ID } from "./wordChain";
+import { POKER_GAME_ID } from "./pokerLite";
 
 function createMockRoom(gameId: string): Room<any> {
   return {
@@ -34,9 +39,9 @@ function createMockRoom(gameId: string): Room<any> {
   };
 }
 
-describe("All 10 Games Engine Registry", () => {
-  it("registers all 10 games as playable", () => {
-    expect(playableGameIds()).toHaveLength(10);
+describe("All 15 Games Engine Registry", () => {
+  it("registers all 15 games as playable", () => {
+    expect(playableGameIds()).toHaveLength(15);
     const ids = [
       "bombcountdown",
       EVERYBODY_GAME_ID,
@@ -48,6 +53,11 @@ describe("All 10 Games Engine Registry", () => {
       DRAW_GAME_ID,
       BATTLE_GAME_ID,
       MYSTERY_GAME_ID,
+      CHAIRS_GAME_ID,
+      MOLES_GAME_ID,
+      SIMON_GAME_ID,
+      CHAIN_GAME_ID,
+      POKER_GAME_ID,
     ];
     for (const id of ids) {
       expect(isPlayable(id)).toBe(true);
@@ -264,16 +274,17 @@ describe("Real Battle Engine", () => {
 });
 
 describe("Mystery Room Engine", () => {
-  it("distributes clues and solves with correct passcode", () => {
+  it("distributes clues and solves with the case's correct passcode", () => {
     const room = createMockRoom(MYSTERY_GAME_ID);
     const state = MysteryRoomEngine.createGame(room);
     expect(state.phase).toBe("investigation");
     expect(state.playerClues["p1"]).toBeDefined();
+    expect(MYSTERY_CASES.some((c) => c.id === state.caseId)).toBe(true);
 
     room.gameState = state;
     const next = MysteryRoomEngine.handlePlayerAction(room, "p1", {
       type: "submitCode",
-      code: "7429",
+      code: state.correctCode,
     });
 
     expect(next.isUnlocked).toBe(true);

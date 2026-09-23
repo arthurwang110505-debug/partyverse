@@ -2,9 +2,9 @@
 
 import { useRoom } from "@/providers/RoomContext";
 import { useToast } from "@/providers/ToastProvider";
-import type { SongGameState } from "@/engine/song3Seconds";
+import { lyricMask, type SongGameState } from "@/engine/song3Seconds";
 import { PlayShell } from "@/components/game/PlayShell";
-import { Headphones, Music2, Sparkles, Zap } from "lucide-react";
+import { Music2, Sparkles, Zap } from "lucide-react";
 import { vibrate } from "@/lib/sound";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ export default function PlaySong3Seconds() {
   const myAnswer = state.playerAnswers?.[player.id];
   const options = state.currentSong?.options ?? [];
   const isCorrect = myAnswer === state.currentSong?.title;
+  const mask = state.currentSong ? lyricMask(state.currentSong, state.lyricRevealed ?? 0) : [];
 
   const handleSelect = async (choice: string) => {
     vibrate(20);
@@ -33,7 +34,7 @@ export default function PlaySong3Seconds() {
       <div className="text-center pt-2">
         <header className="mb-4">
           <span className="mb-1 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-emerald-400">
-            <Music2 className="h-3.5 w-3.5" /> 猜歌三秒鐘
+            <Music2 className="h-3.5 w-3.5" /> 三秒猜歌
           </span>
           <div className="glass rounded-full border border-white/10 px-4 py-1.5 inline-block mt-1">
             <span className="text-xs text-white/70">分類：{state.currentSong?.category}</span>
@@ -43,16 +44,29 @@ export default function PlaySong3Seconds() {
         {state.phase === "listen" && (
           <div className="py-10 glass-card rounded-3xl border border-emerald-500/30 bg-emerald-500/5 p-6 shadow-xl">
             <div className="relative mx-auto mb-4 flex h-28 w-28 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 shadow-inner">
-              <Headphones className="h-14 w-14 animate-pulse" aria-hidden="true" />
+              <Music2 className="h-14 w-14 animate-pulse" aria-hidden="true" />
               <span className="absolute inset-0 rounded-full border border-emerald-400/40 animate-ping opacity-40" />
             </div>
-            <p className="text-xl font-black text-white">仔細聽大螢幕播放前奏！</p>
-            <p className="mt-1 text-xs text-white/50">只有三秒鐘！準備在手機上按鍵搶答！</p>
+            <p className="text-xl font-black text-white">大螢幕即將閃現歌詞線索！</p>
+            <p className="mt-1 text-xs text-white/50">只剩三秒鐘！盯緊大螢幕，準備搶答！</p>
           </div>
         )}
 
         {state.phase === "answering" && (
           <div>
+            {/* Same masked lyric as the TV, so phone-only players can compete. */}
+            <div className="mb-3 rounded-2xl border border-emerald-500/20 bg-emerald-950/30 p-3">
+              <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-emerald-400/80">
+                歌詞線索
+              </span>
+              <p className="text-base font-bold leading-relaxed">
+                {mask.map((seg, i) => (
+                  <span key={i} className={seg.shown ? "text-white" : "text-white/25"}>
+                    {seg.shown ? seg.char : "▢"}
+                  </span>
+                ))}
+              </p>
+            </div>
             <p className="mb-3 text-xs font-semibold text-white/80 flex items-center justify-center gap-1">
               <Zap className="h-3.5 w-3.5 text-yellow-400" />
               {myAnswer ? "✓ 搶答已送出！等待本題結算…" : "越快選對得分越高！請點選正確歌名："}
@@ -88,12 +102,13 @@ export default function PlaySong3Seconds() {
               {isCorrect ? "🎉" : "😅"}
             </p>
             <p className="mb-1 text-2xl font-black text-white">
-              {isCorrect ? "答對了！恭喜得分！" : "可惜答錯了！"}
+              {isCorrect ? "答對了！恭喜得分！" : myAnswer ? "可惜答錯了！" : "來不及搶答！"}
             </p>
             <div className="my-3 rounded-2xl bg-white/5 p-3 border border-white/5">
               <p className="text-xs text-white/40">正解歌曲</p>
               <p className="text-lg font-bold text-emerald-300">{state.currentSong?.title}</p>
               <p className="text-xs text-white/60">原唱：{state.currentSong?.artist}</p>
+              <p className="mt-1 text-xs text-white/50">「{state.currentSong?.lyric}」</p>
             </div>
             <p className="text-xs text-white/40 flex items-center justify-center gap-1">
               <Sparkles className="h-3.5 w-3.5 text-yellow-400" />

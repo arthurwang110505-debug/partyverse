@@ -39,7 +39,7 @@ export default function HostRealBattle() {
       <div className="mx-auto max-w-4xl text-center">
         <header className="mb-4">
           <p className="mb-1 text-sm font-semibold tracking-wider text-orange-400">大亂鬥 ⚔️ · 即時手機手把對決</p>
-          <h1 className="text-2xl font-black text-white md:text-4xl">搶奪金幣與星星！</h1>
+          <h1 className="text-2xl font-black text-white md:text-4xl">搶奪金幣與星星！撞開對手、搶下 10 分大星星！</h1>
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
@@ -53,11 +53,18 @@ export default function HostRealBattle() {
             {state.items.map((item) => (
               <div
                 key={item.id}
-                className="absolute -translate-x-1/2 -translate-y-1/2 animate-pulse text-2xl transition-all"
+                className={
+                  item.type === "mega"
+                    ? "absolute -translate-x-1/2 -translate-y-1/2 animate-bounce text-4xl drop-shadow-[0_0_12px_rgba(250,204,21,0.9)] transition-all"
+                    : "absolute -translate-x-1/2 -translate-y-1/2 animate-pulse text-2xl transition-all"
+                }
                 style={{ left: `${item.x}%`, top: `${item.y}%` }}
                 aria-hidden="true"
               >
-                {item.type === "star" ? "⭐" : "🪙"}
+                {item.type === "mega" ? "🌟" : item.type === "star" ? "⭐" : "🪙"}
+                {item.type === "mega" && (
+                  <span className="absolute -inset-3 rounded-full border-2 border-yellow-400/60 animate-ping" aria-hidden="true" />
+                )}
               </div>
             ))}
 
@@ -67,7 +74,7 @@ export default function HostRealBattle() {
               return (
                 <div
                   key={id}
-                  className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center transition-all duration-100 ease-out"
+                  className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center transition-all duration-300 ease-linear"
                   style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
                 >
                   <div

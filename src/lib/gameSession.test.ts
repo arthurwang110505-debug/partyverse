@@ -90,7 +90,22 @@ describe("shared match lifecycle", () => {
   it("preserves a bomb fuse across passes and applies wrong-answer penalties to the deadline", () => {
     let room = startRoomGame(testRoom(), NOW);
     room = advanceRoomGame(room, NOW + 3000);
-    const originalDeadline = room.gameState.phaseEndsAt as number;
+    let originalDeadline = room.gameState.phaseEndsAt as number;
+    // The "speed" challenge is a single GO button with no wrong option; if it
+    // opens the round, pass it first so the penalty assertions have a choice.
+    let guard = 0;
+    while (guard++ < 10) {
+      const c = room.gameState.challenge as { id: string; correctAnswer: string; options: string[] } | null;
+      if (c && c.options.some((o) => o !== c.correctAnswer)) break;
+      room = applyRoomAction(
+        room,
+        room.gameState.bombHolderId as string,
+        { type: "answer", challengeId: c!.id, answer: c!.correctAnswer },
+        phase(room),
+        NOW + 3000,
+      );
+      originalDeadline = room.gameState.phaseEndsAt as number;
+    }
     const challenge = room.gameState.challenge as { id: string; correctAnswer: string; options: string[] };
     const holder = room.gameState.bombHolderId as string;
     room = applyRoomAction(
@@ -99,7 +114,7 @@ describe("shared match lifecycle", () => {
       {
         type: "answer",
         challengeId: challenge.id,
-        answer: challenge.options.find((o) => o !== challenge.correctAnswer),
+        answer: challenge.options.find((o) => o !== challenge.correctAnswer)!,
       },
       phase(room),
       NOW + 3500,

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRoom } from "@/providers/RoomContext";
 import { useToast } from "@/providers/ToastProvider";
-import type { MysteryGameState } from "@/engine/mysteryRoom";
+import { maskCode, MAX_HINTS, type MysteryGameState } from "@/engine/mysteryRoom";
 import { Button } from "@/components/ui/Button";
 import { PlayShell } from "@/components/game/PlayShell";
 import { vibrate, sfx } from "@/lib/sound";
-import { Delete, KeyRound } from "lucide-react";
+import { Delete, KeyRound, Lightbulb } from "lucide-react";
 
 export default function PlayMysteryRoom() {
   const { room, player, submitAction } = useRoom();
@@ -15,10 +15,29 @@ export default function PlayMysteryRoom() {
   const state = room?.gameState as MysteryGameState | undefined;
   const [code, setCode] = useState("");
   const [pending, setPending] = useState(false);
+  const [hintPending, setHintPending] = useState(false);
+  const [wrong, setWrong] = useState(false);
+  const lastWrongRef = useRef<string | null>(null);
+
+  // A wrong attempt bounces back on the shared state: buzz + shake, then clear.
+  useEffect(() => {
+    const flash = state?.wrongFlash;
+    if (!flash || lastWrongRef.current === flash.code) return;
+    lastWrongRef.current = flash.code;
+    if (flash.code === code) {
+      setWrong(true);
+      sfx.playBuzzer();
+      vibrate([80, 40, 80]);
+      window.setTimeout(() => setWrong(false), 700);
+      window.setTimeout(() => setCode(""), 900);
+    }
+  }, [state?.wrongFlash, code]);
 
   if (!state || !player) return null;
 
   const myClue = state.playerClues?.[player.id];
+  const hintsLeft = MAX_HINTS - (state.hintsUsed ?? 0);
+  const revealed = maskCode(state.correctCode, state.hintRevealed ?? 0);
 
   const handleDigit = (digit: string) => {
     if (code.length >= 4) return;
@@ -44,10 +63,25 @@ export default function PlayMysteryRoom() {
     vibrate(25);
     try {
       await submitAction({ type: "submitCode", code });
+      setCode("");
     } catch {
       toast("送出失敗，請再試一次");
     } finally {
       setPending(false);
+    }
+  };
+
+  const handleHint = async () => {
+    if (hintsLeft <= 0) return;
+    setHintPending(true);
+    vibrate(25);
+    try {
+      await submitAction({ type: "requestHint" });
+      sfx.playChime();
+    } catch {
+      toast("請求提示失敗，請再試一次");
+    } finally {
+      setHintPending(false);
     }
   };
 
@@ -73,19 +107,38 @@ export default function PlayMysteryRoom() {
 
         {state.phase === "investigation" && (
           <div className="space-y-4 py-2">
-            <p className="text-xs text-white/60">口頭交流線索，輸入 4 位數密碼嘗試解鎖：</p>
+            <p className="text-xs text-white/60">大聲口頭交流線索，拼湊 4 位數密碼！答錯扣 3 秒：</p>
+
+            {/* Hint status */}
+            <div
+              className={`flex items-center justify-between rounded-2xl border px-4 py-2.5 ${
+                (state.hintRevealed ?? 0) > 0
+                  ? "border-amber-400/50 bg-amber-500/10"
+                  : "border-white/10 bg-white/5"
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                <Lightbulb className="h-4 w-4" aria-hidden="true" />
+                團隊提示：{revealed}
+              </span>
+              <span className="text-[11px] font-semibold text-white/50">
+                已用 {state.hintsUsed ?? 0}/{MAX_HINTS}
+              </span>
+            </div>
 
             {/* Code Slots Display */}
-            <div className="flex justify-center gap-3">
+            <div className={`flex justify-center gap-3 ${wrong ? "animate-shake" : ""}`}>
               {[0, 1, 2, 3].map((idx) => {
                 const char = code[idx];
                 return (
                   <div
                     key={idx}
                     className={`flex h-14 w-12 items-center justify-center rounded-2xl border font-mono text-2xl font-black transition-all ${
-                      char
-                        ? "border-indigo-400 bg-indigo-500/20 text-white shadow-md shadow-indigo-500/20"
-                        : "border-white/10 bg-white/5 text-white/20"
+                      wrong
+                        ? "border-red-500 bg-red-500/20 text-red-300"
+                        : char
+                          ? "border-indigo-400 bg-indigo-500/20 text-white shadow-md shadow-indigo-500/20"
+                          : "border-white/10 bg-white/5 text-white/20"
                     }`}
                   >
                     {char ?? "•"}
@@ -93,6 +146,11 @@ export default function PlayMysteryRoom() {
                 );
               })}
             </div>
+            {wrong && (
+              <p className="text-xs font-bold text-red-400" role="status">
+                ❌ 密碼錯誤！扣 3 秒，再想想大家的線索
+              </p>
+            )}
 
             {/* Numeric Keypad */}
             <div className="mx-auto grid max-w-[260px] grid-cols-3 gap-2 pt-2">
@@ -132,16 +190,28 @@ export default function PlayMysteryRoom() {
               </button>
             </div>
 
-            <Button
-              variant="accent"
-              size="lg"
-              className="mt-2 w-full"
-              disabled={code.length !== 4}
-              loading={pending}
-              onClick={() => void handleSubmit()}
-            >
-              <KeyRound className="h-4 w-4 mr-1.5" /> 嘗試開鎖
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="accent"
+                size="lg"
+                className="flex-1"
+                disabled={code.length !== 4}
+                loading={pending}
+                onClick={() => void handleSubmit()}
+              >
+                <KeyRound className="h-4 w-4 mr-1.5" /> 嘗試開鎖
+              </Button>
+              <Button
+                variant="ghost"
+                size="lg"
+                className="border-amber-400/40 text-amber-300"
+                disabled={hintsLeft <= 0}
+                loading={hintPending}
+                onClick={() => void handleHint()}
+              >
+                <Lightbulb className="h-4 w-4 mr-1.5" /> 提示（-{10}秒）
+              </Button>
+            </div>
           </div>
         )}
 
@@ -160,4 +230,3 @@ export default function PlayMysteryRoom() {
     </PlayShell>
   );
 }
-

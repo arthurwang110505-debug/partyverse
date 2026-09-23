@@ -2,8 +2,10 @@
 
 import type { ComponentType } from "react";
 import { useRoom } from "@/providers/RoomContext";
-import { PlayShell } from "@/components/game/PlayShell";
 import { participantIds } from "@/engine/participants";
+import { RULES_PHASE } from "@/engine/rulesTour";
+import { PlayShell } from "@/components/game/PlayShell";
+import { RulesTour } from "@/components/game/RulesTour";
 import PlayBombCountdown from "./views/PlayBombCountdown";
 import PlayEverybodyKnows from "./views/PlayEverybodyKnows";
 import PlayAiBullshit from "./views/PlayAiBullshit";
@@ -14,6 +16,11 @@ import PlayFireworkMaster from "./views/PlayFireworkMaster";
 import PlayDrawAndGuess from "./views/PlayDrawAndGuess";
 import PlayRealBattle from "./views/PlayRealBattle";
 import PlayMysteryRoom from "./views/PlayMysteryRoom";
+import PlayMusicalChairs from "./views/PlayMusicalChairs";
+import PlayWhackMoles from "./views/PlayWhackMoles";
+import PlaySimonSays from "./views/PlaySimonSays";
+import PlayWordChain from "./views/PlayWordChain";
+import PlayPokerLite from "./views/PlayPokerLite";
 
 const VIEWS: Record<string, ComponentType> = {
   bombcountdown: PlayBombCountdown,
@@ -26,6 +33,11 @@ const VIEWS: Record<string, ComponentType> = {
   drawandguess: PlayDrawAndGuess,
   realbattle: PlayRealBattle,
   mysteryroom: PlayMysteryRoom,
+  musicalchairs: PlayMusicalChairs,
+  whackmoles: PlayWhackMoles,
+  simonsays: PlaySimonSays,
+  wordchain: PlayWordChain,
+  pokerlite: PlayPokerLite,
 };
 
 /** Dispatch first: never interpret another game's state as bomb state. */
@@ -44,6 +56,9 @@ export default function PlayGameView() {
         </section>
       </PlayShell>
     );
+  if ((room.gameState as { phase?: string } | undefined)?.phase === RULES_PHASE) {
+    return <RulesTour variant="play" />;
+  }
   const View = VIEWS[room.gameId];
   return View ? (
     <View />

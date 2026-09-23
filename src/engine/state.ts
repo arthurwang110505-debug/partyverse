@@ -13,6 +13,14 @@ const COLLECTIONS: Record<string, { arrays: string[]; maps: string[] }> = {
   },
   realbattle: { arrays: ["items"], maps: ["positions"] },
   mysteryroom: { arrays: [], maps: ["playerClues"] },
+  musicalchairs: { arrays: ["survivors", "eliminatedPlayerIds"], maps: ["sitOrder"] },
+  whackmoles: { arrays: ["spawns"], maps: ["hits", "misses", "streaks", "totalHits"] },
+  simonsays: { arrays: ["outThisRound", "maxedOut"], maps: ["playerProgress"] },
+  wordchain: { arrays: ["chain", "objectors"], maps: ["votes"] },
+  pokerlite: {
+    arrays: ["seats", "deck", "board", "activePlayers", "foldedIds", "allInIds", "handWinnerIds"],
+    maps: ["holeCards", "chips", "committed", "streetCommitted", "toCall", "streetActed", "showdownHands", "potSplit"],
+  },
 };
 export function arrayValue(value: unknown): unknown[] {
   if (Array.isArray(value)) return value.filter((item) => item != null);

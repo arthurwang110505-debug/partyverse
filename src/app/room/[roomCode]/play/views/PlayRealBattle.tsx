@@ -7,8 +7,12 @@ import type { BattleGameState } from "@/engine/realBattle";
 import { PlayShell } from "@/components/game/PlayShell";
 import { vibrate } from "@/lib/sound";
 
-/** How fast a held direction repeats, in ms — close to the host's tick rate. */
-const REPEAT_MS = 160;
+/**
+ * Held-direction repeat interval. Each move is a whole-room transaction, so
+ * this caps the write rate per player (~5/sec) instead of carpet-bombing the
+ * room store while a pad button is held.
+ */
+const REPEAT_MS = 200;
 
 export default function PlayRealBattle() {
   const { room, player, submitAction } = useRoom();
@@ -87,7 +91,7 @@ export default function PlayRealBattle() {
           <span className="mb-1 inline-flex items-center gap-1.5 rounded-full border border-rose-400/50 bg-rose-950/40 px-3 py-1 text-xs font-black uppercase tracking-wider text-rose-300 shadow-sm shadow-rose-500/20">
             ⚔️ 實體手機手把 · 大亂鬥
           </span>
-          <p className="mt-2 text-sm text-white/70">按住方向鍵操控角色，搶奪星星與金幣！</p>
+          <p className="mt-2 text-sm text-white/70">按住方向鍵操控角色，搶奪星星與金幣！撞開對手更快搶到！</p>
         </header>
 
         {/* touch-none: swiping across the pad shouldn't scroll the page */}

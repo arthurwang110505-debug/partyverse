@@ -9,11 +9,15 @@ import { PlayShell } from "@/components/game/PlayShell";
 import { vibrate, sfx } from "@/lib/sound";
 import { cn } from "@/lib/utils";
 
+/** Tap-mash flush cadence: ~2-3 room writes/sec instead of one per tap. */
+const TAP_FLUSH_MS = 400;
+
 export default function PlayKingTonight() {
   const { room, player, submitAction } = useRoom();
   const { toast } = useToast();
   const state = room?.gameState as KingGameState | undefined;
   const [taps, setTaps] = useState(0);
+  const pendingTapsRef = useRef(0);
 
   // Samurai reaction state
   const [slashReady, setSlashReady] = useState(false);
@@ -29,6 +33,7 @@ export default function PlayKingTonight() {
     setSlashReady(false);
     setFalseStart(false);
     slashStartTimeRef.current = null;
+    pendingTapsRef.current = 0;
 
     if (state?.phase === "action" && challenge?.type === "reaction_tap") {
       // Random trigger delay between 1200ms and 2400ms
@@ -43,16 +48,38 @@ export default function PlayKingTonight() {
     }
   }, [state?.phase, state?.currentRound, challenge?.type]);
 
+  // Tap-mash batching: count locally, flush the delta on a timer.
+  useEffect(() => {
+    if (state?.phase !== "action" || challenge?.type !== "tap_mash") return;
+    const id = window.setInterval(() => {
+      const count = pendingTapsRef.current;
+      if (count <= 0) return;
+      pendingTapsRef.current = 0;
+      submitAction({ type: "taps", count }).catch(() => {
+        // Failed flushes go back into the queue for the next interval.
+        pendingTapsRef.current += count;
+      });
+    }, TAP_FLUSH_MS);
+    const flushOnExit = () => {
+      const count = pendingTapsRef.current;
+      if (count <= 0) return;
+      pendingTapsRef.current = 0;
+      void submitAction({ type: "taps", count }).catch(() => undefined);
+    };
+    window.addEventListener("pagehide", flushOnExit);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("pagehide", flushOnExit);
+      flushOnExit();
+    };
+  }, [state?.phase, state?.currentRound, challenge?.type, submitAction]);
+
   if (!state || !player) return null;
 
-  const handleTap = async () => {
+  const handleTap = () => {
     setTaps((t) => t + 1);
+    pendingTapsRef.current += 1;
     vibrate(10);
-    try {
-      await submitAction({ type: "tap" });
-    } catch {
-      toast("操作失敗，請再試一次");
-    }
   };
 
   const handleSlashReaction = async () => {
@@ -111,7 +138,7 @@ export default function PlayKingTonight() {
             <button
               type="button"
               aria-label={`瘋狂點擊，已點 ${taps} 次`}
-              onClick={() => void handleTap()}
+              onClick={handleTap}
               className="mx-auto flex h-52 w-52 flex-col items-center justify-center rounded-full border-4 border-yellow-300 bg-gradient-to-tr from-yellow-500 via-orange-500 to-red-500 text-4xl font-black text-white shadow-2xl transition-transform active:scale-90 select-none cursor-pointer"
             >
               <span className="drop-shadow-lg text-5xl">點！</span>

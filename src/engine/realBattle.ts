@@ -6,9 +6,13 @@ export interface ArenaItem {
   id: string;
   x: number; // 0-100%
   y: number; // 0-100%
-  type: "coin" | "star";
+  type: "coin" | "star" | "mega";
   points: number;
 }
+
+/** Two characters closer than this get a body-check knockback. */
+export const BUMP_DISTANCE = 6;
+export const BUMP_KNOCKBACK = 3;
 
 export interface PlayerPosition {
   x: number; // 0-100%
@@ -109,6 +113,25 @@ export const RealBattleEngine: GameEngine<BattleGameState> = {
     const newX = Math.max(5, Math.min(95, cur.x + act.dx * step));
     const newY = Math.max(5, Math.min(95, cur.y + act.dy * step));
 
+    const nextPositions = {
+      ...state.positions,
+      [playerId]: { ...cur, x: newX, y: newY },
+    };
+
+    // Body check: ramming an opponent knocks them back, so you can muscle
+    // your way to a coin. The mover's own position is unaffected.
+    for (const [otherId, other] of Object.entries(nextPositions)) {
+      if (otherId === playerId) continue;
+      const dist = Math.hypot(newX - other.x, newY - other.y);
+      if (dist >= BUMP_DISTANCE) continue;
+      const angle = dist === 0 ? Math.random() * Math.PI * 2 : Math.atan2(other.y - newY, other.x - newX);
+      nextPositions[otherId] = {
+        ...other,
+        x: Math.max(5, Math.min(95, other.x + Math.cos(angle) * BUMP_KNOCKBACK)),
+        y: Math.max(5, Math.min(95, other.y + Math.sin(angle) * BUMP_KNOCKBACK)),
+      };
+    }
+
     // Check collision with items
     let itemCollected = false;
     let earned = 0;
@@ -125,6 +148,7 @@ export const RealBattleEngine: GameEngine<BattleGameState> = {
     const nextScores = { ...state.currentScores };
     if (itemCollected) {
       nextScores[playerId] = (nextScores[playerId] ?? 0) + earned;
+      nextPositions[playerId] = { ...nextPositions[playerId], score: nextScores[playerId] };
     }
 
     // Respawn items if low
@@ -132,10 +156,7 @@ export const RealBattleEngine: GameEngine<BattleGameState> = {
 
     return {
       ...state,
-      positions: {
-        ...state.positions,
-        [playerId]: { ...cur, x: newX, y: newY, score: nextScores[playerId] },
-      },
+      positions: nextPositions,
       items: finalItems,
       currentScores: nextScores,
     };
@@ -169,7 +190,24 @@ export const RealBattleEngine: GameEngine<BattleGameState> = {
           timeLeft: 0,
         };
       }
-      return { ...state, timeLeft: nextTime };
+      // Every 8 seconds a 10-point mega star drops and the table scrambles.
+      let items = state.items;
+      if (nextTime % 8 === 0) {
+        const id = `mega_${nextTime}`;
+        if (!items.some((item) => item.id === id)) {
+          items = [
+            ...items,
+            {
+              id,
+              x: 10 + Math.random() * 80,
+              y: 10 + Math.random() * 80,
+              type: "mega",
+              points: 10,
+            },
+          ];
+        }
+      }
+      return { ...state, timeLeft: nextTime, items };
     }
 
     return state;

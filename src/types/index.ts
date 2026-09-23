@@ -86,6 +86,11 @@ export interface GameDefinition {
   gradient: string;
   tags: string[];
   difficulty: string;
+  /**
+   * Short rules shown in the pre-game rules tour (`engine/rulesTour.ts`).
+   * Games registered without `withRulesPhase` simply never render it.
+   */
+  rules?: string[];
 }
 
 export interface Achievement {

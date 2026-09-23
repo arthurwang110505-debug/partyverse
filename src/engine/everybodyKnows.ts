@@ -20,6 +20,14 @@ export const QUESTIONS: QuestionDef[] = [
   { id: "q10", question: "如果突然中了一億樂透，誰最會隱瞞到底？" },
   { id: "q11", question: "誰最容易把別人的秘密不小心說溜嘴？" },
   { id: "q12", question: "誰出門準備時間總是要最久？" },
+  { id: "q13", question: "誰最可能半夜三點爬起来煮宵夜？" },
+  { id: "q14", question: "誰最常在團體游中當「落單的那個」？" },
+  { id: "q15", question: "誰的錢包裡絕對有一堆來路不明的收據？" },
+  { id: "q16", question: "誰最可能把簡訊打錯人還沒發現？" },
+  { id: "q17", question: "誰唱卡拉OK時最自以為是天王天后？" },
+  { id: "q18", question: "誰最可能邊聽電話邊走路結果撞到人？" },
+  { id: "q19", question: "誰的冰箱裡一定過期了還捨不得丟？" },
+  { id: "q20", question: "誰最可能在聚會結束後還在發廢話訊息？" },
 ];
 
 export type EverybodyPhase = "voting" | "reveal" | "result";

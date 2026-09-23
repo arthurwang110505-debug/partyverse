@@ -20,6 +20,15 @@ const SHAPES: Array<{ id: FireworkDesign["shape"]; label: string; icon: string }
   { id: "ring", label: "土星環", icon: "🪐" },
 ];
 
+const TRAILS: Array<{ id: FireworkDesign["trailEffect"]; label: string; icon: string }> = [
+  { id: "sparkle", label: "閃爍", icon: "✨" },
+  { id: "smoke", label: "煙霧", icon: "🌫️" },
+  { id: "glitter", label: "星輝", icon: "🌟" },
+];
+
+const DENSITY_MIN = 15;
+const DENSITY_MAX = 60;
+
 export default function PlayFireworkMaster() {
   const { room, player, submitAction } = useRoom();
   const { toast } = useToast();
@@ -28,6 +37,8 @@ export default function PlayFireworkMaster() {
 
   const [color, setColor] = useState(PALETTE[0]);
   const [shape, setShape] = useState<FireworkDesign["shape"]>("circle");
+  const [trail, setTrail] = useState<FireworkDesign["trailEffect"]>("sparkle");
+  const [density, setDensity] = useState(35);
   const [pending, setPending] = useState(false);
   const [cheerCount, setCheerCount] = useState(0);
 
@@ -42,7 +53,7 @@ export default function PlayFireworkMaster() {
     try {
       await submitAction({
         type: "submitDesign",
-        design: { color, shape, trailEffect: "sparkle", density: 40 },
+        design: { color, shape, trailEffect: trail, density },
       });
       sfx.playReady();
     } catch {
@@ -148,6 +159,52 @@ export default function PlayFireworkMaster() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div>
+                  <span id="firework-trail-label" className="mb-2 block text-xs font-bold text-white/60">
+                    選擇曳尾特效
+                  </span>
+                  <div className="grid grid-cols-3 gap-2" role="group" aria-labelledby="firework-trail-label">
+                    {TRAILS.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        aria-pressed={trail === t.id}
+                        onClick={() => {
+                          setTrail(t.id);
+                          vibrate(8);
+                        }}
+                        className={cn(
+                          "rounded-2xl border p-2 text-center transition-all cursor-pointer",
+                          trail === t.id
+                            ? "border-cyan-400 bg-cyan-400/25 text-white ring-2 ring-cyan-400"
+                            : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10",
+                        )}
+                      >
+                        <span className="block text-xl mb-0.5">{t.icon}</span>
+                        <span className="block text-[11px] font-bold">{t.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="firework-density"
+                    className="mb-2 block text-xs font-bold text-white/60"
+                  >
+                    綻放密度：{density}
+                  </label>
+                  <input
+                    id="firework-density"
+                    type="range"
+                    min={DENSITY_MIN}
+                    max={DENSITY_MAX}
+                    value={density}
+                    onChange={(e) => setDensity(Number(e.target.value))}
+                    className="w-full accent-cyan-400"
+                  />
                 </div>
 
                 <Button
