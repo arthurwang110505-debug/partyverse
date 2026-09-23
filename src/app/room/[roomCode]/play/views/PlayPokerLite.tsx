@@ -1,7 +1,7 @@
 "use client";
 
 import { useRoom } from "@/providers/RoomContext";
-import { BIG_BLIND, REBUY_CHIPS } from "@/engine/pokerLite";
+import { BIG_BLIND, REBUY_CHIPS, canRaise } from "@/engine/pokerLite";
 import type { PokerGameState } from "@/engine/pokerLite";
 import { useToast } from "@/providers/ToastProvider";
 import { PlayShell } from "@/components/game/PlayShell";
@@ -27,15 +27,15 @@ export default function PlayPokerLite() {
   const iWon = state.potSplit[myId] ?? 0;
 
   const raiseOptions = (() => {
-    if (!myTurn) return [];
+    if (!myTurn || !canRaise(state, myId)) return [];
     const committedNow = state.streetCommitted[myId] ?? 0;
     const allInTo = myChips + committedNow;
-    const minTo = state.currentBet + BIG_BLIND;
-    const options = new Set<number>([minTo]);
+    const minTo = state.currentBet + (state.lastFullRaise ?? BIG_BLIND);
+    const options = new Set<number>([Math.min(minTo, allInTo)]);
     if (allInTo > minTo) options.add(allInTo);
     const mid = state.currentBet + BIG_BLIND * 3;
     if (mid > minTo && mid < allInTo) options.add(mid);
-    return [...options].filter((to) => to > committedNow).sort((a, b) => a - b);
+    return [...options].filter((to) => to > state.currentBet && to <= allInTo).sort((a, b) => a - b);
   })();
 
   const act = async (action: Record<string, unknown>) => {
@@ -55,23 +55,26 @@ export default function PlayPokerLite() {
     </div>
   );
 
-  const myCardsRow = myCards.length > 0 && (showdown || state.phase === "dealing" || state.phase === "betting") && !iFolded ? (
-    <div className="mb-4 flex items-center justify-center gap-2">
-      {myCards.map((c, i) => (
-        <PokerCard key={i} card={c} size="lg" />
-      ))}
-      {showdown && state.showdownHands[myId] && (
-        <span className="ml-2 text-base font-black text-yellow-300">{state.showdownHands[myId]}</span>
-      )}
-    </div>
-  ) : null;
+  const myCardsRow =
+    myCards.length > 0 && (showdown || state.phase === "dealing" || state.phase === "betting") && !iFolded ? (
+      <div className="mb-4 flex items-center justify-center gap-2">
+        {myCards.map((c, i) => (
+          <PokerCard key={i} card={c} size="lg" />
+        ))}
+        {showdown && state.showdownHands[myId] && (
+          <span className="ml-2 text-base font-black text-yellow-300">{state.showdownHands[myId]}</span>
+        )}
+      </div>
+    ) : null;
 
   return (
     <PlayShell round={`第 ${state.handNumber} / ${state.totalHands} 局`}>
       <div className="flex flex-1 flex-col items-center px-4 py-5 text-center">
         <div className="mb-3 flex w-full max-w-xs items-center justify-between text-sm font-bold">
           <span className="text-emerald-300">籌碼 {myChips}</span>
-          {myId === state.dealerSeat && <span className="rounded bg-white/15 px-2 py-0.5 text-[11px] font-black">你執荷官 D</span>}
+          {myId === state.dealerSeat && (
+            <span className="rounded bg-white/15 px-2 py-0.5 text-[11px] font-black">你執荷官 D</span>
+          )}
           {iAmAllIn && !iFolded && <span className="text-amber-300">已全押</span>}
         </div>
 
@@ -93,10 +96,12 @@ export default function PlayPokerLite() {
               <p className="rounded-xl bg-white/10 px-4 py-3 text-sm font-bold text-white/70">你已棄牌，觀戰這局…</p>
             ) : !myTurn && !iAmAllIn ? (
               <p className="rounded-xl bg-white/10 px-4 py-3 text-sm font-bold text-white/70">
-                等待其他玩家行動…
+                等待 {room?.players[state.toAct ?? ""]?.nickname ?? "其他玩家"} 行動…
               </p>
             ) : iAmAllIn ? (
-              <p className="rounded-xl bg-amber-400/15 px-4 py-3 text-sm font-bold text-amber-300">你已全押，等開牌結果！</p>
+              <p className="rounded-xl bg-amber-400/15 px-4 py-3 text-sm font-bold text-amber-300">
+                你已全押，等開牌結果！
+              </p>
             ) : (
               <>
                 <p className="mb-2 text-sm font-black text-amber-300">你的行動！</p>
@@ -142,7 +147,12 @@ export default function PlayPokerLite() {
                   ))}
                 </div>
                 <div className="mt-4">
-                  <RoundTimer timeLeft={state.timeLeft} total={15} endLabel="自動行動" compact />
+                  <RoundTimer
+                    timeLeft={state.timeLeft}
+                    total={room?.settings.timer ?? 15}
+                    endLabel={myToCall > 0 ? "自動棄牌" : "自動過牌"}
+                    compact
+                  />
                 </div>
               </>
             )}
@@ -156,7 +166,7 @@ export default function PlayPokerLite() {
             <h1 className="text-2xl font-black text-white">
               {iWon > 0 ? (
                 <>
-                  🎉 你贏了 <span className="text-emerald-300">{iWon}</span> 籌碼！
+                  本局入帳 <span className="text-emerald-300">{iWon}</span> 籌碼（含退回）
                 </>
               ) : state.handWinnerIds.length > 0 ? (
                 "這局的贏家見大螢幕"
@@ -176,7 +186,9 @@ export default function PlayPokerLite() {
 
         {state.phase === "result" && (
           <>
-            <p className="mb-3 text-6xl" aria-hidden="true">{state.winnerId === myId ? "👑" : "🃏"}</p>
+            <p className="mb-3 text-6xl" aria-hidden="true">
+              {state.winnerId === myId ? "👑" : "🃏"}
+            </p>
             <h1 className="text-2xl font-black text-white">
               {state.winnerId === myId ? "你就是底鍋之王！" : "比賽結束！"}
             </h1>

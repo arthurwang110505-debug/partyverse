@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { playableGameIds } from "../src/engine";
-import { databaseRoundTrip, testRoom } from "../src/test/fixtures";
-import { advanceRoomGame, startRoomGame } from "../src/lib/gameSession";
+import { databaseRoundTrip, testRoom, startPlayingRoom } from "../src/test/fixtures";
+import { advanceRoomGame } from "../src/lib/gameSession";
 import type { Room } from "../src/types";
 
 async function seed(page: Page, room: Room, playerId: string) {
@@ -32,7 +32,7 @@ for (const gameId of playableGameIds()) {
     test(`${gameId}: ${side} renders after an empty-collection database round trip`, async ({ page }) => {
       const errors: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
-      const room = databaseRoundTrip(startRoomGame(testRoom(gameId), Date.now()));
+      const room = databaseRoundTrip(startPlayingRoom(testRoom(gameId), Date.now()));
       await seed(page, room, side === "host" ? "tv" : "p1");
       await page.goto(`/room/${room.id}/${side}`);
       await expect(page.getByRole("main")).toBeVisible();
@@ -75,6 +75,15 @@ test("one TV and four independent demo tabs join, play, refresh, rematch and swi
   await tv.getByRole("button", { name: "全員就緒！立刻開始" }).click();
   await expect.poll(async () => (await readRoom(tv, code)).status).toBe("PLAYING");
   expect((await readRoom(tv, code)).participantIds).toHaveLength(4);
+  await expect(tv.getByText("0 / 4 位玩家已看懂")).toBeVisible();
+  await phones[0].getByRole("button", { name: "我看懂了，準備好了", exact: true }).click();
+  await expect(tv.getByText("1 / 4 位玩家已看懂")).toBeVisible();
+  expect((await readRoom(tv, code)).gameState.phase).toBe("rules");
+  await phones[0].reload();
+  await expect(phones[0].getByRole("button", { name: "已看懂，等大家一起開始", exact: true })).toBeDisabled();
+  await Promise.all(
+    phones.slice(1).map((phone) => phone.getByRole("button", { name: "我看懂了，準備好了", exact: true }).click()),
+  );
   // All phones vote for the same actual player; the TV must not be required.
   await Promise.all(
     phones.map(async (phone) => {
@@ -98,6 +107,7 @@ test("one TV and four independent demo tabs join, play, refresh, rematch and swi
   );
   await tv.getByRole("button", { name: "全員就緒！立刻開始" }).click();
   await expect.poll(async () => (await readRoom(tv, code)).status).toBe("PLAYING");
+  await tv.getByRole("button", { name: "房主開始遊戲 →", exact: true }).click();
   await tv.getByRole("button", { name: "結束並結算", exact: true }).click();
   await tv.getByRole("button", { name: "確認結算" }).click();
   await tv.waitForURL(new RegExp(`/room/${code}/results$`));
@@ -117,7 +127,7 @@ test("drawing streams before pointer-up, guesses stay secret, and controls stop 
   page: drawer,
   context,
 }) => {
-  let room = startRoomGame(testRoom("drawandguess"), Date.now() - 3100);
+  let room = startPlayingRoom(testRoom("drawandguess"), Date.now() - 3100);
   room = advanceRoomGame(room, Date.now());
   const drawerId = room.gameState.drawerPlayerId as string;
   const guesserId = room.participantIds!.find((id) => id !== drawerId)!;
@@ -160,7 +170,7 @@ test("drawing streams before pointer-up, guesses stay secret, and controls stop 
 });
 
 test("late joiner sees a spectator controller instead of being assigned a turn", async ({ page }) => {
-  const room = startRoomGame(testRoom("drawandguess"), Date.now());
+  const room = startPlayingRoom(testRoom("drawandguess"), Date.now());
   room.players.late = { ...room.players.p1, id: "late", nickname: "新朋友" };
   await seed(page, room, "late");
   await page.goto(`/room/${room.id}/play`);
@@ -168,7 +178,7 @@ test("late joiner sees a spectator controller instead of being assigned a turn",
 });
 
 test("a phone can take over a stale host and keep its controller", async ({ page }) => {
-  const room = startRoomGame(testRoom("everybodyknows"), Date.now() - 21000);
+  const room = startPlayingRoom(testRoom("everybodyknows"), Date.now() - 21000);
   await seed(page, room, "p1");
   await page.goto(`/room/${room.id}/play`);
   await page.getByRole("button", { name: "由我接管房主" }).click();
@@ -177,3 +187,21 @@ test("a phone can take over a stale host and keep its controller", async ({ page
   await expect(page.getByRole("button", { name: "由我接管房主" })).toHaveCount(0);
   await expect.poll(async () => (await readRoom(page, room.id)).gameState.phase).toBe("reveal");
 });
+
+for (const gameId of playableGameIds()) {
+  test(`${gameId}: phone briefing is readable at 320px and one player cannot start for everyone`, async ({ page }) => {
+    const { startRoomGame } = await import("../src/lib/gameSession");
+    const room = databaseRoundTrip(startRoomGame(testRoom(gameId), Date.now()));
+    await page.setViewportSize({ width: 320, height: 740 });
+    await seed(page, room, "p1");
+    await page.goto(`/room/${room.id}/play`);
+    for (const label of ["你的目標", "怎麼操作", "怎麼得分"]) {
+      await expect(page.getByText(label, { exact: true })).toBeVisible();
+    }
+    await expect(page.getByRole("button", { name: "房主開始遊戲 →", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "我看懂了，準備好了", exact: true }).click();
+    await expect(page.getByRole("button", { name: "已看懂，等大家一起開始", exact: true })).toBeDisabled();
+    expect((await readRoom(page, room.id)).gameState.phase).toBe("rules");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  });
+}

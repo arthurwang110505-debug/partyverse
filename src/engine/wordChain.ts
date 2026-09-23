@@ -1,4 +1,5 @@
 import type { Achievement, GameEngine, GameSummary, Room } from "@/types";
+import { connectedParticipantIds } from "./participants";
 import { topScorers } from "./scoring";
 
 export const CHAIN_GAME_ID = "wordchain";
@@ -27,11 +28,13 @@ export interface ChainGameState {
   /** The word that just landed, awaiting the objection window. */
   pending: PendingWord | null;
   objectionWindow: number;
+  /** Remaining round time at which the current objection window closes. */
+  objectionClosesAt?: number;
+  feedback?: string;
   objectors: string[];
   /** playerId -> true (valid) / false (invalid) while voting. */
   votes: Record<string, boolean>;
   wordSeq: number;
-  stuckTimeouts: number;
   starterIndex: number;
   currentScores: Record<string, number>;
   winnerId: string | null;
@@ -55,22 +58,70 @@ export type ChainAction = SubmitWordAction | ObjectAction | VoteWordAction;
 export const OBJECTION_SECONDS = 5;
 const VOTING_SECONDS = 4;
 const REVEAL_SECONDS = 3;
-const REJECT_RESTART_SECONDS = 10;
 const LINK_POINTS = 10;
 const OBJECT_POINTS = 5;
 const REJECT_PENALTY = 5;
 
 /**
- * Seed words used to open each round and to bail out of a two-timeout stall.
+ * Seed words used to open each round.
  * They only ever start chains — play itself is open-ended.
  */
 export const STARTER_WORDS: string[] = [
-  "開心", "心中", "中心", "心情", "情形", "情況", "概念", "思考", "考察", "清楚",
-  "楚河", "河流", "流水", "水果", "果然", "然後", "後面", "面積", "積累", "累贅",
-  "寶貝", "寶島", "寶藏", "勇敢", "敢言", "言語", "語言", "言詞", "詞語", "語文",
-  "文章", "章程", "程序", "現代", "代表", "表現", "現場", "場地", "地方", "方便",
-  "便利", "利益", "益處", "處所", "所有", "有限", "限制", "制度", "度日", "日常",
-  "常規", "規律", "法律", "律所", "所以",
+  "開心",
+  "心中",
+  "中心",
+  "心情",
+  "情形",
+  "情況",
+  "概念",
+  "思考",
+  "考察",
+  "清楚",
+  "楚河",
+  "河流",
+  "流水",
+  "水果",
+  "果然",
+  "然後",
+  "後面",
+  "面積",
+  "積累",
+  "累贅",
+  "寶貝",
+  "寶島",
+  "寶藏",
+  "勇敢",
+  "敢言",
+  "言語",
+  "語言",
+  "言詞",
+  "詞語",
+  "語文",
+  "文章",
+  "章程",
+  "程序",
+  "現代",
+  "代表",
+  "表現",
+  "現場",
+  "場地",
+  "地方",
+  "方便",
+  "便利",
+  "利益",
+  "益處",
+  "處所",
+  "所有",
+  "有限",
+  "限制",
+  "制度",
+  "度日",
+  "日常",
+  "常規",
+  "規律",
+  "法律",
+  "律所",
+  "所以",
 ];
 
 const CJK_WORD = /^[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]{2,4}$/;
@@ -99,7 +150,8 @@ function starterWord(index: number): string {
 export const WordChainEngine: GameEngine<ChainGameState> = {
   createGame(room) {
     const rounds = room.settings?.rounds ?? 5;
-    const head = starterWord(Math.floor(Math.random() * STARTER_WORDS.length));
+    const starterIndex = Math.floor(Math.random() * STARTER_WORDS.length);
+    const head = starterWord(starterIndex);
     return {
       phase: "chaining",
       timeLeft: room.settings?.timer ?? 20,
@@ -113,8 +165,7 @@ export const WordChainEngine: GameEngine<ChainGameState> = {
       objectors: [],
       votes: {},
       wordSeq: 0,
-      stuckTimeouts: 0,
-      starterIndex: 0,
+      starterIndex,
       currentScores: initialScores(room.players),
       winnerId: null,
       winnerIds: [],
@@ -133,7 +184,7 @@ export const WordChainEngine: GameEngine<ChainGameState> = {
     if (act?.type === "submitWord") {
       if (state.phase !== "chaining") return state;
       const word = normalizeWord(act.word);
-      if (!isValidLink(word, state.requiredChar, state.chain)) return state;
+      if (!isValidLink(word, requiredLinkChar(state), state.chain)) return state;
       if (state.pending) {
         // A faster word arrives before the window closes: bank the pending
         // word, then put the new one under objection.
@@ -144,6 +195,7 @@ export const WordChainEngine: GameEngine<ChainGameState> = {
           pending: { word, playerId, id: confirmed.wordSeq + 1 },
           wordSeq: confirmed.wordSeq + 1,
           objectionWindow: OBJECTION_SECONDS,
+          objectionClosesAt: state.timeLeft - OBJECTION_SECONDS,
         };
       }
       return {
@@ -152,6 +204,7 @@ export const WordChainEngine: GameEngine<ChainGameState> = {
         pending: { word, playerId, id: state.wordSeq + 1 },
         wordSeq: state.wordSeq + 1,
         objectionWindow: OBJECTION_SECONDS,
+        objectionClosesAt: state.timeLeft - OBJECTION_SECONDS,
       };
     }
 
@@ -163,11 +216,12 @@ export const WordChainEngine: GameEngine<ChainGameState> = {
       if (!inWindow || !state.pending) return state;
       if (playerId === state.pending.playerId) return state;
       if (state.objectors.includes(playerId)) return state;
+      if (state.phase === "voting") return { ...state, objectors: [...state.objectors, playerId] };
       return {
         ...state,
         phase: "voting",
         // Park the round clock so an upheld vote resumes exactly where the
-        // round left off (a rejected word gets a fresh REJECT_RESTART_SECONDS).
+        // round left off, whether the word is upheld or rejected.
         roundTimeLeft: state.timeLeft,
         timeLeft: VOTING_SECONDS,
         objectors: [...state.objectors, playerId],
@@ -178,10 +232,10 @@ export const WordChainEngine: GameEngine<ChainGameState> = {
     if (act?.type === "voteWord") {
       if (state.phase !== "voting" || !state.pending) return state;
       if (playerId === state.pending.playerId) return state; // no voting for yourself
-      if (state.votes[playerId] !== undefined) return state;
+      if (state.votes[playerId] !== undefined || typeof act.valid !== "boolean") return state;
       const votes = { ...state.votes, [playerId]: act.valid === true };
       const next = { ...state, votes };
-      const eligible = Object.keys(room.players).filter((id) => id !== state.pending!.playerId);
+      const eligible = connectedParticipantIds(room).filter((id) => id !== state.pending!.playerId);
       const allVoted = eligible.every((id) => next.votes[id] !== undefined);
       if (!allVoted) return next;
       return resolveVotes(next);
@@ -197,36 +251,23 @@ export const WordChainEngine: GameEngine<ChainGameState> = {
     if (state.phase === "chaining") {
       let next = state;
       if (state.pending && state.objectionWindow > 0) {
-        const window = state.objectionWindow - 1;
+        const window = Math.max(
+          0,
+          state.timeLeft - 1 - (state.objectionClosesAt ?? state.timeLeft - state.objectionWindow),
+        );
         if (window <= 0) next = confirmPending({ ...next, objectionWindow: 0 });
         else next = { ...next, objectionWindow: window };
       }
       if (next.timeLeft > 1) {
         return next === state ? { ...state, timeLeft: state.timeLeft - 1 } : { ...next, timeLeft: next.timeLeft - 1 };
       }
-      // Round deadline.
-      if (next.pending) {
-        return { ...confirmPending(next), phase: "round_reveal", timeLeft: REVEAL_SECONDS };
-      }
-      // Nobody linked in time: one silent retry, then bail to a seed word.
-      const stuck = state.stuckTimeouts + 1;
-      const timer = room.settings?.timer ?? 20;
-      if (stuck >= 2) {
-        const head = starterWord(state.starterIndex + 1);
-        return {
-          ...next,
-          headWord: head,
-          requiredChar: head[head.length - 1],
-          chain: [...next.chain, head],
-          starterIndex: state.starterIndex + 1,
-          stuckTimeouts: 0,
-          timeLeft: timer,
-        };
-      }
-      return { ...next, stuckTimeouts: stuck, timeLeft: timer };
+      // Every round ends, including empty rounds and already-confirmed chains.
+      return { ...confirmPending(next), phase: "round_reveal", timeLeft: REVEAL_SECONDS };
     }
 
     if (state.phase === "voting") {
+      const eligible = connectedParticipantIds(room).filter((id) => id !== state.pending?.playerId);
+      if (eligible.every((id) => state.votes[id] !== undefined)) return resolveVotes(state);
       if (state.timeLeft > 1) return { ...state, timeLeft: state.timeLeft - 1 };
       return resolveVotes(state);
     }
@@ -250,7 +291,7 @@ export const WordChainEngine: GameEngine<ChainGameState> = {
         objectionWindow: 0,
         objectors: [],
         votes: {},
-        stuckTimeouts: 0,
+        feedback: "",
         starterIndex: state.starterIndex + 1,
         timeLeft: timer,
       };
@@ -293,6 +334,7 @@ function confirmPending(state: ChainGameState): ChainGameState {
   const { word, playerId } = state.pending;
   return {
     ...state,
+    feedback: `「${word}」確認有效，接詞者 +${LINK_POINTS} 分`,
     headWord: word,
     requiredChar: word[word.length - 1],
     pending: null,
@@ -315,7 +357,9 @@ function resolveVotes(state: ChainGameState): ChainGameState {
     return {
       ...state,
       phase: "chaining",
-      timeLeft: REJECT_RESTART_SECONDS,
+      timeLeft: state.roundTimeLeft ?? state.timeLeft,
+      chain: state.chain.filter((word) => word !== state.pending!.word),
+      feedback: `「${state.pending.word}」無效：接詞者扣 ${REJECT_PENALTY} 分（最低 0），異議者各 +${OBJECT_POINTS} 分`,
       pending: null,
       objectionWindow: 0,
       objectors: [],
@@ -329,9 +373,15 @@ function resolveVotes(state: ChainGameState): ChainGameState {
   return {
     ...confirmed,
     phase: "chaining",
-    timeLeft: confirmed.roundTimeLeft ?? REJECT_RESTART_SECONDS,
+    timeLeft: confirmed.roundTimeLeft ?? confirmed.timeLeft,
     objectionWindow: 0,
     objectors: [],
     votes: {},
   };
+}
+
+/** Pending words are the next visible link; both clients and engine use this rule. */
+export function requiredLinkChar(state: ChainGameState): string {
+  const word = state.pending?.word;
+  return word ? word[word.length - 1] : state.requiredChar;
 }

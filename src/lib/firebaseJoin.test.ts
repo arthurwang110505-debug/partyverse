@@ -1,69 +1,80 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { joinRoomOnFirebase } from "@/lib/firebaseJoin";
 
-/**
- * A fake Firebase RTDB that reproduces the transaction semantics the real SDK
- * documents (and that caused the "找不到這個房間" bug):
- *
- * 1. The transaction update function FIRST runs against the local cache —
- *    `null` if this client never read the node before.
- * 2. Returning `undefined` aborts the transaction LOCALLY: it resolves with
- *    `{ committed: false }` and the server is NEVER contacted.
- * 3. Returning a value sends an optimistic write tagged with the value the
- *    client assumed; if the server value differs, the update function re-runs
- *    with the real server value and the write is retried.
- * 4. `get()` reads the server AND populates the local cache.
+/** Model the SDK's cache lifetime, not just its returned snapshots.
+ * get() removes its temporary registration; only active listeners pin a cache.
+ * See @firebase/database's repoGetValue / syncTreeRemoveEventRegistration.
  */
-const state = vi.hoisted(() => {
-  const server = new Map<string, unknown>();
-  const cache = new Map<string, unknown>();
-  const calls: string[] = [];
-  return { server, cache, calls };
-});
+const state = vi.hoisted(() => ({
+  server: new Map<string, any>(),
+  cache: new Map<string, any>(),
+  listeners: new Map<string, number>(),
+  calls: [] as string[],
+  readError: null as Error | null,
+  writeError: null as Error | null,
+  stallRead: false,
+  stallWrite: false,
+  beforeWrite: null as (() => void) | null,
+  delayedUpdate: null as ((current: unknown) => unknown) | null,
+}));
 
 vi.mock("firebase/database", () => {
-  const snapshotOf = (value: unknown) => ({
-    exists: () => value != null,
-    val: () => value,
-  });
-  const json = (v: unknown) => JSON.stringify(v);
-
+  const clone = (value: unknown) => (value == null ? null : JSON.parse(JSON.stringify(value)));
+  const snapshotOf = (value: unknown) => ({ exists: () => value != null, val: () => clone(value) });
   return {
     ref: (_db: unknown, path: string) => ({ path }),
-
     get: async (r: { path: string }) => {
       state.calls.push("get");
-      const value = state.server.get(r.path) ?? null;
-      state.cache.set(r.path, value);
+      const value = clone(state.server.get(r.path));
+      if (state.listeners.get(r.path)) state.cache.set(r.path, value);
       return snapshotOf(value);
     },
-
-    runTransaction: async (r: { path: string }, updateFunction: (current: unknown) => unknown) => {
+    onValue: (r: { path: string }, callback: (s: unknown) => void, onError: (e: Error) => void) => {
+      state.calls.push("listen");
+      state.listeners.set(r.path, (state.listeners.get(r.path) ?? 0) + 1);
+      let stopped = false;
+      queueMicrotask(() => {
+        if (stopped || state.stallRead) return;
+        if (state.readError) {
+          onError(state.readError);
+          return;
+        }
+        const value = clone(state.server.get(r.path));
+        state.cache.set(r.path, value);
+        callback(snapshotOf(value));
+      });
+      return () => {
+        stopped = true;
+        state.calls.push("unsubscribe");
+        const count = (state.listeners.get(r.path) ?? 1) - 1;
+        state.listeners.set(r.path, count);
+        if (!count) state.cache.delete(r.path);
+      };
+    },
+    runTransaction: async (
+      r: { path: string },
+      update: (current: unknown) => unknown,
+      options?: { applyLocally?: boolean },
+    ) => {
       state.calls.push("transaction");
-      const path = r.path;
-
-      // First run: against the local cache only (null when never read).
-      let assumed = state.cache.has(path) ? state.cache.get(path) : null;
-      let next = updateFunction(assumed);
-      if (next === undefined) {
-        // Aborted locally — the server is never consulted.
-        return { committed: false, snapshot: snapshotOf(null) };
+      if (options) expect(options.applyLocally).toBe(false);
+      if (state.writeError) throw state.writeError;
+      if (state.stallWrite) {
+        state.delayedUpdate = update;
+        return new Promise(() => {});
       }
-
-      // Server round trip with conflict re-runs.
-      let serverValue = state.server.get(path) ?? null;
-      for (let attempt = 0; attempt < 5 && json(serverValue) !== json(assumed); attempt++) {
-        assumed = serverValue;
-        next = updateFunction(assumed);
-        if (next === undefined) return { committed: false, snapshot: snapshotOf(null) };
-        serverValue = state.server.get(path) ?? null;
+      state.beforeWrite?.();
+      let assumed = clone(state.cache.get(r.path));
+      let next = update(assumed);
+      if (next === undefined) return { committed: false, snapshot: snapshotOf(assumed) };
+      // A conflict retries against the server, not the original read snapshot.
+      if (JSON.stringify(assumed) !== JSON.stringify(state.server.get(r.path) ?? null)) {
+        assumed = clone(state.server.get(r.path));
+        next = update(assumed);
       }
-      if (json(serverValue) !== json(assumed) && next === undefined) {
-        return { committed: false, snapshot: snapshotOf(null) };
-      }
-
-      state.server.set(path, next);
-      state.cache.set(path, next);
+      if (next === undefined) return { committed: false, snapshot: snapshotOf(assumed) };
+      state.server.set(r.path, clone(next));
+      state.cache.set(r.path, clone(next));
       return { committed: true, snapshot: snapshotOf(next) };
     },
   };
@@ -78,135 +89,159 @@ const HOST = {
   isReady: true,
   score: 0,
 };
-
-function seedServerRoom(code: string, players: Record<string, object> = { "host-uid": HOST }) {
+function seedServerRoom(code = "ABCDE", players: Record<string, object> = { "host-uid": HOST }) {
   state.server.set(`rooms/${code}`, {
     id: code,
     gameId: "whoisundercoveragent",
     hostPlayerId: "host-uid",
     status: "LOBBY",
-    createdAt: Date.now(),
+    createdAt: 100000,
     players,
     gameState: {},
   });
 }
+const join = (code = "ABCDE", uid = "joiner-uid") => joinRoomOnFirebase({} as never, code, uid, "小明");
+const players = () => state.server.get("rooms/ABCDE").players;
 
 beforeEach(() => {
   state.server.clear();
   state.cache.clear();
+  state.listeners.clear();
   state.calls.length = 0;
+  state.readError = null;
+  state.writeError = null;
+  state.stallRead = false;
+  state.stallWrite = false;
+  state.beforeWrite = null;
+  state.delayedUpdate = null;
+});
+afterEach(() => {
+  expect([...state.listeners.values()].every((count) => count === 0)).toBe(true);
+  vi.useRealTimers();
 });
 
-describe("joinRoomOnFirebase", () => {
-  it("joins an existing room from a cold cache (the regression: fresh joiner device)", async () => {
-    seedServerRoom("ABCDE");
-
-    const result = await joinRoomOnFirebase({} as never, "ABCDE", "joiner-uid", "小明");
-
-    expect(result).toEqual({ outcome: "joined" });
-
-    const room = state.server.get("rooms/ABCDE") as {
-      players: Record<string, { nickname: string; isHost: boolean; isConnected: boolean }>;
-    };
-    expect(room.players["joiner-uid"].nickname).toBe("小明");
-    expect(room.players["joiner-uid"].isHost).toBe(false);
-    expect(room.players["joiner-uid"].isConnected).toBe(true);
-    // Host is untouched.
-    expect(room.players["host-uid"].nickname).toBe("房主");
+describe("Firebase joins from independent devices", () => {
+  it("joins from a cold cache, keeping the listener alive until the write settles", async () => {
+    seedServerRoom();
+    expect(await join()).toEqual({ outcome: "joined" });
+    expect(players()["joiner-uid"]).toMatchObject({
+      nickname: "小明",
+      isHost: false,
+      role: "player",
+      isConnected: true,
+    });
+    expect(players()["host-uid"]).toEqual(HOST);
+    expect(state.calls).toEqual(["listen", "transaction", "unsubscribe"]);
+    expect(state.cache.size).toBe(0);
   });
 
-  it("reads the room from the server BEFORE running the transaction", async () => {
-    seedServerRoom("ABCDE");
-
-    await joinRoomOnFirebase({} as never, "ABCDE", "joiner-uid", "小明");
-
-    expect(state.calls).toEqual(["get", "transaction"]);
+  it("documents why the old get-then-transaction fix fails with actual cache lifetimes", async () => {
+    seedServerRoom();
+    const { get, ref, runTransaction } = await import("firebase/database");
+    const roomRef = ref({} as never, "rooms/ABCDE");
+    expect((await get(roomRef)).exists()).toBe(true);
+    const result = await runTransaction(roomRef, (current) => (current === null ? undefined : current));
+    expect(result.committed).toBe(false);
+    expect(state.server.has("rooms/ABCDE")).toBe(true);
   });
 
-  it("reports not-found for a code that does not exist on the server", async () => {
-    const result = await joinRoomOnFirebase({} as never, "ZZZZZ", "joiner-uid", "小明");
-
-    expect(result).toEqual({ outcome: "not-found" });
-    // Existence was confirmed against the server, so no speculative write was attempted.
-    expect(state.calls).toEqual(["get"]);
-    expect(state.server.has("rooms/ZZZZZ")).toBe(false);
+  it("normalizes pasted room codes", async () => {
+    seedServerRoom();
+    expect(await join(" abcde \n")).toEqual({ outcome: "joined" });
   });
 
-  it("reports full when the room is at capacity", async () => {
-    const players: Record<string, object> = { "host-uid": HOST };
-    for (let i = 0; i < 11; i++) players[`p${i}`] = { ...HOST, id: `p${i}`, isHost: false };
-    seedServerRoom("ABCDE", players);
-
-    const result = await joinRoomOnFirebase({} as never, "ABCDE", "joiner-uid", "小明");
-
-    expect(result).toEqual({ outcome: "full" });
-    const room = state.server.get("rooms/ABCDE") as { players: Record<string, unknown> };
-    expect(room.players["joiner-uid"]).toBeUndefined();
+  it("does not write a nonexistent room", async () => {
+    expect(await join("ZZZZZ")).toEqual({ outcome: "not-found" });
+    expect(state.calls).toEqual(["listen", "unsubscribe"]);
+    expect(state.server.size).toBe(0);
   });
 
-  it("does not count a display-only host toward the player limit", async () => {
-    const players: Record<string, object> = { "host-uid": { ...HOST, role: "display" } };
-    for (let i = 0; i < 11; i++) players[`p${i}`] = { ...HOST, id: `p${i}`, isHost: false };
-    seedServerRoom("ABCDE", players);
-    expect(await joinRoomOnFirebase({} as never, "ABCDE", "last-seat", "小明")).toEqual({ outcome: "joined" });
-    expect(await joinRoomOnFirebase({} as never, "ABCDE", "one-too-many", "小華")).toEqual({ outcome: "full" });
+  it("reports a full room without throwing from the transaction callback", async () => {
+    seedServerRoom(
+      "ABCDE",
+      Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`p${i}`, { ...HOST, id: `p${i}`, isHost: false }])),
+    );
+    expect(await join()).toEqual({ outcome: "full" });
+    expect(players()["joiner-uid"]).toBeUndefined();
   });
 
-  it("rejoining keeps the player's previous avatar and score", async () => {
+  it("does not count a display toward capacity", async () => {
+    seedServerRoom("ABCDE", {
+      "host-uid": { ...HOST, role: "display" },
+      ...Object.fromEntries(Array.from({ length: 11 }, (_, i) => [`p${i}`, { ...HOST, id: `p${i}`, isHost: false }])),
+    });
+    expect(await join()).toEqual({ outcome: "joined" });
+    expect(await join("ABCDE", "extra")).toEqual({ outcome: "full" });
+  });
+
+  it("rejoining preserves the player's avatar, score and readiness", async () => {
     seedServerRoom("ABCDE", {
       "host-uid": HOST,
-      "joiner-uid": { ...HOST, id: "joiner-uid", isHost: false, nickname: "舊名字", avatar: "🐼", score: 7 },
+      "joiner-uid": { ...HOST, id: "joiner-uid", isHost: false, avatar: "🐼", score: 7 },
     });
+    expect(await join()).toEqual({ outcome: "joined" });
+    expect(players()["joiner-uid"]).toMatchObject({
+      nickname: "小明",
+      avatar: "🐼",
+      score: 7,
+      isReady: true,
+      isHost: false,
+    });
+  });
 
-    const result = await joinRoomOnFirebase({} as never, "ABCDE", "joiner-uid", "小明");
-
-    expect(result).toEqual({ outcome: "joined" });
-    const room = state.server.get("rooms/ABCDE") as {
-      players: Record<string, { nickname: string; avatar: string; score: number }>;
+  it("preserves a concurrent join when the transaction retries", async () => {
+    seedServerRoom();
+    state.beforeWrite = () => {
+      players().racer = { ...HOST, id: "racer", isHost: false };
     };
-    expect(room.players["joiner-uid"].nickname).toBe("小明");
-    expect(room.players["joiner-uid"].avatar).toBe("🐼");
-    expect(room.players["joiner-uid"].score).toBe(7);
+    expect(await join()).toEqual({ outcome: "joined" });
+    expect(players().racer).toBeDefined();
+    expect(players()["joiner-uid"]).toBeDefined();
   });
 
-  it("survives a concurrent join between the read and the transaction (conflict re-run)", async () => {
-    seedServerRoom("ABCDE");
-
-    // Warm the cache, then simulate another player joining before our write lands.
-    const resultPromise = joinRoomOnFirebase({} as never, "ABCDE", "joiner-uid", "小明");
-    // The fake processes synchronously up to the first await; give it a tick,
-    // then mutate the server so the transaction hits a conflict and re-runs.
-    await Promise.resolve();
-    await Promise.resolve();
-    const room = state.server.get("rooms/ABCDE") as { players: Record<string, unknown> };
-    room.players["racer-uid"] = { ...HOST, id: "racer-uid", isHost: false };
-
-    const result = await resultPromise;
-    expect(result).toEqual({ outcome: "joined" });
-
-    const after = state.server.get("rooms/ABCDE") as { players: Record<string, unknown> };
-    expect(after.players["joiner-uid"]).toBeDefined();
-    expect(after.players["racer-uid"]).toBeDefined();
+  it("does not resurrect a room deleted between its first snapshot and the write", async () => {
+    seedServerRoom();
+    state.beforeWrite = () => state.server.delete("rooms/ABCDE");
+    expect(await join()).toEqual({ outcome: "not-found" });
+    expect(state.server.has("rooms/ABCDE")).toBe(false);
   });
 
-  /**
-   * Documents the original bug: a join transaction that aborts on
-   * `current === null` fails on every cold-cache client without ever asking
-   * the server — this is exactly what joinRoom used to do, and why joiners
-   * always saw 「找不到這個房間」. The get()-first strategy above avoids it.
-   */
-  it("old abort-on-null pattern silently fails from a cold cache (regression documentation)", async () => {
-    seedServerRoom("ABCDE");
+  it("rechecks capacity on a conflict retry", async () => {
+    seedServerRoom();
+    state.beforeWrite = () => {
+      for (let i = 0; i < 11; i++) players()[`p${i}`] = { ...HOST, id: `p${i}`, isHost: false };
+    };
+    expect(await join()).toEqual({ outcome: "full" });
+    expect(players()["joiner-uid"]).toBeUndefined();
+  });
 
-    // Simulate the OLD joinRoom transaction shape: runTransaction WITHOUT a prior get().
-    const { runTransaction, ref } = await import("firebase/database");
-    const result = await runTransaction(ref({} as never, "rooms/ABCDE"), (current: unknown) => {
-      if (current === null) return undefined; // "no such room"
-      return { ...(current as object), players: {} };
-    });
+  it.each(["read", "write"])("reports %s permission errors, not a missing room", async (stage) => {
+    seedServerRoom();
+    const error = Object.assign(new Error("PERMISSION_DENIED"), { code: "PERMISSION_DENIED" });
+    if (stage === "read") state.readError = error;
+    else state.writeError = error;
+    const result = await join();
+    expect(result.outcome).toBe("error");
+    if (result.outcome === "error") expect(result.error.message).toContain("安全規則");
+  });
 
-    expect(result.committed).toBe(false);
-    // The room is still on the server, untouched — the transaction never asked.
-    expect(state.server.has("rooms/ABCDE")).toBe(true);
+  it("reports network failures separately", async () => {
+    state.readError = Object.assign(new Error("offline"), { code: "database/unavailable" });
+    const result = await join();
+    expect(result.outcome).toBe("error");
+    if (result.outcome === "error") expect(result.error.message).toContain("伺服器");
+  });
+
+  it.each(["read", "write"])("cleans up a stalled %s and reports timeout", async (stage) => {
+    vi.useFakeTimers();
+    seedServerRoom();
+    if (stage === "read") state.stallRead = true;
+    else state.stallWrite = true;
+    const pending = join();
+    await vi.advanceTimersByTimeAsync(7100);
+    const result = await pending;
+    expect(result.outcome).toBe("error");
+    if (result.outcome === "error") expect(result.error.message).toContain("逾時");
+    if (state.delayedUpdate) expect(state.delayedUpdate(state.server.get("rooms/ABCDE"))).toBeUndefined();
   });
 });

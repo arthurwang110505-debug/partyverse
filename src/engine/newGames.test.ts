@@ -12,10 +12,9 @@ import { generateSpawns, type MolesGameState } from "./whackMoles";
 function playing<T>(id: string, count = 4): { room: Room<T>; state: T } {
   const engine = getGameEngine(id)!;
   const room = testRoom(id, count) as unknown as Room<T>;
-  // The five new games start in the shared "rules" tour; skip it through the
-  // wrapper's own path so these tests exercise the production engine.
+  // Explicit host start: mechanics tests exercise the registered engine after onboarding.
   room.gameState = engine.createGame(room) as T;
-  room.gameState = engine.handlePlayerAction(room, "p1", { type: "skipRules" }) as T;
+  room.gameState = engine.handlePlayerAction(room, "tv", { type: "skipRules" }) as T;
   return { room, state: room.gameState };
 }
 
@@ -28,49 +27,6 @@ function tick<T>(id: string, room: Room<T>, times: number): T {
   }
   return state;
 }
-
-describe("rules tour wrapper", () => {
-  function rulesRoom<T>(id: string, count = 4) {
-    const engine = getGameEngine(id)!;
-    const room = testRoom(id, count) as unknown as Room<T>;
-    room.gameState = engine.createGame(room) as T;
-    return { room, engine };
-  }
-
-  it("holds the game on the tour, then restores the original phase and clock", () => {
-    const { room, engine } = rulesRoom<ChairsGameState>("musicalchairs");
-    expect(room.gameState.phase).toBe("rules");
-    expect(room.gameState.timeLeft).toBe(15);
-    expect((room.gameState as unknown as { phaseAfterRules: string }).phaseAfterRules).toBe("briefing");
-
-    let next = engine.updateGameState(room) as ChairsGameState;
-    room.gameState = next;
-    expect(next.phase).toBe("rules");
-    expect(next.timeLeft).toBe(14);
-    for (let i = 0; i < 14; i++) {
-      next = engine.updateGameState(room) as ChairsGameState;
-      room.gameState = next;
-    }
-    expect(next.phase).toBe("briefing");
-    expect(next.timeLeft).toBe(3); // the briefing's own 3-second clock, restored
-  });
-
-  it("any participant can skip early; the display seat cannot", () => {
-    const { room, engine } = rulesRoom<ChairsGameState>("musicalchairs");
-    // tv is a display seat, not a participant: its "skip" is ignored.
-    let next = engine.handlePlayerAction(room, "tv", { type: "skipRules" }) as ChairsGameState;
-    room.gameState = next;
-    expect(next.phase).toBe("rules");
-    // Gameplay actions are frozen during the tour.
-    next = engine.handlePlayerAction(room, "p1", { type: "sit" }) as ChairsGameState;
-    room.gameState = next;
-    expect(next.phase).toBe("rules");
-    // A real participant can start the game.
-    next = engine.handlePlayerAction(room, "p2", { type: "skipRules" }) as ChairsGameState;
-    room.gameState = next;
-    expect(next.phase).toBe("briefing");
-  });
-});
 
 describe("rng", () => {
   it("mulberry32 is deterministic and within [0,1)", () => {
@@ -101,7 +57,7 @@ describe("rng", () => {
 });
 
 describe("pokerlite: evaluator", () => {
-  it("parses ranks and suits (cards are \"10♥\"-style rank+suit strings)", () => {
+  it('parses ranks and suits (cards are "10♥"-style rank+suit strings)', () => {
     expect(cardValue("A♠")).toBe(14);
     expect(cardValue("K♦")).toBe(13);
     expect(cardValue("10♥")).toBe(10);

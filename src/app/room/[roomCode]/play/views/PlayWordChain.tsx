@@ -2,15 +2,13 @@
 
 import { useState } from "react";
 import { useRoom } from "@/providers/RoomContext";
-import { normalizeWord, OBJECTION_SECONDS } from "@/engine/wordChain";
+import { normalizeWord, isValidLink, requiredLinkChar } from "@/engine/wordChain";
 import type { ChainGameState } from "@/engine/wordChain";
 import { useToast } from "@/providers/ToastProvider";
 import { PlayShell } from "@/components/game/PlayShell";
 import { RoundTimer } from "@/components/game/RoundTimer";
 import { vibrate } from "@/lib/sound";
 import { cn } from "@/lib/utils";
-
-const CJK_WORD = /^[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]{2,4}$/;
 
 export default function PlayWordChain() {
   const { room, player, submitAction } = useRoom();
@@ -20,7 +18,7 @@ export default function PlayWordChain() {
   const [pendingAction, setPendingAction] = useState<"submit" | "object" | "vote" | null>(null);
 
   // Fresh round, fresh input.
-  const roundKey = state ? `${state.phase}-${state.currentRound}-${state.headWord}` : "idle";
+  const roundKey = state ? `${state.phase}-${state.currentRound}-${state.pending?.word ?? state.headWord}` : "idle";
   const [lastKey, setLastKey] = useState(roundKey);
   if (lastKey !== roundKey) {
     setLastKey(roundKey);
@@ -29,7 +27,9 @@ export default function PlayWordChain() {
 
   if (!state || !player) return null;
   const myPending = state.pending?.playerId === player.id;
-  const localValid = CJK_WORD.test(word.trim()) && word[0] === state.requiredChar;
+  const requiredChar = requiredLinkChar(state);
+  const localValid = isValidLink(normalizeWord(word), requiredChar, state.chain);
+  const voted = state.votes[player.id] !== undefined;
 
   const run = async (kind: "submit" | "object" | "vote", action: Record<string, unknown>) => {
     if (pendingAction) return;
@@ -50,12 +50,13 @@ export default function PlayWordChain() {
       <div className="flex flex-1 flex-col items-center px-4 py-5 text-center">
         {state.phase === "chaining" && (
           <>
-            <p className="text-5xl font-black tracking-widest text-white" aria-label={`接龍詞：${state.headWord}`}>
-              {state.headWord}
+            <p
+              className="text-5xl font-black tracking-widest text-white"
+              aria-label={`接龍詞：${state.pending?.word ?? state.headWord}`}
+            >
+              {state.pending?.word ?? state.headWord}
             </p>
-            <p className="mt-2 text-sm font-bold text-emerald-300">
-              用「{state.requiredChar}」開頭接 2-4 個字的詞
-            </p>
+            <p className="mt-2 text-sm font-bold text-emerald-300">用「{requiredChar}」開頭接 2-4 個字的詞</p>
 
             {state.pending && !myPending && state.objectionWindow > 0 && (
               <div className="mt-4 w-full max-w-xs rounded-2xl border border-amber-400/40 bg-amber-500/10 p-3">
@@ -86,7 +87,7 @@ export default function PlayWordChain() {
                 enterKeyHint="send"
                 value={word}
                 onChange={(e) => setWord(e.target.value)}
-                placeholder={`${state.requiredChar}__`}
+                placeholder={`${requiredChar}__`}
                 aria-label="輸入接龍詞"
                 className="w-full rounded-2xl border border-white/15 bg-white/10 px-4 py-3.5 text-center text-2xl font-black tracking-widest text-white placeholder:text-white/30 focus:border-emerald-300 focus:outline-none"
               />
@@ -104,7 +105,7 @@ export default function PlayWordChain() {
             </div>
 
             <div className="mt-4">
-              <RoundTimer timeLeft={state.timeLeft} total={state.timeLeft > OBJECTION_SECONDS ? 20 : 10} endLabel="換詞" compact />
+              <RoundTimer timeLeft={state.timeLeft} total={room?.settings.timer ?? 20} endLabel="回合結束" compact />
             </div>
           </>
         )}
@@ -113,12 +114,14 @@ export default function PlayWordChain() {
           <>
             <p className="text-sm font-bold text-amber-300">全場投票中</p>
             <p className="mt-2 text-4xl font-black tracking-widest text-white">{state.pending.word}</p>
-            <p className="mt-2 text-sm text-white/60">這個詞有效嗎？{myPending ? "（你自己不能投票）" : "投出你的判斷！"}</p>
+            <p className="mt-2 text-sm text-white/60">
+              這個詞有效嗎？{myPending ? "（你自己不能投票）" : "投出你的判斷！"}
+            </p>
             <div className="mt-6 grid w-full max-w-xs grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => void run("vote", { type: "voteWord", valid: true })}
-                disabled={myPending || pendingAction === "vote"}
+                disabled={myPending || voted || pendingAction === "vote"}
                 className="rounded-2xl bg-emerald-400 px-4 py-4 text-lg font-black text-black transition-transform active:scale-95 disabled:opacity-40"
               >
                 有效 ✓
@@ -126,12 +129,17 @@ export default function PlayWordChain() {
               <button
                 type="button"
                 onClick={() => void run("vote", { type: "voteWord", valid: false })}
-                disabled={myPending || pendingAction === "vote"}
+                disabled={myPending || voted || pendingAction === "vote"}
                 className="rounded-2xl bg-red-400 px-4 py-4 text-lg font-black text-black transition-transform active:scale-95 disabled:opacity-40"
               >
                 無效 ✗
               </button>
             </div>
+            {voted && (
+              <p role="status" className="mt-3 text-emerald-300">
+                已投票，等待揭曉
+              </p>
+            )}
             <div className="mt-5">
               <RoundTimer timeLeft={state.timeLeft} total={4} endLabel="截止" compact />
             </div>
@@ -140,15 +148,27 @@ export default function PlayWordChain() {
 
         {state.phase === "round_reveal" && (
           <>
-            <p className="mb-3 text-6xl" aria-hidden="true">🀄</p>
+            <p className="mb-3 text-6xl" aria-hidden="true">
+              🀄
+            </p>
             <h1 className="text-2xl font-black text-white">本回合結束！</h1>
-            <p className="mt-2 text-sm text-white/60">馬上換新詞開始下一回合…</p>
+            <p className="mt-2 text-sm text-white/60">
+              {state.currentRound >= state.totalRounds ? "準備揭曉最終排名…" : "馬上換新詞開始下一回合…"}
+            </p>
           </>
+        )}
+
+        {state.feedback && (
+          <p role="status" className="mt-4 rounded-xl bg-white/5 p-3 text-sm text-emerald-200">
+            {state.feedback}
+          </p>
         )}
 
         {state.phase === "result" && (
           <>
-            <p className="mb-3 text-6xl" aria-hidden="true">{state.winnerId === player.id ? "👑" : "🀄"}</p>
+            <p className="mb-3 text-6xl" aria-hidden="true">
+              {state.winnerId === player.id ? "👑" : "🀄"}
+            </p>
             <h1 className="text-2xl font-black text-white">
               {state.winnerId === player.id ? "你就是接龍高手！" : "比賽結束！"}
             </h1>

@@ -13,9 +13,11 @@ export interface ActionPhase {
   phase: unknown;
   round: unknown;
   startedAt?: number;
+  contextKey?: string;
 }
 
 function timerKey(state: State): "timeLeft" | "bombTimeLeft" {
+  if (state.phase === "rules") return "timeLeft";
   return typeof state.bombTimeLeft === "number" ? "bombTimeLeft" : "timeLeft";
 }
 function seconds(state: State): number {
@@ -23,7 +25,14 @@ function seconds(state: State): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 function samePhase(a: State, b: State): boolean {
-  return a.phase === b.phase && a.currentRound === b.currentRound;
+  return (
+    a.phase === b.phase &&
+    a.currentRound === b.currentRound &&
+    a.handNumber === b.handNumber &&
+    a.street === b.street &&
+    a.toAct === b.toAct &&
+    a.actionSeq === b.actionSeq
+  );
 }
 function stamp(previous: State | null, next: State, now: number, action = false): State {
   let deadline = now + seconds(next) * 1000;
@@ -117,14 +126,22 @@ export function applyRoomAction(
     room.status !== "PLAYING" ||
     room.gameId !== expected.gameId ||
     room.startedAt !== expected.startedAt ||
-    !connectedParticipantIds(room).includes(playerId)
+    (!connectedParticipantIds(room).includes(playerId) &&
+      !(
+        room.gameState.phase === "rules" &&
+        room.hostPlayerId === playerId &&
+        room.players[playerId]?.isConnected !== false &&
+        room.players[playerId] &&
+        (action as { type?: string } | null)?.type === "skipRules"
+      ))
   )
     return room;
   const current = advanceRoomGame(room, now);
   if (
     current.status !== "PLAYING" ||
     current.gameState.phase !== expected.phase ||
-    current.gameState.currentRound !== expected.round
+    current.gameState.currentRound !== expected.round ||
+    (expected.contextKey !== undefined && actionContextKey(current.gameState) !== expected.contextKey)
   )
     return current;
   const engine = getGameEngine(current.gameId)!;
@@ -171,4 +188,17 @@ export function claimRoomHost(room: Room, userId: string, expectedHostId: string
     lastTickAt: now,
     players: Object.fromEntries(Object.entries(room.players).map(([id, p]) => [id, { ...p, isHost: id === userId }])),
   };
+}
+
+/** Bind taps to a poker decision or word challenge, even within the same phase. */
+export function actionContextKey(state: State): string {
+  return JSON.stringify([
+    state.phase,
+    state.currentRound,
+    state.handNumber,
+    state.street,
+    state.toAct,
+    state.actionSeq,
+    state.wordSeq,
+  ]);
 }

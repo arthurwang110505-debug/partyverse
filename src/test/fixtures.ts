@@ -1,3 +1,4 @@
+import { applyRoomAction, startRoomGame } from "@/lib/gameSession";
 import type { Room } from "@/types";
 import { normalizeSettings } from "@/constants/gameSettings";
 
@@ -60,4 +61,21 @@ export function databaseRoundTrip<T>(value: T): T {
     return data;
   };
   return strip(value) as T;
+}
+
+/** Gameplay tests explicitly leave onboarding via the real host action. */
+export function startPlayingRoom(base: Room, now = Date.now()): Room {
+  const room = startRoomGame(base, now);
+  return applyRoomAction(
+    room,
+    room.hostPlayerId,
+    { type: "skipRules" },
+    {
+      gameId: room.gameId,
+      phase: room.gameState.phase,
+      round: room.gameState.currentRound,
+      startedAt: room.startedAt,
+    },
+    now,
+  );
 }

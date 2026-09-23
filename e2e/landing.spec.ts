@@ -37,14 +37,8 @@ test("touch scrolling and menu taps remain responsive under CPU throttling", asy
   await session.send("Emulation.setCPUThrottlingRate", { rate: 4 });
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  const effects = await page.evaluate(() => ({
-    running: document.getAnimations().filter((animation) => animation.playState === "running").length,
-    blurred: [...document.querySelectorAll(".landing-page *")].filter((element) => {
-      const css = getComputedStyle(element);
-      return css.display !== "none" && (css.filter.includes("blur(") || css.backdropFilter.includes("blur("));
-    }).length,
-  }));
-  expect(effects).toEqual({ running: 0, blurred: 0 });
+  // Mobile animations intentionally stay enabled (2026-09-22 product decision).
+  // Assert the actual interaction below, not the removed animation kill-switch.
   // Wait for native momentum scrolling to finish; otherwise the first tap
   // merely stops the browser's fling instead of activating a control.
   const scrollEnded = page.evaluate(

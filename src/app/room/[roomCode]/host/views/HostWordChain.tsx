@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRoom } from "@/providers/RoomContext";
 import { engineRoom } from "@/engine/participants";
-import { OBJECTION_SECONDS } from "@/engine/wordChain";
+import { requiredLinkChar } from "@/engine/wordChain";
 import type { ChainGameState } from "@/engine/wordChain";
 import { HostGameControls } from "@/components/game/HostGameControls";
 import { HostShell } from "@/components/game/HostShell";
@@ -51,10 +51,13 @@ export default function HostWordChain() {
           {state.phase === "chaining" && (
             <>
               <h1 className="text-2xl font-bold text-white/70 md:text-3xl">
-                用「<span className="text-4xl font-black text-emerald-300">{state.requiredChar}</span>」開頭接新詞
+                用「<span className="text-4xl font-black text-emerald-300">{requiredLinkChar(state)}</span>」開頭接新詞
               </h1>
-              <p className="mt-4 text-6xl font-black tracking-widest text-white md:text-8xl" aria-label={`接龍詞：${state.headWord}`}>
-                {state.headWord}
+              <p
+                className="mt-4 text-6xl font-black tracking-widest text-white md:text-8xl"
+                aria-label={`接龍詞：${state.pending?.word ?? state.headWord}`}
+              >
+                {state.pending?.word ?? state.headWord}
               </p>
             </>
           )}
@@ -95,10 +98,13 @@ export default function HostWordChain() {
         {state.phase === "chaining" && state.pending && (
           <div className="mx-auto mb-8 max-w-lg rounded-3xl border border-amber-400/40 bg-amber-500/10 p-5">
             <p className="text-sm font-bold text-amber-300">
-              待確認：「{state.pending.word}」（{players[state.pending.playerId]?.nickname}）· 異議倒數 {state.objectionWindow} 秒
+              待確認：「{state.pending.word}」（{players[state.pending.playerId]?.nickname}）· 異議倒數{" "}
+              {state.objectionWindow} 秒
             </p>
             {state.objectors.length > 0 && (
-              <p className="mt-2 text-xs text-amber-200/80">已按異議：{state.objectors.map((id) => players[id]?.nickname).join("、")}</p>
+              <p className="mt-2 text-xs text-amber-200/80">
+                已按異議：{state.objectors.map((id) => players[id]?.nickname).join("、")}
+              </p>
             )}
           </div>
         )}
@@ -107,8 +113,8 @@ export default function HostWordChain() {
           <div className="mx-auto mb-6 max-w-xs">
             <RoundTimer
               timeLeft={state.timeLeft}
-              total={state.phase === "voting" ? 4 : state.timeLeft > OBJECTION_SECONDS ? 20 : 10}
-              endLabel={state.phase === "voting" ? "投票截止" : "換詞"}
+              total={state.phase === "voting" ? 4 : state.phase === "round_reveal" ? 3 : (room?.settings.timer ?? 20)}
+              endLabel={state.phase === "voting" ? "投票截止" : "回合結束"}
               compact
             />
           </div>
@@ -122,6 +128,11 @@ export default function HostWordChain() {
           ))}
         </div>
 
+        {state.feedback && (
+          <p role="status" className="mb-4 text-lg text-emerald-200">
+            {state.feedback}
+          </p>
+        )}
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {ids.map((id) => (
             <PlayerChip
@@ -130,7 +141,7 @@ export default function HostWordChain() {
               nickname={players[id].nickname}
               score={state.currentScores[id] ?? 0}
               highlight={state.pending?.playerId === id}
-              status={state.pending?.playerId === id ? "新詞 +10" : undefined}
+              status={state.pending?.playerId === id ? "新詞待確認" : undefined}
             />
           ))}
         </ul>

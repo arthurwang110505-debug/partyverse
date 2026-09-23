@@ -8,6 +8,7 @@ import { MuteToggle } from "@/components/game/MuteToggle";
 import { FloatingReactions } from "@/components/game/FloatingReactions";
 import { HostGameControls } from "./HostGameControls";
 import { HostRecoveryNotice } from "./HostRecoveryNotice";
+import { GameplayFeedback } from "./GameplayFeedback";
 import { cn } from "@/lib/utils";
 
 interface PlayShellProps {
@@ -77,6 +78,7 @@ export function PlayShell({ children, className, round }: PlayShellProps) {
 
       <div className={cn("mx-auto w-full max-w-md flex-1 px-4 pb-28 relative z-10", className)}>
         <HostRecoveryNotice />
+        <GameplayFeedback phone />
         {children}
         {isHost && player?.role !== "display" && <HostGameControls />}
       </div>

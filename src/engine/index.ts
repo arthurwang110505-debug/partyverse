@@ -16,15 +16,12 @@ import { MOLES_GAME_ID, WhackMolesEngine } from "./whackMoles";
 import { SIMON_GAME_ID, SimonSaysEngine } from "./simonSays";
 import { CHAIN_GAME_ID, WordChainEngine } from "./wordChain";
 import { POKER_GAME_ID, PokerLiteEngine } from "./pokerLite";
-import { DEFAULT_RULES_TOUR_SECONDS, withRulesPhase } from "./rulesTour";
+import { RULES_PHASE, withRulesPhase } from "./rulesTour";
 
 /**
  * The registry of all games with playable engines.
  * Normalize database collections at every engine boundary.
  */
-// The five newer modes open with the shared, skippable rules tour
-// (`withRulesPhase`). The original ten keep their previous start behavior;
-// wrap them the same way if the tour should cover them too.
 const engines: Record<string, GameEngine<any>> = {
   [BOMB_GAME_ID]: BombEngine as GameEngine<any>,
   [EVERYBODY_GAME_ID]: EverybodyKnowsEngine as GameEngine<any>,
@@ -36,33 +33,45 @@ const engines: Record<string, GameEngine<any>> = {
   [DRAW_GAME_ID]: DrawAndGuessEngine as GameEngine<any>,
   [BATTLE_GAME_ID]: RealBattleEngine as GameEngine<any>,
   [MYSTERY_GAME_ID]: MysteryRoomEngine as GameEngine<any>,
-  [CHAIRS_GAME_ID]: withRulesPhase(MusicalChairsEngine, DEFAULT_RULES_TOUR_SECONDS) as GameEngine<any>,
-  [MOLES_GAME_ID]: withRulesPhase(WhackMolesEngine, DEFAULT_RULES_TOUR_SECONDS) as GameEngine<any>,
-  [SIMON_GAME_ID]: withRulesPhase(SimonSaysEngine, DEFAULT_RULES_TOUR_SECONDS) as GameEngine<any>,
-  [CHAIN_GAME_ID]: withRulesPhase(WordChainEngine, DEFAULT_RULES_TOUR_SECONDS) as GameEngine<any>,
-  [POKER_GAME_ID]: withRulesPhase(PokerLiteEngine, DEFAULT_RULES_TOUR_SECONDS) as GameEngine<any>,
+  [CHAIRS_GAME_ID]: MusicalChairsEngine as GameEngine<any>,
+  [MOLES_GAME_ID]: WhackMolesEngine as GameEngine<any>,
+  [SIMON_GAME_ID]: SimonSaysEngine as GameEngine<any>,
+  [CHAIN_GAME_ID]: WordChainEngine as GameEngine<any>,
+  [POKER_GAME_ID]: PokerLiteEngine as GameEngine<any>,
 };
 
 function prepare(room: Room<any>): Room<any> {
   return engineRoom({ ...room, gameState: normalizeGameState(room.gameId, room.gameState) });
 }
 const guardedEngines: Record<string, GameEngine<any>> = Object.fromEntries(
-  Object.entries(engines).map(([id, engine]) => [
-    id,
-    {
-      createGame: (room: Room<any>) => engine.createGame(prepare(room)),
-      startGame: (room: Room<any>) => engine.startGame(prepare(room)),
-      handlePlayerAction: (room: Room<any>, playerId: string, action: unknown) => {
-        const current = prepare(room);
-        if (!current.players[playerId] || current.players[playerId].isConnected === false) return current.gameState;
-        return engine.handlePlayerAction(current, playerId, action);
+  Object.entries(engines).map(([id, base]) => {
+    const engine = withRulesPhase(base);
+    return [
+      id,
+      {
+        createGame: (room: Room<any>) => engine.createGame(prepare(room)),
+        startGame: (room: Room<any>) => engine.startGame(prepare(room)),
+        handlePlayerAction: (room: Room<any>, playerId: string, action: unknown) => {
+          const current = prepare(room);
+          const hostStart =
+            current.gameState.phase === RULES_PHASE &&
+            playerId === room.hostPlayerId &&
+            (action as { type?: string } | null)?.type === "skipRules";
+          if (
+            !room.players[playerId] ||
+            room.players[playerId].isConnected === false ||
+            (!current.players[playerId] && !hostStart)
+          )
+            return current.gameState;
+          return engine.handlePlayerAction(current, playerId, action);
+        },
+        updateGameState: (room: Room<any>) => engine.updateGameState(prepare(room)),
+        endRound: (room: Room<any>) => engine.endRound(prepare(room)),
+        endGame: (room: Room<any>) => engine.endGame(prepare(room)),
+        calculateScores: (room: Room<any>) => engine.calculateScores(prepare(room)),
       },
-      updateGameState: (room: Room<any>) => engine.updateGameState(prepare(room)),
-      endRound: (room: Room<any>) => engine.endRound(prepare(room)),
-      endGame: (room: Room<any>) => engine.endGame(prepare(room)),
-      calculateScores: (room: Room<any>) => engine.calculateScores(prepare(room)),
-    },
-  ]),
+    ];
+  }),
 );
 
 export function getGameEngine(gameId: string): GameEngine<any> | null {

@@ -87,8 +87,8 @@ export interface GameDefinition {
   tags: string[];
   difficulty: string;
   /**
-   * Short rules shown in the pre-game rules tour (`engine/rulesTour.ts`).
-   * Games registered without `withRulesPhase` simply never render it.
+   * Optional extended rules for game detail pages.
+   * The shared briefing uses constants/gameGuides.ts.
    */
   rules?: string[];
 }

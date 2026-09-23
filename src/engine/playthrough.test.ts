@@ -46,6 +46,8 @@ function playMatch(
   runner.submit = (playerId, action) => {
     runner.room = applyRoomAction(runner.room, playerId, action, expectedPhase(runner.room), runner.now);
   };
+  for (const id of playerIds(runner.room)) runner.submit(id, { type: "readyRules" });
+  expect(runner.room.gameState.phase).not.toBe("rules");
   const maxSeconds = options.maxSeconds ?? 600;
   for (let i = 0; i < maxSeconds && runner.room.status !== "RESULTS"; i++) {
     drive(runner.room, runner);
@@ -319,16 +321,13 @@ describe("full match playthroughs (all games reach results)", () => {
   });
 
   it("musicalchairs: slowest tapper falls each round, last stand wins", () => {
-    const room = playMatch(
-      "musicalchairs",
-      (r, runner) => {
-        const s = r.gameState as { phase: string; survivors: string[]; sitOrder: Record<string, number> };
-        if (s.phase !== "sit") return;
-        for (const id of playerIds(r)) {
-          if (s.survivors.includes(id) && s.sitOrder[id] === undefined) runner.submit(id, { type: "sit" });
-        }
-      },
-    );
+    const room = playMatch("musicalchairs", (r, runner) => {
+      const s = r.gameState as { phase: string; survivors: string[]; sitOrder: Record<string, number> };
+      if (s.phase !== "sit") return;
+      for (const id of playerIds(r)) {
+        if (s.survivors.includes(id) && s.sitOrder[id] === undefined) runner.submit(id, { type: "sit" });
+      }
+    });
     const s = room.gameState as { lastStandId: string | null; currentScores: Record<string, number> };
     // p1-p4 tap in seat order, so p4, p3, p2 fall in turn and p1 stays.
     expect(s.lastStandId).toBe("p1");
@@ -362,7 +361,8 @@ describe("full match playthroughs (all games reach results)", () => {
         },
         { settings: { rounds: 2 } },
       );
-      const scores = (room.gameState as { currentScores: Record<string, number>; winnerId: string | null }).currentScores;
+      const scores = (room.gameState as { currentScores: Record<string, number>; winnerId: string | null })
+        .currentScores;
       const winner = (room.gameState as { winnerId: string | null }).winnerId;
       expect(Math.max(...Object.values(scores))).toBeGreaterThan(0);
       expect(winner).toBeTruthy();
@@ -412,7 +412,9 @@ describe("full match playthroughs (all games reach results)", () => {
           currentRound: number;
         };
         if (s.phase === "chaining") {
-          const word = s.requiredChar + String.fromCharCode(0x4e00 + ((runner.ticks * 131) % 20000));
+          const head = s.pending?.word;
+          const char = head ? head[head.length - 1] : s.requiredChar;
+          const word = char + String.fromCharCode(0x4e00 + ((runner.ticks * 131) % 20000));
           if (!s.chain.includes(word)) runner.submit("p1", { type: "submitWord", word });
           if (!objected && s.currentRound === 1 && s.pending?.playerId === "p1") {
             objected = true;

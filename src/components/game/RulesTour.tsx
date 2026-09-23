@@ -1,106 +1,111 @@
 "use client";
 
+import { useState } from "react";
 import { GAMES } from "@/constants/games";
-import { vibrate } from "@/lib/sound";
+import { GAME_GUIDES } from "@/constants/gameGuides";
+import { connectedParticipantIds } from "@/engine/participants";
+import type { RulesState } from "@/engine/rulesTour";
 import { useRoom } from "@/providers/RoomContext";
+import { Button } from "@/components/ui/Button";
+import { ErrorNote } from "@/components/ui/ErrorNote";
+import { HostGameControls } from "./HostGameControls";
 import { HostShell } from "./HostShell";
 import { PlayShell } from "./PlayShell";
-import { RoundTimer } from "./RoundTimer";
+import { cn } from "@/lib/utils";
 
-/**
- * The pre-game rules tour rendered while the engine sits in the shared
- * "rules" phase (see `engine/rulesTour.ts`). The TV is the read-aloud
- * surface; phones show the same rules plus the skip button — any
- * participant can tap "開始遊戲" to start the match early.
- */
 export function RulesTour({ variant }: { variant: "host" | "play" }) {
-  const { room, submitAction } = useRoom();
+  const { room, player, isHost, submitAction } = useRoom();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
   const game = GAMES.find((g) => g.id === room?.gameId);
-  const state = room?.gameState as { timeLeft?: number } | undefined;
-  const timeLeft = state?.timeLeft ?? 0;
-  const rules = game?.rules;
-
-  if (!game || !rules?.length) return null;
-
-  const skip = async () => {
-    vibrate(20);
+  const guide = game && GAME_GUIDES[game.id];
+  if (!room || !game || !guide) return null;
+  const state = room.gameState as RulesState;
+  const ids = connectedParticipantIds(room);
+  const ready = ids.filter((id) => state.rulesReady?.[id]);
+  const meReady = !!state.rulesReady?.[player?.id ?? ""];
+  const phone = variant === "play";
+  const Shell = phone ? PlayShell : HostShell;
+  const send = async (type: "readyRules" | "skipRules") => {
+    if (pending) return;
+    setPending(true);
+    setError("");
     try {
-      await submitAction({ type: "skipRules" });
-    } catch {
-      // The tour keeps running; the countdown still ends it.
+      await submitAction({ type });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "未能送出，請再試一次");
+    } finally {
+      setPending(false);
     }
   };
 
-  if (variant === "play") {
-    return (
-      <PlayShell>
-        <div className="flex flex-1 flex-col px-4 py-6 text-center">
-          <p className="mb-2 text-5xl" aria-hidden="true">
-            {game.icon}
-          </p>
-          <h1 className="text-2xl font-black text-white">
-            {game.name}
-            <span className="mt-1 block text-xs font-semibold tracking-widest text-white/50">規則說明</span>
-          </h1>
-
-          <ol className="mt-5 flex flex-col gap-2.5 text-left">
-            {rules.map((rule, i) => (
-              <li key={i} className="flex items-start gap-2.5 text-sm leading-relaxed text-white/85">
-                <span
-                  aria-hidden="true"
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-black text-white"
-                >
-                  {i + 1}
-                </span>
-                {rule}
-              </li>
-            ))}
-          </ol>
-
-          <div className="mt-auto flex flex-col items-center gap-4 pt-6">
-            <RoundTimer timeLeft={timeLeft} total={15} endLabel="開始！" compact />
-            <button
-              type="button"
-              onClick={() => void skip()}
-              className="w-full max-w-xs rounded-2xl bg-white px-6 py-4 text-base font-black text-black shadow-lg transition-transform active:scale-95"
-            >
-              開始遊戲 →
-            </button>
-            <p className="text-[11px] text-white/40">任一玩家按下即可直接開玩</p>
-          </div>
-        </div>
-      </PlayShell>
-    );
-  }
-
   return (
-    <HostShell>
-      <div className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center text-center">
-        <p className="mb-4 text-7xl animate-bounce" aria-hidden="true">
+    <Shell>
+      <section className={cn("mx-auto flex max-w-3xl flex-col items-center py-6 text-center", !phone && "md:py-10")}>
+        <p className={phone ? "text-5xl" : "text-7xl"} aria-hidden="true">
           {game.icon}
         </p>
-        <h1 className="text-5xl font-black text-white md:text-6xl">{game.name}</h1>
-        <p className="mb-8 mt-2 text-sm font-bold tracking-[0.4em] text-white/50">規 則 說 明</p>
-
-        <ol className="flex w-full flex-col gap-4 text-left">
-          {rules.map((rule, i) => (
-            <li key={i} className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
-              <span
-                aria-hidden="true"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-lg font-black text-white"
-              >
-                {i + 1}
+        <p className="mb-2 mt-4 text-xs font-bold tracking-[0.3em] text-violet-300">一起看懂，再開始</p>
+        <h1 className={cn("font-black text-white", phone ? "text-3xl" : "text-5xl")}>{game.name}</h1>
+        <dl className="mt-6 grid w-full gap-3 text-left">
+          {[
+            ["01", "你的目標", guide.goal],
+            ["02", "怎麼操作", guide.controls],
+            ["03", "怎麼得分", guide.scoring],
+          ].map(([number, title, text]) => (
+            <div key={number} className="flex gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 md:p-5">
+              <span aria-hidden="true" className="text-sm font-black tabular-nums text-violet-300">
+                {number}
               </span>
-              <span className="text-xl font-medium leading-relaxed text-white/90">{rule}</span>
-            </li>
+              <div>
+                <dt className="mb-1 text-xs font-bold tracking-widest text-white/60">{title}</dt>
+                <dd className={cn("leading-relaxed text-white/90", phone ? "text-sm" : "text-xl")}>{text}</dd>
+              </div>
+            </div>
           ))}
-        </ol>
-
-        <div className="mt-10 flex flex-col items-center gap-2">
-          <RoundTimer timeLeft={timeLeft} total={15} endLabel="開始！" className="w-56" />
-          <p className="text-sm text-white/45">任一玩家可在手機點「開始遊戲」提前開玩</p>
+        </dl>
+        <div className="mt-6 w-full rounded-2xl border border-violet-400/20 bg-violet-500/10 p-4">
+          <p role="status" className="font-bold text-violet-200">
+            {ready.length} / {ids.length} 位玩家已看懂
+          </p>
+          <ul className="mt-3 flex flex-wrap justify-center gap-2" aria-label="規則準備狀態">
+            {ids.map((id) => (
+              <li
+                key={id}
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs",
+                  state.rulesReady?.[id] ? "bg-emerald-500/20 text-emerald-200" : "bg-white/10 text-white/70",
+                )}
+              >
+                {state.rulesReady?.[id] ? "✓" : "○"} {room.players[id].nickname}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs leading-relaxed text-white/65">
+            不倒數催促。全員看懂後自動開始，房主也可以提前開玩。
+          </p>
         </div>
-      </div>
-    </HostShell>
+        <ErrorNote className="mt-4 w-full">{error}</ErrorNote>
+        <div className="mt-4 flex w-full flex-col gap-3 sm:max-w-sm">
+          {phone && ids.includes(player?.id ?? "") && (
+            <Button
+              variant="primary"
+              size="lg"
+              loading={pending}
+              disabled={meReady}
+              onClick={() => void send("readyRules")}
+            >
+              {meReady ? "已看懂，等大家一起開始" : "我看懂了，準備好了"}
+            </Button>
+          )}
+          {isHost && (
+            <Button size="lg" onClick={() => void send("skipRules")} loading={pending}>
+              房主開始遊戲 →
+            </Button>
+          )}
+        </div>
+        {!phone && <HostGameControls />}
+      </section>
+    </Shell>
   );
 }
