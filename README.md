@@ -30,7 +30,9 @@ npm run dev
 
 ## Database Rules
 
-在 Firebase Console > Realtime Database > 規則 中貼上以下規則：
+> **注意：下方是舊版參考規則，不可直接視為目前整房交易流程的正式部署規則。** 新玩家尚未成為成員時，房間根節點的寫入條件會拒絕加入交易；只允許 `players/$playerId` 子節點寫入並不足以授權整房交易。請先審查加入授權設計，不要改成公開讀寫來繞過限制。參閱 [跨裝置加入修正與部署排錯](docs/firebase-join-fix.md)。
+
+舊版參考（尚需與目前的加入流程整合驗證）：
 
 ```json
 {
@@ -62,6 +64,8 @@ npm run dev
 ## Gameplay/mobile implementation update
 
 See [the first-pass implementation and verification notes](docs/gameplay-implementation.md).
+
+Latest: [2026-09-23 gameplay foundation](docs/gameplay-foundation.md) — all 15 games now have readiness-based briefings and in-game rules reminders; Poker and Word Chain have fairness/pacing fixes. Includes verification results and the remaining roadmap.
 
 The default host device is now a display-only TV; every participant (including the host who wants to play) joins using a separate controller. **Local demo mode only shares rooms between ordinary tabs in the same browser** — use the lobby's “開新分頁當玩家” link. Physical phones and separate/incognito browser profiles require configured Firebase.
 

@@ -7,6 +7,7 @@ import { MuteToggle } from "@/components/game/MuteToggle";
 import { ConnectionBadge } from "@/components/game/ConnectionBadge";
 import { FloatingReactions } from "@/components/game/FloatingReactions";
 import { sfx } from "@/lib/sound";
+import { GameplayFeedback } from "./GameplayFeedback";
 import { cn } from "@/lib/utils";
 
 interface HostShellProps {
@@ -80,7 +81,10 @@ export function HostShell({ children, className, wide = true }: HostShellProps) 
           <MuteToggle />
         </div>
       </div>
-      <div className={cn("relative z-10", className)}>{children}</div>
+      <div className={cn("relative z-10", className)}>
+        <GameplayFeedback />
+        {children}
+      </div>
     </main>
   );
 }

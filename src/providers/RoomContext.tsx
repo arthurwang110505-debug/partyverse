@@ -34,6 +34,7 @@ import { normalizeSettings } from "@/constants/gameSettings";
 import {
   advanceRoomGame,
   applyRoomAction,
+  actionContextKey,
   claimRoomHost,
   endRoomGame,
   restartRoomGame,
@@ -457,7 +458,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   const joinRoom = useCallback(
     async (rawRoomCode: string, rawNickname: string) => {
-      const roomCode = rawRoomCode.toUpperCase();
+      const roomCode = rawRoomCode.trim().toUpperCase();
       const authUser = await ensureAuth();
       const nickname = sanitizeNickname(rawNickname) || "玩家";
 
@@ -658,6 +659,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         phase: room.gameState.phase,
         round: room.gameState.currentRound,
         startedAt: room.startedAt,
+        contextKey: actionContextKey(room.gameState),
       };
       const apply = (current: Room) =>
         applyRoomAction(current, user.uid, action, expected, Date.now() + serverOffset.current);

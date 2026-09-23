@@ -19,7 +19,17 @@ const COLLECTIONS: Record<string, { arrays: string[]; maps: string[] }> = {
   wordchain: { arrays: ["chain", "objectors"], maps: ["votes"] },
   pokerlite: {
     arrays: ["seats", "deck", "board", "activePlayers", "foldedIds", "allInIds", "handWinnerIds"],
-    maps: ["holeCards", "chips", "committed", "streetCommitted", "toCall", "streetActed", "showdownHands", "potSplit"],
+    maps: [
+      "holeCards",
+      "chips",
+      "committed",
+      "streetCommitted",
+      "toCall",
+      "streetActed",
+      "actedAtBet",
+      "showdownHands",
+      "potSplit",
+    ],
   },
 };
 export function arrayValue(value: unknown): unknown[] {
@@ -38,7 +48,7 @@ export function normalizeGameState(gameId: string, value: unknown): Record<strin
   if (!state.phase) return state; // An empty lobby is not a started game.
   const collections = COLLECTIONS[gameId] ?? { arrays: [], maps: [] };
   for (const key of [...collections.arrays, "achievements", "winnerIds"]) state[key] = arrayValue(state[key]);
-  for (const key of [...collections.maps, "currentScores"]) {
+  for (const key of [...collections.maps, "currentScores", "rulesReady"]) {
     if (!state[key] || typeof state[key] !== "object" || Array.isArray(state[key])) state[key] = {};
   }
   state.winnerId ??= null;

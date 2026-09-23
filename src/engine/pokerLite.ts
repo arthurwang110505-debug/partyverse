@@ -31,8 +31,7 @@ const COMBOS: number[][] = (() => {
   for (let a = 0; a < 7; a++)
     for (let b = a + 1; b < 7; b++)
       for (let c = b + 1; c < 7; c++)
-        for (let d = c + 1; d < 7; d++)
-          for (let e = d + 1; e < 7; e++) combos.push([a, b, c, d, e]);
+        for (let d = c + 1; d < 7; d++) for (let e = d + 1; e < 7; e++) combos.push([a, b, c, d, e]);
   return combos;
 })();
 
@@ -56,7 +55,8 @@ function rank5(cards: string[]): HandRank {
   const isFlush = suits.every((s) => s === suits[0]);
   const uniq = [...new Set(vals)];
   // A wheel is exactly A-5-4-3-2: ace-high alone is not enough.
-  const isWheel = uniq.length === 5 && uniq[0] === 14 && uniq[1] === 5 && uniq[2] === 4 && uniq[3] === 3 && uniq[4] === 2;
+  const isWheel =
+    uniq.length === 5 && uniq[0] === 14 && uniq[1] === 5 && uniq[2] === 4 && uniq[3] === 3 && uniq[4] === 2;
   const isStraight = uniq.length === 5 && (uniq[0] - uniq[4] === 4 || isWheel);
   const straightHigh = isStraight ? (isWheel ? 5 : uniq[0]) : 0;
   const counts = new Map<number, number>();
@@ -109,6 +109,9 @@ export interface PokerGameState {
   streetCommitted: Record<string, number>;
   toCall: Record<string, number>;
   currentBet: number;
+  lastFullRaise?: number;
+  actedAtBet?: Record<string, number>;
+  actionSeq?: number;
   pot: number;
   activePlayers: string[];
   foldedIds: string[];
@@ -125,11 +128,7 @@ export interface PokerGameState {
   winnerIds: string[];
 }
 
-export type PokerAction =
-  | { type: "fold" }
-  | { type: "check" }
-  | { type: "call" }
-  | { type: "raise"; to: number };
+export type PokerAction = { type: "fold" } | { type: "check" } | { type: "call" } | { type: "raise"; to: number };
 
 export const START_CHIPS = 100;
 export const REBUY_CHIPS = 50;
@@ -193,7 +192,7 @@ export const PokerLiteEngine: GameEngine<PokerGameState> = {
     if (act.type === "fold") return applyFold(state, room, playerId);
     if (act.type === "check") {
       if ((state.toCall[playerId] ?? 0) > 0) return state;
-      return advanceStreet({ ...state, streetActed: { ...state.streetActed, [playerId]: true } }, room, playerId);
+      return advanceStreet(markActed(state, playerId), room, playerId);
     }
     if (act.type === "call") {
       if ((state.toCall[playerId] ?? 0) <= 0) return state;
@@ -209,18 +208,18 @@ export const PokerLiteEngine: GameEngine<PokerGameState> = {
 
     if (state.phase === "dealing") {
       if (state.timeLeft > 1) return { ...state, timeLeft: state.timeLeft - 1 };
-      if (!state.toAct) return showdown(state, room);
+      if (!state.toAct) return streetEnd(state, room);
       return { ...state, phase: "betting", timeLeft: betSeconds(room) };
     }
 
     if (state.phase === "betting") {
       if (state.timeLeft > 1) return { ...state, timeLeft: state.timeLeft - 1 };
       if (!state.toAct) return streetEnd(state, room);
-      // Decision timeout: call if facing a bet, check otherwise.
+      // Never spend a player's chips without input: fold to a bet, check otherwise.
       if ((state.toCall[state.toAct] ?? 0) > 0 && (state.chips[state.toAct] ?? 0) > 0) {
-        return applyCall(state, room, state.toAct);
+        return applyFold(state, room, state.toAct);
       }
-      return advanceStreet({ ...state, streetActed: { ...state.streetActed, [state.toAct]: true } }, room, state.toAct);
+      return advanceStreet(markActed(state, state.toAct), room, state.toAct);
     }
 
     if (state.phase === "showdown") {
@@ -274,8 +273,8 @@ function dealHand(state: PokerGameState, _room: Room<PokerGameState>): PokerGame
   const blinds: Record<string, number> = {};
   if (n === 2) {
     const other = active.find((id) => id !== dealerSeat)!;
-    blinds[other] = SMALL_BLIND;
-    blinds[dealerSeat] = BIG_BLIND; // heads-up: dealer is big blind and acts first preflop
+    blinds[dealerSeat] = SMALL_BLIND;
+    blinds[other] = BIG_BLIND; // heads-up: dealer is small blind and acts first preflop
   } else if (n >= 3) {
     const i = active.indexOf(dealerSeat);
     blinds[active[(i + 1) % n]] = SMALL_BLIND;
@@ -302,8 +301,9 @@ function dealHand(state: PokerGameState, _room: Room<PokerGameState>): PokerGame
     pot += pay;
   }
   const allInIds = active.filter((id) => chips[id] === 0);
+  for (const id of active) toCall[id] = Math.min(chips[id], Math.max(0, BIG_BLIND - streetCommitted[id]));
 
-  // First to act: heads-up the dealer (BB); otherwise the first seat after BB.
+  // First to act: heads-up the dealer (SB); otherwise the first seat after BB.
   let toAct: string | null = null;
   if (n >= 3) {
     const i = active.indexOf(dealerSeat);
@@ -335,7 +335,10 @@ function dealHand(state: PokerGameState, _room: Room<PokerGameState>): PokerGame
     committed,
     streetCommitted,
     toCall,
-    currentBet: 0,
+    currentBet: BIG_BLIND,
+    lastFullRaise: BIG_BLIND,
+    actedAtBet: {},
+    actionSeq: 0,
     pot,
     activePlayers: active,
     foldedIds: [],
@@ -351,7 +354,8 @@ function dealHand(state: PokerGameState, _room: Room<PokerGameState>): PokerGame
 }
 
 function payChips(state: PokerGameState, id: string, pay: number): PokerGameState {
-  const chips = { ...state.chips, [id]: Math.max(0, (state.chips[id] ?? 0) - pay) };
+  pay = Math.max(0, Math.min(pay, state.chips[id] ?? 0));
+  const chips = { ...state.chips, [id]: (state.chips[id] ?? 0) - pay };
   return {
     ...state,
     chips,
@@ -366,32 +370,47 @@ function applyCall(state: PokerGameState, room: Room<PokerGameState>, id: string
   const pay = Math.min(state.toCall[id] ?? 0, state.chips[id] ?? 0);
   if (pay <= 0) return state;
   const next = payChips(state, id, pay);
-  return advanceStreet(
-    { ...next, toCall: { ...next.toCall, [id]: 0 }, streetActed: { ...next.streetActed, [id]: true } },
-    room,
-    id,
-  );
+  return advanceStreet(markActed({ ...next, toCall: { ...next.toCall, [id]: 0 } }, id), room, id);
+}
+
+/** A short all-in only reopens raising once the accumulated increase is a full raise. */
+export function canRaise(state: PokerGameState, id: string): boolean {
+  const last = state.actedAtBet?.[id];
+  return last === undefined || state.currentBet - last >= (state.lastFullRaise ?? BIG_BLIND);
+}
+
+function markActed(state: PokerGameState, id: string): PokerGameState {
+  return {
+    ...state,
+    streetActed: { ...state.streetActed, [id]: true },
+    actedAtBet: { ...state.actedAtBet, [id]: state.currentBet },
+  };
 }
 
 function applyRaise(state: PokerGameState, room: Room<PokerGameState>, id: string, to: number): PokerGameState {
-  const chips = state.chips[id] ?? 0;
+  if (typeof to !== "number" || !Number.isFinite(to) || !canRaise(state, id)) return state;
   const committedNow = state.streetCommitted[id] ?? 0;
-  const minTo = state.currentBet + BIG_BLIND;
-  const requested = typeof to === "number" && Number.isFinite(to) ? Math.round(to) : minTo;
-  const newTo = Math.max(minTo, Math.min(requested, chips + committedNow));
-  if (newTo <= committedNow) return applyCall(state, room, id); // can only all-in as a call
-  const pay = newTo - committedNow;
-  let next = payChips(state, id, pay);
-  const streetActed: Record<string, boolean> = {};
+  const maxTo = (state.chips[id] ?? 0) + committedNow;
+  const newTo = Math.min(Math.round(to), maxTo);
+  if (newTo <= state.currentBet) return newTo === maxTo ? applyCall(state, room, id) : state;
+  const increase = newTo - state.currentBet;
+  const minimum = state.lastFullRaise ?? BIG_BLIND;
+  if (increase < minimum && newTo !== maxTo) return state;
+  let next = payChips(state, id, newTo - committedNow);
   const toCall: Record<string, number> = {};
   for (const other of next.activePlayers) {
-    streetActed[other] = other === id;
-    toCall[other] =
-      other === id
-        ? 0
-        : Math.max(0, Math.min(newTo - (next.streetCommitted[other] ?? 0), next.chips[other] ?? 0));
+    toCall[other] = Math.max(0, Math.min(newTo - (next.streetCommitted[other] ?? 0), next.chips[other] ?? 0));
   }
-  next = { ...next, currentBet: newTo, lastRaiserId: id, streetActed, toCall };
+  next = markActed(
+    {
+      ...next,
+      currentBet: newTo,
+      lastRaiserId: id,
+      toCall,
+      lastFullRaise: increase >= minimum ? increase : minimum,
+    },
+    id,
+  );
   return advanceStreet(next, room, id);
 }
 
@@ -404,6 +423,7 @@ function applyFold(state: PokerGameState, room: Room<PokerGameState>, id: string
     return {
       ...state,
       phase: "showdown",
+      actionSeq: (state.actionSeq ?? 0) + 1,
       timeLeft: SHOWDOWN_SECONDS,
       chips,
       activePlayers: active,
@@ -420,17 +440,19 @@ function applyFold(state: PokerGameState, room: Room<PokerGameState>, id: string
 }
 
 function advanceStreet(state: PokerGameState, room: Room<PokerGameState>, fromId: string): PokerGameState {
+  state = { ...state, actionSeq: (state.actionSeq ?? 0) + 1 };
   const next = nextToAct(state, fromId);
   if (next) return { ...state, toAct: next, timeLeft: betSeconds(room) };
   return streetEnd(state, room);
 }
 
 function nextToAct(state: PokerGameState, fromId: string): string | null {
-  const idx = state.activePlayers.indexOf(fromId);
-  for (let i = 1; i <= state.activePlayers.length; i++) {
-    const id = state.activePlayers[(idx + i) % state.activePlayers.length];
+  const idx = state.seats.indexOf(fromId);
+  for (let i = 1; i <= state.seats.length; i++) {
+    const id = state.seats[(idx + i) % state.seats.length];
+    if (!state.activePlayers.includes(id)) continue;
     if (state.allInIds.includes(id)) continue;
-    if (state.streetActed[id]) continue;
+    if (state.streetActed[id] && (state.toCall[id] ?? 0) === 0) continue;
     return id;
   }
   return null;
@@ -480,7 +502,9 @@ function streetEnd(state: PokerGameState, room: Room<PokerGameState>): PokerGame
     streetCommitted,
     streetActed,
     currentBet: 0,
-    toAct: canAct[0],
+    lastFullRaise: BIG_BLIND,
+    actedAtBet: {},
+    toAct: nextToAct({ ...state, streetActed, toCall }, state.dealerSeat),
     lastRaiserId: null,
     timeLeft: betSeconds(room),
   };
@@ -499,13 +523,26 @@ export function showdown(state: PokerGameState, _room: Room<PokerGameState>): Po
   for (const id of active) showdownHands[id] = handName(ranks[id]);
 
   // Proper side pots: each all-in level is awarded to the best eligible hand.
-  const levels = [...new Set(active.map((id) => state.committed[id] ?? 0))].filter((v) => v > 0).sort((a, b) => a - b);
+  const contributors = state.seats.filter((id) => (state.committed[id] ?? 0) > 0);
+  const levels = [...new Set(contributors.map((id) => state.committed[id] ?? 0))]
+    .filter((v) => v > 0)
+    .sort((a, b) => a - b);
   const potSplit: Record<string, number> = {};
   const winners: string[] = [];
   let prev = 0;
   for (const level of levels) {
-    const eligible = active.filter((id) => (state.committed[id] ?? 0) >= level);
-    const amount = (level - prev) * eligible.length;
+    // Odd chips go clockwise from the dealer, not permanently to seat one.
+    const dealerIndex = state.seats.indexOf(state.dealerSeat);
+    const clockwise = [...state.seats.slice(dealerIndex + 1), ...state.seats.slice(0, dealerIndex + 1)];
+    const eligible = clockwise.filter((id) => active.includes(id) && (state.committed[id] ?? 0) >= level);
+    const paid = contributors.filter((id) => (state.committed[id] ?? 0) >= level);
+    const amount = (level - prev) * paid.length;
+    // Uncalled excess is returned, not awarded to a shorter stack.
+    if (paid.length === 1 || eligible.length === 0) {
+      for (const id of paid) potSplit[id] = (potSplit[id] ?? 0) + level - prev;
+      prev = level;
+      continue;
+    }
     let best: HandRank | null = null;
     let bestIds: string[] = [];
     for (const id of eligible) {
@@ -519,7 +556,7 @@ export function showdown(state: PokerGameState, _room: Room<PokerGameState>): Po
     }
     const share = Math.floor(amount / bestIds.length);
     for (let i = 0; i < bestIds.length; i++) {
-      potSplit[bestIds[i]] = (potSplit[bestIds[i]] ?? 0) + share + (i === 0 ? amount - share * bestIds.length : 0);
+      potSplit[bestIds[i]] = (potSplit[bestIds[i]] ?? 0) + share + (i < amount % bestIds.length ? 1 : 0);
     }
     for (const id of bestIds) if (!winners.includes(id)) winners.push(id);
     prev = level;

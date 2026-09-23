@@ -100,7 +100,7 @@ const PROFILES: Record<string, Partial<GameSettingsProfile>> = {
   },
   wordchain: {
     timerLabel: "接龍秒數",
-    timerHint: "每個回合的接龍時間；卡關兩次會換提示詞。",
+    timerHint: "每回合限時接龍；時間到換新詞，沒有答案也會進入下一回合。",
     timerMin: 10,
     timerMax: 60,
     defaultTimer: 20,
@@ -109,7 +109,7 @@ const PROFILES: Record<string, Partial<GameSettingsProfile>> = {
   },
   pokerlite: {
     timerLabel: "決策秒數",
-    timerHint: "每個下注決策的秒數，逾時自動跟注或過牌。",
+    timerHint: "每個下注決策的秒數，逾時面對下注自動棄牌，否則過牌。",
     timerMin: 8,
     timerMax: 30,
     defaultTimer: 15,
