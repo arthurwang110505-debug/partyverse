@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useRoom } from "@/providers/RoomContext";
+import { useToast } from "@/providers/ToastProvider";
+import { decideRoomEntry } from "@/lib/roomEntry";
 import { LinkButton } from "@/components/ui/Button";
 
 /**
@@ -12,6 +14,10 @@ import { LinkButton } from "@/components/ui/Button";
  * All redirects happen in effects. The previous pages called `router.push()`
  * during render, which React can warn about and double-fire under Strict Mode
  * (`reactStrictMode: true` is on in next.config.js).
+ *
+ * The decision itself lives in `decideRoomEntry` because "no room yet" and "not
+ * this room" used to be the same thing here — which sent a host who had just
+ * created a room straight to `/join/<code>`.
  */
 export function RoomGate({
   roomCode,
@@ -24,25 +30,49 @@ export function RoomGate({
   hostOnly?: boolean;
 }) {
   const router = useRouter();
-  const { room, player, loading, isHost } = useRoom();
+  const { toast } = useToast();
+  const { room, player, loading, pendingRoomCode, lostRoomCode, isHost } = useRoom();
+
+  const decision = decideRoomEntry({
+    roomCode,
+    loading,
+    pendingRoomCode,
+    lostRoomCode,
+    roomId: room?.id ?? null,
+    hasPlayer: Boolean(player),
+    hostOnly,
+    isHost,
+    isDisplay: player?.role === "display",
+  });
+  const finished = decision === "ready" && room?.status === "RESULTS";
 
   // Not signed into this room at all → send them to the join form.
   useEffect(() => {
-    if (!loading && (!player || room?.id !== roomCode)) router.replace(`/join/${roomCode}`);
-  }, [loading, player, room?.id, roomCode, router]);
+    if (decision === "join") router.replace(`/join/${roomCode}`);
+  }, [decision, roomCode, router]);
+
+  // The room itself is gone (ended, or removed from another device).
+  const announced = useRef("");
+  useEffect(() => {
+    if (decision !== "home") return;
+    if (announced.current !== roomCode) {
+      announced.current = roomCode;
+      toast("房間已經結束了，帶你回到首頁");
+    }
+    router.replace("/");
+  }, [decision, roomCode, router, toast]);
 
   // In the room, but on the wrong side of it.
   useEffect(() => {
-    if (!loading && player && hostOnly && !isHost && player?.role !== "display")
-      router.replace(`/room/${roomCode}/play`);
-  }, [loading, player, hostOnly, isHost, roomCode, router]);
+    if (decision === "play") router.replace(`/room/${roomCode}/play`);
+  }, [decision, roomCode, router]);
 
   // The game ended while they were here.
   useEffect(() => {
-    if (room?.status === "RESULTS") router.replace(`/room/${roomCode}/results`);
-  }, [room?.status, roomCode, router]);
+    if (finished) router.replace(`/room/${roomCode}/results`);
+  }, [finished, roomCode, router]);
 
-  if (loading || !room || !player || room.id !== roomCode) {
+  if (decision !== "ready" || finished) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-ink text-white">
         <p className="animate-pulse text-white/50" role="status">
@@ -55,9 +85,6 @@ export function RoomGate({
       </main>
     );
   }
-
-  if (hostOnly && !isHost && player?.role !== "display") return null;
-  if (room.status === "RESULTS") return null;
 
   return <>{children}</>;
 }

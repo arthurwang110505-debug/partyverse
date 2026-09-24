@@ -45,13 +45,21 @@ function notifyLocal(roomCode: string, room: Room | null) {
   }
 }
 
-export function saveLocalRoom(room: Room): void {
-  if (typeof window === "undefined") return;
+/**
+ * @returns false when the room could not be persisted (private mode, quota).
+ * Callers that just created a room must surface that: a room nobody can read
+ * back — not even this tab — looks like a successful create followed by being
+ * thrown back to the join screen.
+ */
+export function saveLocalRoom(room: Room): boolean {
+  if (typeof window === "undefined") return false;
   const code = room.id.toUpperCase();
+  let persisted = true;
   try {
     window.localStorage.setItem(`${LOCAL_STORAGE_PREFIX}${code}`, JSON.stringify(room));
   } catch {
     // Quota exceeded
+    persisted = false;
   }
   notifyLocal(code, room);
 
@@ -65,6 +73,7 @@ export function saveLocalRoom(room: Room): void {
       // BroadcastChannel unavailable
     }
   }
+  return persisted;
 }
 
 export function deleteLocalRoom(roomCode: string): void {

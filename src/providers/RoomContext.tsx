@@ -26,6 +26,13 @@ import {
   updateLocalRoom,
 } from "@/lib/localRoomStore";
 import { joinRoomOnFirebase } from "@/lib/firebaseJoin";
+import {
+  forgetRoomSession,
+  recallEndedRoom,
+  recallRoomSession,
+  rememberEndedRoom,
+  rememberRoomSession,
+} from "@/lib/roomSession";
 import { generateRoomCode, pickAvatar, sanitizeNickname } from "@/lib/utils";
 import { getGameEngine } from "@/engine";
 import { sfx } from "@/lib/sound";
@@ -46,6 +53,12 @@ import { isParticipant } from "@/engine/participants";
 /** How often the host advances the game clock. */
 const TICK_MS = 1000;
 
+/**
+ * How long a stored session waits for Firebase to hand back the persisted
+ * anonymous user before we give up and treat the tab as not signed in.
+ */
+const AUTH_RESTORE_GRACE_MS = 3000;
+
 export type ConnectionStatus = "connected" | "connecting" | "reconnecting" | "disconnected" | "local";
 
 interface RoomContextValue {
@@ -54,6 +67,17 @@ interface RoomContextValue {
   user: User | null;
   /** True until Firebase auth has resolved and any stored session has been checked. */
   loading: boolean;
+  /**
+   * Room the provider is currently opening (create, join or session restore) but
+   * has not received a snapshot for yet. `/room/<code>` screens must wait — not
+   * bounce to the join form — while this names the code in the URL.
+   */
+  pendingRoomCode: string | null;
+  /**
+   * Room this tab was in that no longer exists — ended here or by another
+   * device. `/room/<code>` screens send these visitors home, not to `/join`.
+   */
+  lostRoomCode: string | null;
   isHost: boolean;
   isLocalMode: boolean;
   connectionStatus: ConnectionStatus;
@@ -144,11 +168,32 @@ function maxPlayersFor(gameId: string): number {
   return GAMES.find((g) => g.id === gameId)?.maxPlayers ?? 20;
 }
 
+/** A room the tab was already in when this provider mounted, if any. */
+function readResumableSession(): ReturnType<typeof recallRoomSession> {
+  return typeof window === "undefined" ? null : recallRoomSession();
+}
+
 export function RoomProvider({ children }: { children: ReactNode }) {
-  const [room, setRoom] = useState<Room | null>(null);
-  const [player, setPlayer] = useState<Player | null>(null);
+  // Seeded from the tab's last room: `/create` and `/room` mount different
+  // providers, so without this the host screen would come up empty right after a
+  // successful create and the room gate would bounce the host to /join/<code>.
+  const [room, setRoom] = useState<Room | null>(() => readResumableSession()?.room ?? null);
+  const [player, setPlayer] = useState<Player | null>(() => readResumableSession()?.player ?? null);
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => readResumableSession() === null);
+  const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(null);
+  // Rooms this tab was in that are now gone. `/room/<code>` screens use it to go
+  // home rather than offering the join form for a code that no longer exists.
+  // Seeded from the tab (not the provider) so it survives the create → host and
+  // back-button remounts too.
+  const [lostRoomCode, setLostRoomCode] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : recallEndedRoom(),
+  );
+  /** Records the room as gone for this tab as well as this provider instance. */
+  const markRoomLost = useCallback((roomCode: string) => {
+    rememberEndedRoom(roomCode);
+    setLostRoomCode(roomCode);
+  }, []);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(db ? "connecting" : "local");
 
   const [isLocalMode, setIsLocalMode] = useState(!db);
@@ -166,45 +211,91 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     unsubscribeRef.current = null;
   }, []);
 
+  /** Clears the handshake flag only if it still refers to the same room. */
+  const settlePendingRoom = useCallback((roomCode: string) => {
+    setPendingRoomCode((current) =>
+      current && current.trim().toUpperCase() === roomCode.trim().toUpperCase() ? null : current,
+    );
+  }, []);
+
   /**
    * One live listener per room. Supports both Firebase RTDB and Local In-Memory bus.
+   * `onSettled` fires once, when the first snapshot (or failure) arrives.
    */
   const subscribe = useCallback(
-    (roomCode: string, userId: string) => {
+    (roomCode: string, userId: string, onSettled?: () => void) => {
       stopListening();
+      let settled = false;
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        onSettled?.();
+      };
       if (db && !localModeRef.current) {
         unsubscribeRef.current = onValue(
           ref(db, `rooms/${roomCode}`),
           (snap) => {
             const next = parseRoom(snap.val() as Record<string, unknown> | null, roomCode);
             if (!next) {
+              forgetRoomSession();
               setRoom(null);
               setPlayer(null);
+              markRoomLost(roomCode);
               writeSession(null);
               stopListening();
+              settle();
               return;
             }
+            const nextPlayer = next.players[userId] ?? null;
+            rememberRoomSession(next, nextPlayer);
             setRoom(next);
-            setPlayer(next.players[userId] ?? null);
+            setPlayer(nextPlayer);
+            setLostRoomCode(null);
+            settle();
           },
-          (error) => console.error("[partyverse] Room listener failed:", error),
+          (error) => {
+            console.error("[partyverse] Room listener failed:", error);
+            settle();
+          },
         );
       } else {
         unsubscribeRef.current = subscribeLocalRoom(roomCode, (next) => {
-          if (!next) {
+          const clean = next ? parseRoom(next as unknown as Record<string, unknown>, roomCode) : null;
+          if (!clean) {
+            forgetRoomSession();
             setRoom(null);
             setPlayer(null);
+            markRoomLost(roomCode);
             writeSession(null);
             stopListening();
+            settle();
             return;
           }
-          const clean = parseRoom(next as unknown as Record<string, unknown>, roomCode);
+          const cleanPlayer = clean.players[userId] ?? null;
+          rememberRoomSession(clean, cleanPlayer);
           setRoom(clean);
-          setPlayer(clean?.players[userId] ?? null);
+          setPlayer(cleanPlayer);
+          setLostRoomCode(null);
+          settle();
         });
       }
     },
-    [stopListening],
+    [markRoomLost, stopListening],
+  );
+
+  /**
+   * Mark a room as "being opened" before its first snapshot can arrive, so the
+   * room screens wait for it instead of deciding the visitor is an outsider.
+   */
+  const openRoom = useCallback(
+    (roomCode: string, userId: string, onSettled?: () => void) => {
+      setPendingRoomCode(roomCode);
+      subscribe(roomCode, userId, () => {
+        settlePendingRoom(roomCode);
+        onSettled?.();
+      });
+    },
+    [subscribe, settlePendingRoom],
   );
 
   useEffect(() => stopListening, [stopListening]);
@@ -214,6 +305,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     const database = db;
     const stored = readSession();
     let cancelled = false;
+    let authGrace: ReturnType<typeof setTimeout> | null = null;
 
     if (!database || stored?.mode === "local" || (stored && !stored.mode && getLocalRoom(stored.roomCode))) {
       enterLocalMode();
@@ -225,7 +317,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       if (stored) {
         const localRoom = getLocalRoom(stored.roomCode);
         if (localRoom && localRoom.players?.[stored.userId]) {
-          subscribe(stored.roomCode, stored.userId);
+          openRoom(stored.roomCode, stored.userId);
         } else {
           writeSession(null);
         }
@@ -243,6 +335,14 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       setUser(authUser);
 
+      if (!authUser && stored) {
+        // Firebase emits a null state until the persisted anonymous user has been
+        // read back (IndexedDB on a TV can be slower than the first paint). The
+        // next emission carries that user, so hold the door: judging the stored
+        // session now is what drops a host on the join form.
+        if (authGrace === null) authGrace = setTimeout(() => !cancelled && setLoading(false), AUTH_RESTORE_GRACE_MS);
+        return;
+      }
       if (!authUser || !stored || stored.userId !== authUser.uid) {
         setLoading(false);
         return;
@@ -254,22 +354,50 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           "Session restore timeout",
         );
         if (cancelled) return;
-        if (snap.exists()) subscribe(stored.roomCode, stored.userId);
-        else writeSession(null);
+        if (snap.exists()) {
+          // Wait for the room itself, not just the membership record: clearing
+          // `loading` with the room still missing is what bounced hosts to
+          // /join/<code> right after they created a room.
+          await withTimeout(
+            new Promise<void>((resolve) => openRoom(stored.roomCode, stored.userId, resolve)),
+            6000,
+            "Room snapshot timeout",
+          );
+        } else {
+          writeSession(null);
+        }
       } catch (error) {
+        // The membership probe can fail for reasons that are not "you are not in
+        // this room": rules that deny ancestor reads, or a TV whose connection
+        // dropped between two round trips. Let the room snapshot decide, instead
+        // of dropping a valid session and leaving the host on the join form.
         console.warn("[partyverse] Firebase session restore check:", error);
-        // A configured online room must not silently change transports or identities.
-        if (!cancelled) writeSession(null);
+        if (cancelled) return;
+        try {
+          await withTimeout(
+            new Promise<void>((resolve) => openRoom(stored.roomCode, stored.userId, resolve)),
+            6000,
+            "Room snapshot timeout",
+          );
+        } catch {
+          // Still nothing: the session is not usable, and keeping it would make
+          // every future mount repeat this handshake.
+          if (!cancelled) writeSession(null);
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          settlePendingRoom(stored.roomCode);
+        }
       }
     });
 
     return () => {
       cancelled = true;
+      if (authGrace !== null) clearTimeout(authGrace);
       unsubscribeAuth();
     };
-  }, [subscribe, enterLocalMode]);
+  }, [subscribe, openRoom, settlePendingRoom, enterLocalMode]);
 
   /**
    * Presence & Reconnection management:
@@ -353,6 +481,18 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * Show a room we already hold the full record for (create/join result) without
+   * waiting for a database round trip. `rememberRoomSession` additionally keeps
+   * it available to the provider that the next route segment will mount.
+   */
+  const adoptRoom = useCallback((next: Room, nextPlayer: Player | null) => {
+    rememberRoomSession(next, nextPlayer);
+    setRoom(next);
+    setPlayer(nextPlayer);
+    setLostRoomCode(null);
+  }, []);
+
   const createRoom = useCallback(
     async (gameId: string, rawNickname: string, settings?: RoomSettings): Promise<string> => {
       const game = GAMES.find((g) => g.id === gameId);
@@ -380,25 +520,32 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               score: 0,
             };
             const now = Date.now();
+            const createdRoom: Room = {
+              id: candidate,
+              gameId,
+              hostPlayerId: authUser.uid,
+              status: "LOBBY",
+              createdAt: now,
+              expiresAt: now + ROOM_TTL_MS,
+              settings: baseSettings,
+              players: { [authUser.uid]: hostPlayer },
+              gameState: {},
+            };
             const result = await withTimeout(
               runTransaction(ref(db, `rooms/${candidate}`), (current) => {
                 if (current !== null) return undefined; // code already taken
-                return {
-                  id: candidate,
-                  gameId,
-                  hostPlayerId: authUser.uid,
-                  status: "LOBBY",
-                  createdAt: now,
-                  expiresAt: now + ROOM_TTL_MS,
-                  settings: baseSettings,
-                  players: { [authUser.uid]: hostPlayer },
-                  gameState: {},
-                };
+                return createdRoom as unknown as Record<string, unknown>;
               }),
               7000,
               "Firebase 房間建立連線逾時",
             );
-            if (result.committed) roomCode = candidate;
+            if (result.committed) {
+              roomCode = candidate;
+              // Publish the host screen's room before navigating: the create and
+              // room segments mount different providers, so waiting for the
+              // listener would leave the new host screen roomless for a beat.
+              adoptRoom(createdRoom, hostPlayer);
+            }
           }
 
           if (roomCode) {
@@ -411,7 +558,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               mode: localModeRef.current ? "local" : "firebase",
             });
             setUser(authUser);
-            subscribe(roomCode, authUser.uid);
+            openRoom(roomCode, authUser.uid);
             return roomCode;
           }
         } catch (firebaseErr) {
@@ -446,14 +593,16 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         players: { [authUser.uid]: hostPlayer },
         gameState: {},
       };
-      saveLocalRoom(newRoom);
+      if (!saveLocalRoom(newRoom))
+        throw new Error("這個瀏覽器的儲存空間不足，房間無法建立。請關閉其他分頁或清除網站資料後再試一次。");
       rememberNickname(nickname);
       writeSession({ userId: authUser.uid, roomCode: candidate, nickname, mode: "local" });
       setUser(authUser);
-      subscribe(candidate, authUser.uid);
+      adoptRoom(newRoom, hostPlayer);
+      openRoom(candidate, authUser.uid);
       return candidate;
     },
-    [ensureAuth, subscribe],
+    [adoptRoom, ensureAuth, openRoom],
   );
 
   const joinRoom = useCallback(
@@ -470,7 +619,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           rememberNickname(nickname);
           writeSession({ userId: authUser.uid, roomCode, nickname, mode: localModeRef.current ? "local" : "firebase" });
           setUser(authUser);
-          subscribe(roomCode, authUser.uid);
+          openRoom(roomCode, authUser.uid);
           return;
         }
         if (result.outcome === "full") throw new Error("房間已額滿");
@@ -511,17 +660,20 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       rememberNickname(nickname);
       writeSession({ userId: authUser.uid, roomCode, nickname, mode: localModeRef.current ? "local" : "firebase" });
       setUser(authUser);
-      subscribe(roomCode, authUser.uid);
+      adoptRoom(joined, joined.players[authUser.uid] ?? null);
+      openRoom(roomCode, authUser.uid);
     },
-    [ensureAuth, subscribe, enterLocalMode],
+    [adoptRoom, ensureAuth, openRoom, enterLocalMode],
   );
 
   const leaveRoom = useCallback(async () => {
     const uid = user?.uid;
     const currentRoom = room;
     stopListening();
+    forgetRoomSession();
     setRoom(null);
     setPlayer(null);
+    setPendingRoomCode(null);
     writeSession(null);
 
     if (!currentRoom || !uid) return;
@@ -565,10 +717,15 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       });
     }
     stopListening();
+    forgetRoomSession();
     setRoom(null);
     setPlayer(null);
+    setPendingRoomCode(null);
+    // Recorded before the listener is torn down so the host screen knows to go
+    // home rather than offer the join form for a code that just stopped existing.
+    markRoomLost(room.id);
     writeSession(null);
-  }, [room, user, stopListening]);
+  }, [markRoomLost, room, user, stopListening]);
 
   const requireHost = useCallback((): HostContext => {
     if (!room) throw new Error("尚未加入房間");
@@ -772,7 +929,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     };
   }, [tickingRoomId, tickingStatus, tickingHostId, tickingUserId]);
 
-  const isHost = Boolean(user && room && room.hostPlayerId === user.uid);
+  // A provider that mounted with a resumed room may not have resolved Firebase
+  // auth yet; the resumed player record carries the same identity.
+  const identity = user?.uid ?? player?.id ?? null;
+  const isHost = Boolean(room && identity && room.hostPlayerId === identity);
 
   return (
     <RoomContext.Provider
@@ -781,6 +941,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         player,
         user,
         loading,
+        pendingRoomCode,
+        lostRoomCode,
         isHost,
         isLocalMode,
         connectionStatus,
