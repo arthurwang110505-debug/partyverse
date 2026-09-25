@@ -3,7 +3,6 @@ import type { Room } from "@/types";
 import { testRoom } from "@/test/fixtures";
 import { getGameEngine } from "./index";
 import { mulberry32, seededShuffle, freshSeed } from "./rng";
-import { cardValue, compareRank, handName, bestOf7, showdown, type PokerGameState } from "./pokerLite";
 import { SIMON_QUADRANTS, simonSequence, type SimonGameState } from "./simonSays";
 import { isValidLink, normalizeWord, type ChainGameState } from "./wordChain";
 import { SIT_SECONDS, type ChairsGameState } from "./musicalChairs";
@@ -56,112 +55,6 @@ describe("rng", () => {
   });
 });
 
-describe("pokerlite: evaluator", () => {
-  it('parses ranks and suits (cards are "10♥"-style rank+suit strings)', () => {
-    expect(cardValue("A♠")).toBe(14);
-    expect(cardValue("K♦")).toBe(13);
-    expect(cardValue("10♥")).toBe(10);
-    expect(cardValue("2♣")).toBe(2);
-  });
-
-  it("picks the stronger straight when 7 cards contain two", () => {
-    // Values 4-5-6-7-8-9 form both a 4-high and a 9-high straight.
-    const hand = bestOf7(["4♠", "5♥", "6♦", "7♣", "8♠", "9♥", "K♦"]);
-    expect(hand).toEqual([4, 9, 0, 0, 0, 0]);
-  });
-
-  it("ranks hands in the correct order", () => {
-    const royal = bestOf7(["A♠", "K♠", "Q♠", "J♠", "10♠", "9♥", "2♦"]);
-    const fourOfAKind = bestOf7(["A♠", "A♥", "A♦", "A♣", "K♠", "9♥", "2♦"]);
-    const fullHouse = bestOf7(["A♠", "A♥", "A♦", "K♣", "K♦", "9♥", "2♦"]);
-    const flush = bestOf7(["A♠", "J♠", "9♠", "7♠", "3♠", "2♥", "2♦"]);
-    const straight = bestOf7(["5♠", "6♥", "7♦", "8♣", "9♠", "2♥", "K♦"]);
-    const trips = bestOf7(["7♠", "7♥", "7♦", "K♣", "Q♦", "9♥", "2♦"]);
-
-    expect(compareRank(royal, fourOfAKind)).toBeLessThan(0);
-    expect(compareRank(fourOfAKind, fullHouse)).toBeLessThan(0);
-    expect(compareRank(fullHouse, flush)).toBeLessThan(0);
-    expect(compareRank(flush, straight)).toBeLessThan(0);
-    expect(compareRank(straight, trips)).toBeLessThan(0);
-
-    expect(handName(royal)).toContain("同花順");
-    expect(handName(fourOfAKind)).toContain("四條");
-    expect(handName(fullHouse)).toContain("葫蘆");
-    expect(handName(flush)).toContain("同花");
-    expect(handName(straight)).toContain("順子");
-    expect(handName(trips)).toContain("三條");
-  });
-
-  it("wheel straight: A-2-3-4-5 plays as an ace-low straight", () => {
-    const wheel = bestOf7(["A♠", "2♥", "3♦", "4♣", "5♠", "9♥", "K♦"]);
-    expect(handName(wheel)).toContain("順子");
-    // The wheel loses to any other straight.
-    const higher = bestOf7(["2♠", "3♥", "4♦", "5♣", "6♠", "9♥", "K♦"]);
-    expect(compareRank(higher, wheel)).toBeLessThan(0);
-  });
-
-  it("kickers and pair structure decide ties", () => {
-    const aaKQJ = bestOf7(["A♠", "A♥", "K♠", "Q♥", "J♦", "9♣", "8♦"]);
-    const aaKQ9 = bestOf7(["A♠", "A♥", "K♠", "Q♥", "9♦", "8♣", "7♦"]);
-    const kk = bestOf7(["K♠", "K♥", "A♠", "Q♥", "J♦", "9♣", "8♦"]);
-    expect(compareRank(aaKQJ, aaKQ9)).toBeLessThan(0);
-    expect(compareRank(aaKQ9, kk)).toBeLessThan(0);
-
-    const twoPairTop = bestOf7(["A♠", "A♥", "9♠", "9♥", "K♦", "5♣", "8♦"]);
-    const twoPairSecond = bestOf7(["A♠", "A♥", "8♠", "8♥", "K♦", "5♣", "9♦"]);
-    expect(compareRank(twoPairTop, twoPairSecond)).toBeLessThan(0);
-  });
-
-  it("splits the exact pot with proper side pots", () => {
-    // The board is mixed (no straight, no flush on its own): p1's J-10
-    // makes an ace-high straight and wins the 40-chip main pot even though
-    // p1 only committed 10. p3 and p4 committed 40, so their 60-chip side
-    // pot is settled between them: p3's three kings beat p4's three queens.
-    // p2's three aces cannot reach the side pot (only committed 10).
-    const state: PokerGameState = {
-      phase: "betting",
-      street: "river",
-      timeLeft: 0,
-      handNumber: 1,
-      totalHands: 1,
-      seats: ["p1", "p2", "p3", "p4"],
-      deck: [],
-      holeCards: {
-        p1: ["J♥", "10♥"],
-        p2: ["A♦", "A♣"],
-        p3: ["K♦", "K♣"],
-        p4: ["Q♠", "Q♥"],
-      },
-      board: ["A♠", "K♥", "Q♦", "7♣", "2♠"],
-      chips: { p1: 0, p2: 0, p3: 0, p4: 0 },
-      committed: { p1: 10, p2: 10, p3: 40, p4: 40 },
-      streetCommitted: {},
-      toCall: {},
-      currentBet: 0,
-      pot: 100,
-      activePlayers: ["p1", "p2", "p3", "p4"],
-      foldedIds: [],
-      allInIds: ["p1", "p2", "p3", "p4"],
-      toAct: null,
-      lastRaiserId: null,
-      streetActed: {},
-      dealerSeat: "p1",
-      showdownHands: {},
-      handWinnerIds: [],
-      potSplit: {},
-      currentScores: { p1: 0, p2: 0, p3: 0, p4: 0 },
-      winnerId: null,
-      winnerIds: [],
-    };
-    const out = showdown(state, testRoom("pokerlite") as unknown as Room<PokerGameState>);
-    expect(out.pot).toBe(0);
-    expect(out.potSplit).toEqual({ p1: 40, p3: 60 });
-    expect(out.chips).toEqual({ p1: 40, p2: 0, p3: 60, p4: 0 });
-    expect(out.handWinnerIds).toEqual(["p1", "p3"]);
-    expect(out.currentScores["p3"]).toBe(60);
-  });
-});
-
 describe("simonsays: sequence and taps", () => {
   it("simonSequence is deterministic, in range and prefix-stable", () => {
     const a = simonSequence(42, 5);
@@ -174,33 +67,41 @@ describe("simonsays: sequence and taps", () => {
     expect(simonSequence(7, 6)).not.toEqual(simonSequence(8, 6));
   });
 
-  it("correct taps score, a wrong tap eliminates for the round", () => {
+  it("shows every element (including the last) before repeat", () => {
     const { room, state } = playing<SimonGameState>("simonsays");
-    // Burn through the learning phase for the starting level (3 seconds).
-    const learning = tick<SimonGameState>("simonsays", room, state.level ?? 3);
+    const lit: number[] = [];
+    let s2 = state;
+    while (s2.phase === "learning") {
+      s2 = tick<SimonGameState>("simonsays", room, 1);
+      if (s2.phase === "learning") lit.push(s2.learnIndex);
+    }
+    expect(lit).toEqual([1, 2, 3]);
+  });
+
+  it("a correct full sequence scores; a wrong one eliminates; others advance the level", () => {
+    const { room, state } = playing<SimonGameState>("simonsays");
+    const engine = getGameEngine("simonsays")!;
+    const learning = tick<SimonGameState>("simonsays", room, (state.level ?? 3) + 1);
     expect(learning.phase).toBe("repeat");
     const seq = simonSequence(learning.seqSeed, learning.level);
 
-    const ok1 = getGameEngine("simonsays")!.handlePlayerAction(room, "p1", { type: "tap", quadrant: seq[0] });
-    room.gameState = ok1;
-    const ok2 = getGameEngine("simonsays")!.handlePlayerAction(room, "p1", {
-      type: "tap",
-      quadrant: seq[1],
-    });
-    room.gameState = ok2;
+    room.gameState = engine.handlePlayerAction(room, "p1", { type: "submitSequence", taps: seq });
+    expect(room.gameState.playerProgress["p1"]).toBe(3);
+    expect(room.gameState.currentScores["p1"]).toBe(3);
+    // Duplicate submit is ignored (no double points, no elimination).
+    room.gameState = engine.handlePlayerAction(room, "p1", { type: "submitSequence", taps: [0, 0, 0] });
+    expect(room.gameState.outThisRound).not.toContain("p1");
+    expect(room.gameState.currentScores["p1"]).toBe(3);
 
-    expect(ok2.playerProgress["p1"]).toBe(2);
-    expect(ok2.outThisRound).not.toContain("p1");
+    const wrong = [...seq];
+    wrong[2] = (wrong[2] + 1) % SIMON_QUADRANTS;
+    room.gameState = engine.handlePlayerAction(room, "p2", { type: "submitSequence", taps: wrong });
+    expect(room.gameState.outThisRound).toContain("p2");
 
-    const wrong = getGameEngine("simonsays")!.handlePlayerAction(room, "p1", {
-      type: "tap",
-      quadrant: (seq[2] + 1) % SIMON_QUADRANTS,
-    });
-    room.gameState = wrong;
-    expect(wrong.outThisRound).toContain("p1");
-    // An eliminated player cannot keep tapping.
-    const after = getGameEngine("simonsays")!.handlePlayerAction(room, "p1", { type: "tap", quadrant: 0 });
-    expect(after.playerProgress["p1"]).toBe(2);
+    room.gameState = engine.handlePlayerAction(room, "p3", { type: "submitSequence", taps: seq });
+    room.gameState = engine.handlePlayerAction(room, "p4", { type: "submitSequence", taps: seq });
+    expect(room.gameState.phase).toBe("learning");
+    expect(room.gameState.level).toBe(4);
   });
 });
 
@@ -339,7 +240,7 @@ describe("whackmoles: spawn schedule and whacks", () => {
         expect(s.startAt).toBeGreaterThanOrEqual(1_000_000_000_000);
         expect(s.endAt - s.startAt).toBeGreaterThan(300);
         expect(s.endAt).toBeLessThan(1_000_000_000_000 + 20_000);
-        expect(s.hitBy).toEqual([]);
+        expect(s.hitBy).toBeUndefined();
       }
       // Windows never overlap so a tap always means exactly one mole.
       const sorted = [...spawns].sort((a, b) => a.startAt - b.startAt);
@@ -357,11 +258,11 @@ describe("whackmoles: spawn schedule and whacks", () => {
       const { room } = playing<MolesGameState>("whackmoles", 4);
       const engine = getGameEngine("whackmoles")!;
       // intro (2s) -> hunting, with the spawn schedule stamped at t0.
-      let next = tick<MolesGameState>("whackmoles", room, 2);
+      let next = tick<MolesGameState>("whackmoles", room, 3);
       expect(next.phase).toBe("hunting");
       // Advance the (frozen) wall clock 1.2s in: the first spawn window
       // (t0+0.8s .. t0+1.75s) is live now.
-      vi.advanceTimersByTime(1200);
+      vi.advanceTimersByTime(2200);
       const now = Date.now();
       const active = next.spawns.find((s) => now >= s.startAt && now < s.endAt);
       expect(active).toBeDefined();
@@ -370,14 +271,14 @@ describe("whackmoles: spawn schedule and whacks", () => {
       expect(next.hits["p1"]).toBe(1);
       expect(next.totalHits["p1"]).toBe(1);
       const hit = next.spawns.find((s) => s.cell === active!.cell)!;
-      expect(hit.hitBy).toEqual(["p1"]);
+      expect(hit.hitBy).toBe("p1");
       // A second whack on the same mole is a no-op.
       next = engine.handlePlayerAction(room, "p2", { type: "whack", cell: active!.cell });
       room.gameState = next;
       expect(next.hits["p1"]).toBe(1);
       // Empty whack (a cell with no live mole at this instant).
       const emptyCell = [0, 1, 2, 3, 4, 5, 6, 7, 8].find(
-        (c) => !next.spawns.some((s) => s.cell === c && now >= s.startAt && now < s.endAt && s.hitBy.length === 0),
+        (c) => !next.spawns.some((s) => s.cell === c && now >= s.startAt - 500 && now < s.endAt + 500),
       )!;
       next = engine.handlePlayerAction(room, "p3", { type: "whack", cell: emptyCell });
       room.gameState = next;

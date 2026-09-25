@@ -20,7 +20,8 @@ import PlayMusicalChairs from "./views/PlayMusicalChairs";
 import PlayWhackMoles from "./views/PlayWhackMoles";
 import PlaySimonSays from "./views/PlaySimonSays";
 import PlayWordChain from "./views/PlayWordChain";
-import PlayPokerLite from "./views/PlayPokerLite";
+import PlayBrainTeaser from "./views/PlayBrainTeaser";
+import PlayAmongUs from "./views/PlayAmongUs";
 
 const VIEWS: Record<string, ComponentType> = {
   bombcountdown: PlayBombCountdown,
@@ -37,7 +38,8 @@ const VIEWS: Record<string, ComponentType> = {
   whackmoles: PlayWhackMoles,
   simonsays: PlaySimonSays,
   wordchain: PlayWordChain,
-  pokerlite: PlayPokerLite,
+  brainteaser: PlayBrainTeaser,
+  amongus: PlayAmongUs,
 };
 
 /** Dispatch first: never interpret another game's state as bomb state. */

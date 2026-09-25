@@ -92,6 +92,7 @@ describe("full match playthroughs (all games reach results)", () => {
         for (const id of playerIds(r)) {
           if (s.phase === "submitting" && !s.submissions[id]) {
             runner.submit(id, { type: "submitBluff", text: `唬爛答案 ${id}` });
+            runner.submit(id, { type: "finishBluffs" });
           }
           if (s.phase === "voting" && !s.votes[id]) {
             runner.submit(id, { type: "voteAnswer", optionId: "real" });
@@ -208,7 +209,7 @@ describe("full match playthroughs (all games reach results)", () => {
           if (s.phase === "designing" && !s.designs[id]) {
             runner.submit(id, {
               type: "submitDesign",
-              design: { color: "#ef4444", shape: "star", trailEffect: "glitter", density: 40 },
+              design: { strokes: [{ c: "#ff0000", w: 6, p: [100, 100, 300, 300] }] },
             });
           }
           if (s.phase === "voting" && !s.votes[id]) {
@@ -217,7 +218,7 @@ describe("full match playthroughs (all games reach results)", () => {
           }
         }
       },
-      { settings: { timer: 25 } },
+      { settings: { timer: 30 } },
     );
     const s = room.gameState as { winnerId: string | null; currentScores: Record<string, number> };
     expect(s.winnerId).toBeTruthy();
@@ -349,12 +350,12 @@ describe("full match playthroughs (all games reach results)", () => {
           vi.setSystemTime(runner.now);
           const s = r.gameState as {
             phase: string;
-            spawns: Array<{ cell: number; startAt: number; endAt: number; hitBy: string[] }>;
+            spawns: Array<{ cell: number; startAt: number; endAt: number; hitBy?: string }>;
             hits: Record<string, number>;
           };
           if (s.phase !== "hunting") return;
           const now = runner.now;
-          const spawn = s.spawns.find((sp) => now >= sp.startAt && now < sp.endAt && sp.hitBy.length === 0);
+          const spawn = s.spawns.find((sp) => now >= sp.startAt && now < sp.endAt && !sp.hitBy);
           if (!spawn) return;
           const whacker = playerIds(r).find((id) => (s.hits[id] ?? 0) < 5) ?? playerIds(r)[0];
           runner.submit(whacker, { type: "whack", cell: spawn.cell });
@@ -386,8 +387,8 @@ describe("full match playthroughs (all games reach results)", () => {
         if (s.phase !== "repeat") return;
         const seq = simonSequence(s.seqSeed, s.level);
         for (const id of playerIds(r)) {
-          if (s.outThisRound.includes(id)) continue;
-          runner.submit(id, { type: "tap", quadrant: seq[s.playerProgress[id] ?? 0] });
+          if (s.outThisRound.includes(id) || (s.playerProgress[id] ?? 0) >= s.level) continue;
+          runner.submit(id, { type: "submitSequence", taps: seq });
         }
       },
       { settings: { rounds: 2 } },
@@ -437,44 +438,66 @@ describe("full match playthroughs (all games reach results)", () => {
     expect(s.winnerId).toBeTruthy();
   });
 
-  it("pokerlite: a full hand cycle of bets, showdown and chip carry-over", () => {
-    let lastHand = 0;
-    let p3Raised = false;
+  it("brainteaser: everyone answers, the right answer scores, a champion emerges", () => {
     const room = playMatch(
-      "pokerlite",
+      "brainteaser",
       (r, runner) => {
-        const s = r.gameState as {
-          phase: string;
-          handNumber: number;
-          toAct: string | null;
-          toCall: Record<string, number>;
-          currentBet: number;
-          chips: Record<string, number>;
-        };
-        if (s.phase !== "betting" || !s.toAct) return;
-        if (s.handNumber !== lastHand) {
-          lastHand = s.handNumber;
-          p3Raised = false;
-        }
-        const id = s.toAct;
-        if ((s.toCall[id] ?? 0) > 0) {
-          runner.submit(id, { type: "call" });
-        } else if (id === "p3" && !p3Raised) {
-          p3Raised = true;
-          runner.submit(id, { type: "raise", to: s.currentBet + 2 + 4 });
-        } else {
-          runner.submit(id, { type: "check" });
+        const s = r.gameState as { phase: string; answers: Record<string, string>; riddle: { answer: string }; options: string[] };
+        if (s.phase !== "question") return;
+        for (const id of playerIds(r)) {
+          if (s.answers[id] !== undefined) continue;
+          const wrong = s.options.find((o) => o !== s.riddle.answer)!;
+          runner.submit(id, { type: "answer", choice: id === "p1" ? s.riddle.answer : wrong });
         }
       },
-      { settings: { rounds: 3 } },
+      { settings: { rounds: 4 } },
     );
-    const s = room.gameState as { chips: Record<string, number>; winnerId: string | null };
-    for (const id of playerIds(room)) expect(s.chips[id] ?? 0).toBeGreaterThanOrEqual(0);
-    expect(Object.values(s.chips).some((c) => c > 100)).toBe(true); // someone banked a pot
-    expect(s.winnerId).toBeTruthy();
+    const s = room.gameState as { currentScores: Record<string, number>; winnerId: string };
+    expect(s.currentScores["p1"]).toBeGreaterThanOrEqual(4 * 15);
+    expect(s.currentScores["p2"]).toBe(0);
+    expect(s.winnerId).toBe("p1");
   });
 
-  it("registers exactly the fifteen games", () => {
+  it("amongus: crew finish every task and win", () => {
+    const room = playMatch("amongus", (r, runner) => {
+      const s = r.gameState as { phase: string; impostorIds: string[]; tasks: Record<string, number[]>; taskMask: Record<string, number> };
+      if (s.phase !== "tasks") return;
+      for (const id of playerIds(r)) {
+        if (s.impostorIds.includes(id)) continue;
+        const slot = (s.tasks[id] ?? []).findIndex((_, i) => ((s.taskMask[id] ?? 0) & (1 << i)) === 0);
+        if (slot >= 0) runner.submit(id, { type: "completeTask", slot });
+      }
+    });
+    const s = room.gameState as { winnerTeam: string; impostorIds: string[]; winnerIds: string[] };
+    expect(s.winnerTeam).toBe("crew");
+    expect(s.winnerIds).not.toContain(s.impostorIds[0]);
+    expect(room.gameState.winnerIds).toEqual(s.winnerIds);
+  });
+
+  it("amongus: the impostor picks off crew until they win", () => {
+    const room = playMatch("amongus", (r, runner) => {
+      const s = r.gameState as { phase: string; impostorIds: string[]; deadIds: string[]; killCooldowns: Record<string, number> };
+      if (s.phase !== "tasks") return;
+      const imp = s.impostorIds[0];
+      const target = playerIds(r).find((id) => id !== imp && !s.deadIds.includes(id));
+      if (target && (s.killCooldowns[imp] ?? 0) === 0) runner.submit(imp, { type: "kill", targetId: target });
+    });
+    expect(room.gameState.winnerTeam).toBe("impostor");
+  });
+
+  it("amongus: a meeting votes the impostor out", () => {
+    const room = playMatch("amongus", (r, runner) => {
+      const s = r.gameState as { phase: string; impostorIds: string[]; votes: Record<string, string>; deadIds: string[] };
+      if (s.phase === "tasks") runner.submit(playerIds(r).find((id) => !s.impostorIds.includes(id))!, { type: "emergency" });
+      if (s.phase === "discussion" || s.phase === "voting") {
+        for (const id of playerIds(r)) if (!s.votes[id]) runner.submit(id, { type: "vote", targetId: s.impostorIds[0] });
+      }
+    });
+    expect(room.gameState.winnerTeam).toBe("crew");
+    expect(room.gameState.winReason).toContain("內鬼");
+  });
+
+  it("registers exactly the sixteen games", () => {
     expect(playableGameIds().sort()).toEqual(
       [
         "aibullshit",
@@ -491,7 +514,8 @@ describe("full match playthroughs (all games reach results)", () => {
         "whackmoles",
         "simonsays",
         "wordchain",
-        "pokerlite",
+        "brainteaser",
+        "amongus",
       ].sort(),
     );
   });

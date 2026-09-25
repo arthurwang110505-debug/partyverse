@@ -22,8 +22,8 @@ export function submissionProgress(room: Room, playerId?: string) {
       ids = ids.filter((id) => id !== author);
     }
   } else if (room.gameId === "aibullshit" && state.phase === "submitting") {
-    key = "submissions";
-    prompt = "編寫並送出你的假答案";
+    key = "doneIds";
+    prompt = "寫下假答案（最多 2 個），寫完按「完成」";
   } else if (room.gameId === "fireworkmaster" && state.phase === "designing") {
     key = "designs";
     prompt = "設計完成後，記得送出作品";

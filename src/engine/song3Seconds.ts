@@ -1,3 +1,4 @@
+import { serverNow } from "./clock";
 import type { Achievement, GameEngine, GameSummary, Room } from "@/types";
 
 export const SONG_GAME_ID = "song3seconds";
@@ -12,104 +13,76 @@ export interface SongItem {
   options: string[];
 }
 
+/** Titles used as extra wrong answers when a category has few songs. */
+const EXTRA_TITLES: Record<string, string[]> = {"日語流行": ["打上花火", "Pretender", "夜に駆ける", "Kick Back"], "西洋流行": ["Blinding Lights", "Bad Guy", "Perfect", "Butter"]};
+
 export const SONG_LIST: SongItem[] = [
-  {
-    id: "s1",
-    title: "告白氣球",
-    artist: "周杰倫",
-    category: "華語流行",
-    lyric: "塞納河畔 左岸的咖啡",
-    options: ["告白氣球", "青花瓷", "七里香", "簡單愛"],
-  },
-  {
-    id: "s2",
-    title: "如果可以",
-    artist: "韋禮安",
-    category: "電影主題曲",
-    lyric: "如果可以 我想和你看每場煙火",
-    options: ["如果可以", "慢慢等", "還是會", "女孩"],
-  },
-  {
-    id: "s3",
-    title: "愛你",
-    artist: "王心凌",
-    category: "甜蜜經典",
-    lyric: "話不能亂說 經過了這麼多",
-    options: ["愛你", "睫毛彎彎", "心電心", "第一次愛的人"],
-  },
-  {
-    id: "s4",
-    title: "想見你想見你想見你",
-    artist: "八三夭",
-    category: "影視金曲",
-    lyric: "想見你 只想見你 未來過去",
-    options: ["想見你想見你想見你", "東區東區", "最後的831", "致青春"],
-  },
-  {
-    id: "s5",
-    title: "Lemon",
-    artist: "米津玄師",
-    category: "日語流行",
-    lyric: "夢ならばどれほどよかったでしょう",
-    options: ["Lemon", "紅蓮華", "打上花火", "Kick Back"],
-  },
-  {
-    id: "s6",
-    title: "怪美的",
-    artist: "蔡依林",
-    category: "流行舞曲",
-    lyric: "垂涎的邪惡 陪我喝醉翻了幾趟",
-    options: ["怪美的", "玫瑰少年", "大藝術家", "舞娘"],
-  },
-  {
-    id: "s7",
-    title: "夜曲",
-    artist: "周杰倫",
-    category: "華語流行",
-    lyric: "窗外的麻雀 在電線桿上多嘴",
-    options: ["夜曲", "告白氣球", "園遊會", "蘭亭序"],
-  },
-  {
-    id: "s8",
-    title: "光年之外",
-    artist: "鄧紫棋",
-    category: "電影主題曲",
-    lyric: "當我抬起頭 才發覺 聖潔的遠方",
-    options: ["光年之外", "泡沫", "多遠都要在一起", "喜欢你"],
-  },
-  {
-    id: "s9",
-    title: "愛你一萬年",
-    artist: "劉若英",
-    category: "影視金曲",
-    lyric: "我願愛你一萬年 直到天荒地老",
-    options: ["愛你一萬年", "後來", "我在他鄉", "約定"],
-  },
-  {
-    id: "s10",
-    title: "稻香",
-    artist: "周杰倫",
-    category: "田園治癒",
-    lyric: "回家吧 回到最初的美好",
-    options: ["稻香", "晴天", "聽媽媽的話", "菊花台"],
-  },
-  {
-    id: "s11",
-    title: "孤勇者",
-    artist: "陳奕迅",
-    category: "影視金曲",
-    lyric: "愛你不執著 被愛不孤單",
-    options: ["孤勇者", "海闊天空", "浮誇", "紅梅開"],
-  },
-  {
-    id: "s12",
-    title: "Dynamite",
-    artist: "BTS",
-    category: "西洋流行",
-    lyric: "I got love in my heart, don't know how to say it",
-    options: ["Dynamite", "Butter", "Permission to Dance", "Blueberry Nights"],
-  },
+  { id: "s1", title: "告白氣球", artist: "周杰倫", category: "華語流行", lyric: "塞納河畔 左岸的咖啡", options: [] },
+  { id: "s2", title: "晴天", artist: "周杰倫", category: "華語流行", lyric: "故事的小黃花 從出生那年就飄著", options: [] },
+  { id: "s3", title: "七里香", artist: "周杰倫", category: "華語流行", lyric: "窗外的麻雀 在電線桿上多嘴", options: [] },
+  { id: "s4", title: "稻香", artist: "周杰倫", category: "華語流行", lyric: "還記得你說家是唯一的城堡", options: [] },
+  { id: "s5", title: "青花瓷", artist: "周杰倫", category: "華語流行", lyric: "素胚勾勒出青花筆鋒濃轉淡", options: [] },
+  { id: "s6", title: "夜曲", artist: "周杰倫", category: "華語流行", lyric: "一群嗜血的螞蟻 被腐肉所吸引", options: [] },
+  { id: "s7", title: "小幸運", artist: "田馥甄", category: "電影主題曲", lyric: "原來你是我最想留住的幸運", options: [] },
+  { id: "s8", title: "後來", artist: "劉若英", category: "華語經典", lyric: "後來 我總算學會了如何去愛", options: [] },
+  { id: "s9", title: "愛你", artist: "王心凌", category: "甜蜜經典", lyric: "如果你突然打了個噴嚏 那一定就是我在想你", options: [] },
+  { id: "s10", title: "光年之外", artist: "鄧紫棋", category: "電影主題曲", lyric: "緣份讓我們相遇亂世以外", options: [] },
+  { id: "s11", title: "泡沫", artist: "鄧紫棋", category: "華語流行", lyric: "美麗的泡沫 雖然一剎花火", options: [] },
+  { id: "s12", title: "孤勇者", artist: "陳奕迅", category: "影視金曲", lyric: "愛你孤身走暗巷 愛你不跪的模樣", options: [] },
+  { id: "s13", title: "十年", artist: "陳奕迅", category: "華語經典", lyric: "如果那兩個字沒有顫抖 我不會發現我難受", options: [] },
+  { id: "s14", title: "倔強", artist: "五月天", category: "樂團搖滾", lyric: "當我和世界不一樣 那就讓我不一樣", options: [] },
+  { id: "s15", title: "知足", artist: "五月天", category: "樂團搖滾", lyric: "怎麼去擁有一道彩虹 怎麼去擁抱一夏天的風", options: [] },
+  { id: "s16", title: "突然好想你", artist: "五月天", category: "樂團搖滾", lyric: "突然好想你 你會在哪裡 過得快樂或委屈", options: [] },
+  { id: "s17", title: "溫柔", artist: "五月天", category: "樂團搖滾", lyric: "走在風中 今天陽光 突然好溫柔", options: [] },
+  { id: "s18", title: "那些年", artist: "胡夏", category: "電影主題曲", lyric: "又回到最初的起點 呆呆地站在鏡子前", options: [] },
+  { id: "s19", title: "修煉愛情", artist: "林俊傑", category: "華語流行", lyric: "修煉愛情的悲歡 我們這些努力不簡單", options: [] },
+  { id: "s20", title: "江南", artist: "林俊傑", category: "華語流行", lyric: "風到這裡就是黏 黏住過客的思念", options: [] },
+  { id: "s21", title: "小情歌", artist: "蘇打綠", category: "樂團搖滾", lyric: "這是一首簡單的小情歌 唱著人們心腸的曲折", options: [] },
+  { id: "s22", title: "月亮代表我的心", artist: "鄧麗君", category: "華語經典", lyric: "你問我愛你有多深 我愛你有幾分", options: [] },
+  { id: "s23", title: "童話", artist: "光良", category: "華語經典", lyric: "你哭著對我說 童話裡都是騙人的", options: [] },
+  { id: "s24", title: "演員", artist: "薛之謙", category: "華語流行", lyric: "簡單點 說話的方式簡單點", options: [] },
+  { id: "s25", title: "海闊天空", artist: "Beyond", category: "樂團搖滾", lyric: "今天我 寒夜裡看雪飄過", options: [] },
+  { id: "s26", title: "野狼disco", artist: "寶石Gem", category: "洗腦神曲", lyric: "心裡的花 我想要帶你回家", options: [] },
+  { id: "s27", title: "學貓叫", artist: "小潘潘、小峰峰", category: "洗腦神曲", lyric: "我們一起學貓叫 一起喵喵喵喵喵", options: [] },
+  { id: "s28", title: "小蘋果", artist: "筷子兄弟", category: "洗腦神曲", lyric: "你是我的小呀小蘋果", options: [] },
+  { id: "s29", title: "Lemon", artist: "米津玄師", category: "日語流行", lyric: "夢ならばどれほどよかったでしょう", options: [] },
+  { id: "s30", title: "紅蓮華", artist: "LiSA", category: "日語流行", lyric: "強くなれる理由を知った", options: [] },
+  { id: "s31", title: "Shape of You", artist: "Ed Sheeran", category: "西洋流行", lyric: "The club isn't the best place to find a lover", options: [] },
+  { id: "s32", title: "Let It Go", artist: "Idina Menzel", category: "西洋流行", lyric: "Let it go, let it go, can't hold it back anymore", options: [] },
+  { id: "s33", title: "Someone Like You", artist: "Adele", category: "西洋流行", lyric: "Never mind, I'll find someone like you", options: [] },
+  { id: "s34", title: "Dynamite", artist: "BTS", category: "西洋流行", lyric: "'Cause I, I, I'm in the stars tonight", options: [] },
 ];
+
+/** Correct title + 3 wrong titles (same category first), shuffled. */
+export function songOptions(song: SongItem, rand: () => number = Math.random): string[] {
+  const shuffle = <T,>(items: T[]) => {
+    const out = [...items];
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  };
+  const sameCat = SONG_LIST.filter((s) => s.category === song.category && s.title !== song.title).map((s) => s.title);
+  const extra = (EXTRA_TITLES[song.category] ?? []).filter((t) => t !== song.title);
+  const others = SONG_LIST.filter((s) => s.category !== song.category).map((s) => s.title);
+  const wrong = Array.from(new Set([...shuffle(sameCat), ...shuffle(extra), ...shuffle(others)])).slice(0, 3);
+  return shuffle([song.title, ...wrong]);
+}
+
+function withOptions(song: SongItem): SongItem {
+  return { ...song, options: songOptions(song) };
+}
+
+function shuffledSongIds(exclude: string[] = []): string[] {
+  const fresh = SONG_LIST.filter((s) => !exclude.includes(s.id)).map((s) => s.id);
+  const pool = fresh.length >= 5 ? fresh : SONG_LIST.map((s) => s.id);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool;
+}
 
 export type SongPhase = "listen" | "answering" | "reveal" | "result";
 
@@ -119,6 +92,9 @@ export interface SongGameState {
   totalRounds: number;
   timeLeft: number;
   currentSong: SongItem;
+  /** Shuffled song ids for this match, so every game plays a different set. */
+  songOrder?: string[];
+  usedPromptIds?: string[];
   /** How many characters of the lyric are un-masked on the TV (and phones). */
   lyricRevealed: number;
   /** playerId -> chosen song title */
@@ -143,8 +119,10 @@ function initialScores(players: Room["players"]): Record<string, number> {
   return scores;
 }
 
-function getSong(roundIndex: number): SongItem {
-  return SONG_LIST[(roundIndex - 1) % SONG_LIST.length];
+function getSong(order: string[] | undefined, roundIndex: number): SongItem {
+  const ids = order && order.length ? order : SONG_LIST.map((s) => s.id);
+  const id = ids[(roundIndex - 1) % ids.length];
+  return withOptions(SONG_LIST.find((s) => s.id === id) ?? SONG_LIST[(roundIndex - 1) % SONG_LIST.length]);
 }
 
 /** First-mask how much of the lyric depends on the room difficulty. */
@@ -163,17 +141,20 @@ export function lyricMask(song: SongItem, revealed: number): Array<{ char: strin
 
 export const Song3SecondsEngine: GameEngine<SongGameState> = {
   createGame(room) {
-    const song = getSong(1);
+    const songOrder = shuffledSongIds(room.contentHistory?.[SONG_GAME_ID] ?? []);
+    const song = getSong(songOrder, 1);
     return {
+      songOrder,
+      usedPromptIds: [song.id],
       phase: "listen",
       currentRound: 1,
-      totalRounds: Math.min(room.settings?.rounds ?? 4, SONG_LIST.length),
+      totalRounds: Math.min(room.settings?.rounds ?? 10, SONG_LIST.length),
       timeLeft: 3, // 3 seconds "listen / countdown"
       currentSong: song,
       lyricRevealed: initialLyricRevealed(song, room.settings?.difficulty ?? "easy"),
       playerAnswers: {},
       answerTimes: {},
-      roundStartTime: Date.now() + 3000,
+      roundStartTime: serverNow() + 3000,
       currentScores: initialScores(room.players),
       winnerId: null,
     };
@@ -191,7 +172,7 @@ export const Song3SecondsEngine: GameEngine<SongGameState> = {
     if (act?.type !== "answer" || typeof act.choice !== "string") return state;
     if (state.playerAnswers[playerId]) return state; // Already answered
 
-    const now = Date.now();
+    const now = serverNow();
     const elapsed = Math.max(100, now - state.roundStartTime);
     const answers = { ...state.playerAnswers, [playerId]: act.choice };
     const times = { ...state.answerTimes, [playerId]: elapsed };
@@ -221,7 +202,7 @@ export const Song3SecondsEngine: GameEngine<SongGameState> = {
           ...state,
           phase: "answering",
           timeLeft: Math.max(6, room.settings?.timer ?? 8),
-          roundStartTime: Date.now(),
+          roundStartTime: serverNow(),
         };
       }
       return { ...state, timeLeft: nextTime };
@@ -256,17 +237,18 @@ export const Song3SecondsEngine: GameEngine<SongGameState> = {
           };
         } else {
           const nextRound = state.currentRound + 1;
-          const song = getSong(nextRound);
+          const song = getSong(state.songOrder, nextRound);
           return {
             ...state,
             phase: "listen",
             currentRound: nextRound,
             timeLeft: 3,
             currentSong: song,
+            usedPromptIds: [...(state.usedPromptIds ?? []), song.id],
             lyricRevealed: initialLyricRevealed(song, room.settings?.difficulty ?? "easy"),
             playerAnswers: {},
             answerTimes: {},
-            roundStartTime: Date.now() + 3000,
+            roundStartTime: serverNow() + 3000,
           };
         }
       }

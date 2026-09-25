@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRoom } from "@/providers/RoomContext";
 import { engineRoom } from "@/engine/participants";
-import type { MolesGameState } from "@/engine/whackMoles";
+import { isMoleUp, type MolesGameState } from "@/engine/whackMoles";
+import { serverNow } from "@/engine/clock";
 import { HostGameControls } from "@/components/game/HostGameControls";
 import { HostShell } from "@/components/game/HostShell";
 import { PlayerChip } from "@/components/game/PlayerChip";
@@ -14,9 +15,9 @@ import { sfx } from "@/lib/sound";
 /** The host state ticks at 1Hz; the mole windows are sub-second, so the TV
  *  grid keeps a local clock to stay smooth against the same spawn schedule. */
 function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => serverNow());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), intervalMs);
+    const t = setInterval(() => setNow(serverNow()), intervalMs);
     return () => clearInterval(t);
   }, [intervalMs]);
   return now;
@@ -42,7 +43,7 @@ export default function HostWhackMoles() {
   const ids = Object.keys(players);
 
   const activeCell = (cell: number) =>
-    hunting && state.spawns.some((s) => s.cell === cell && now >= s.startAt && now < s.endAt && s.hitBy.length === 0);
+    hunting && (state.spawns ?? []).some((s) => s && s.cell === cell && isMoleUp(s, now));
 
   return (
     <HostShell>
@@ -78,7 +79,7 @@ export default function HostWhackMoles() {
                 }`}
               >
                 <span className={activeCell(cell) ? "animate-scale-in" : "opacity-20 grayscale"} aria-hidden="true">
-                  🐹
+                  🪵
                 </span>
               </div>
             ))}
@@ -87,7 +88,7 @@ export default function HostWhackMoles() {
           <div className="mx-auto mb-8 max-w-md">
             <RoundTimer
               timeLeft={state.timeLeft}
-              total={hunting ? state.roundDuration : state.phase === "round_intro" ? 2 : 3}
+              total={hunting ? state.roundDuration : state.phase === "round_intro" ? 3 : 3}
               endLabel={state.phase === "round_intro" ? "開始！" : "下一回合"}
             />
           </div>

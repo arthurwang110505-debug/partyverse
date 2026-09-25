@@ -86,8 +86,8 @@ describe("shared readiness briefing", () => {
   });
 
   it("resets readiness on restart and tolerates missing RTDB maps", () => {
-    let room = databaseRoundTrip(startRoomGame(testRoom("pokerlite"), NOW));
-    expect(() => getGameEngine("pokerlite")!.updateGameState(room)).not.toThrow();
+    let room = databaseRoundTrip(startRoomGame(testRoom("wordchain"), NOW));
+    expect(() => getGameEngine("wordchain")!.updateGameState(room)).not.toThrow();
     room = act(room, "p1", "readyRules");
     room = restartRoomGame(room, NOW + 1000);
     expect(room.gameState.phase).toBe("rules");

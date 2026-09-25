@@ -4,7 +4,7 @@ import { engineRoom } from "@/engine/participants";
 
 import { useEffect } from "react";
 import { useRoom } from "@/providers/RoomContext";
-import type { AIBullshitGameState } from "@/engine/aiBullshit";
+import { bluffsOf, type AIBullshitGameState } from "@/engine/aiBullshit";
 import { HostGameControls } from "@/components/game/HostGameControls";
 import { HostShell } from "@/components/game/HostShell";
 import { PlayerChip } from "@/components/game/PlayerChip";
@@ -30,7 +30,9 @@ export default function HostAiBullshit() {
   if (!state) return null;
 
   const livingPlayerCount = Object.keys(players).length;
-  const submissionCount = Object.keys(state.submissions).length;
+  const doneMap = state.doneIds ?? {};
+  const submissionCount = Object.keys(players).filter((id) => doneMap[id]).length;
+  const bluffCount = Object.values(state.submissions ?? {}).reduce<number>((n, v) => n + bluffsOf(v).length, 0);
   const voteCount = Object.keys(state.votes).length;
 
   return (
@@ -50,7 +52,7 @@ export default function HostAiBullshit() {
             <div className="mx-auto mb-8 max-w-md">
               <RoundTimer
                 timeLeft={state.timeLeft}
-                total={Math.max(20, room?.settings?.timer ?? 25)}
+                total={Math.max(45, room?.settings?.timer ?? 60)}
                 endLabel="提交截止"
               />
             </div>
@@ -60,7 +62,7 @@ export default function HostAiBullshit() {
               <div className="mb-2 flex items-center justify-between text-sm font-semibold text-pink-300">
                 <span>編造進度</span>
                 <span>
-                  {submissionCount} / {livingPlayerCount} 人已提交
+                  {submissionCount} / {livingPlayerCount} 人完成 · 共 {bluffCount} 個陷阱
                 </span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
@@ -79,8 +81,8 @@ export default function HostAiBullshit() {
                   key={id}
                   avatar={p.avatar}
                   nickname={p.nickname}
-                  highlight={Boolean(state.submissions[id])}
-                  status={state.submissions[id] ? "已提交 ✍️" : "苦思中…"}
+                  highlight={Boolean(doneMap[id])}
+                  status={doneMap[id] ? "完成 ✅" : bluffsOf(state.submissions[id]).length ? `已寫 ${bluffsOf(state.submissions[id]).length} 個 ✍️` : "苦思中…"}
                 />
               ))}
             </ul>
@@ -92,7 +94,7 @@ export default function HostAiBullshit() {
             <div className="mx-auto mb-8 max-w-md">
               <RoundTimer
                 timeLeft={state.timeLeft}
-                total={Math.max(15, room?.settings?.timer ?? 20)}
+                total={Math.max(20, room?.settings?.timer ? Math.round(room.settings.timer / 2) : 25)}
                 endLabel="投票截止"
               />
             </div>

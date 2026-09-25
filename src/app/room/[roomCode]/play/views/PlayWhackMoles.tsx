@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRoom } from "@/providers/RoomContext";
 import type { MolesGameState } from "@/engine/whackMoles";
-import { COMBO_SIZE } from "@/engine/whackMoles";
+import { COMBO_SIZE, isMoleUp } from "@/engine/whackMoles";
+import { serverNow } from "@/engine/clock";
 import { PlayShell } from "@/components/game/PlayShell";
 import { RoundTimer } from "@/components/game/RoundTimer";
 import { vibrate } from "@/lib/sound";
@@ -10,17 +12,29 @@ import { vibrate } from "@/lib/sound";
 export default function PlayWhackMoles() {
   const { room, player, submitAction } = useRoom();
   const state = room?.gameState as MolesGameState | undefined;
+  const hunting = state?.phase === "hunting";
+  const [now, setNow] = useState(() => serverNow());
+  const [flash, setFlash] = useState<{ cell: number; hit: boolean; at: number } | null>(null);
+  useEffect(() => {
+    if (!hunting) return;
+    const t = setInterval(() => setNow(serverNow()), 80);
+    return () => clearInterval(t);
+  }, [hunting]);
 
   if (!state || !player) return null;
+  const spawns = (state.spawns ?? []).filter(Boolean);
+  const upIndex = (cell: number) => spawns.findIndex((s) => s.cell === cell && isMoleUp(s, now));
   const myHits = state.hits[player.id] ?? 0;
   const myStreak = state.streaks[player.id] ?? 0;
-  const hunting = state.phase === "hunting";
 
   const whack = async (cell: number) => {
     if (!hunting) return;
-    vibrate(15);
+    const t = serverNow();
+    const spawn = spawns.findIndex((s) => s.cell === cell && !s.hitBy && t >= s.startAt - 250 && t < s.endAt + 450);
+    setFlash({ cell, hit: spawn >= 0, at: t });
+    vibrate(spawn >= 0 ? 30 : 10);
     try {
-      await submitAction({ type: "whack", cell });
+      await submitAction({ type: "whack", cell, ...(spawn >= 0 ? { spawn } : {}) });
     } catch {
       // Drop it; the next tap still lands.
     }
@@ -31,11 +45,11 @@ export default function PlayWhackMoles() {
       <div className="flex flex-1 flex-col items-center px-4 py-5 text-center">
         {state.phase === "round_intro" && (
           <>
-            <p className="mb-3 text-6xl animate-bounce" aria-hidden="true">🐹</p>
+            <p className="mb-3 text-6xl animate-bounce" aria-hidden="true">🪵</p>
             <h1 className="text-2xl font-black text-white">第 {state.currentRound} 回合，準備…</h1>
-            <p className="mt-2 text-sm text-white/60">木頭從大螢幕的洞裡冒出來，點「同樣位置」的洞！</p>
+            <p className="mt-2 text-sm text-white/60">木頭冒出來（手機和大螢幕同步）就立刻點它！</p>
             <div className="mt-6">
-              <RoundTimer timeLeft={state.timeLeft} total={2} endLabel="開始！" compact />
+              <RoundTimer timeLeft={state.timeLeft} total={3} endLabel="開始！" compact />
             </div>
           </>
         )}
@@ -49,17 +63,26 @@ export default function PlayWhackMoles() {
               </span>
             </div>
             <div className="grid w-full max-w-xs grid-cols-3 gap-2.5">
-              {Array.from({ length: 9 }, (_, cell) => (
-                <button
-                  key={cell}
-                  type="button"
-                  aria-label={`敲第 ${Math.floor(cell / 3) + 1} 排第 ${cell % 3 + 1} 個洞`}
-                  onClick={() => void whack(cell)}
-                  className="flex aspect-square select-none items-center justify-center rounded-2xl border-2 border-white/15 bg-white/5 text-3xl transition-all active:scale-90 active:bg-amber-400/30"
-                >
-                  🕳️
-                </button>
-              ))}
+              {Array.from({ length: 9 }, (_, cell) => {
+                const up = upIndex(cell) >= 0;
+                const fb = flash && flash.cell === cell && now - flash.at < 350 ? flash : null;
+                return (
+                  <button
+                    key={cell}
+                    type="button"
+                    aria-label={`敲第 ${Math.floor(cell / 3) + 1} 排第 ${cell % 3 + 1} 個洞${up ? "（木頭）" : ""}`}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      void whack(cell);
+                    }}
+                    className={`flex aspect-square touch-manipulation select-none items-center justify-center rounded-2xl border-2 text-4xl transition-all active:scale-90 ${
+                      fb ? (fb.hit ? "border-emerald-300 bg-emerald-500/40" : "border-red-400/60 bg-red-500/20") : up ? "border-amber-300 bg-amber-500/30 shadow-[0_0_20px_rgba(251,191,36,0.45)]" : "border-white/15 bg-white/5"
+                    }`}
+                  >
+                    {fb?.hit ? "💥" : up ? "🪵" : <span className="opacity-30">🕳️</span>}
+                  </button>
+                );
+              })}
             </div>
             <div className="mt-4">
               <RoundTimer timeLeft={state.timeLeft} total={state.roundDuration} endLabel="本回合結束" compact />
