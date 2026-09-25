@@ -31,7 +31,7 @@ describe("safe submission feedback", () => {
   });
 
   it.each([
-    ["aibullshit", "submitting", "submissions"],
+    ["aibullshit", "submitting", "doneIds"],
     ["fireworkmaster", "designing", "designs"],
     ["song3seconds", "answering", "playerAnswers"],
   ])("%s shows completion without leaking content", (id, phase, key) => {

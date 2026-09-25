@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRoom } from "@/providers/RoomContext";
 import { useToast } from "@/providers/ToastProvider";
-import type { AIBullshitGameState } from "@/engine/aiBullshit";
+import { MAX_BLUFFS_PER_PLAYER, bluffsOf, type AIBullshitGameState } from "@/engine/aiBullshit";
 import { Button } from "@/components/ui/Button";
 import { PlayShell } from "@/components/game/PlayShell";
 import { vibrate, sfx } from "@/lib/sound";
@@ -24,7 +24,8 @@ export default function PlayAiBullshit() {
 
   if (!state || !player) return null;
 
-  const hasSubmitted = Boolean(state.submissions?.[player.id]);
+  const myBluffs = bluffsOf(state.submissions?.[player.id]);
+  const isDone = Boolean(state.doneIds?.[player.id]) || myBluffs.length >= MAX_BLUFFS_PER_PLAYER;
   const myVote = state.votes?.[player.id];
 
   const handleSubmitFake = async () => {
@@ -33,7 +34,19 @@ export default function PlayAiBullshit() {
     vibrate(20);
     try {
       await submitAction({ type: "submitBluff", text: fakeInput.trim() });
+      setFakeInput("");
       sfx.playReady();
+    } catch {
+      toast("送出失敗，請再試一次");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const handleFinish = async () => {
+    setPending(true);
+    try {
+      await submitAction({ type: "finishBluffs" });
     } catch {
       toast("送出失敗，請再試一次");
     } finally {
@@ -63,13 +76,22 @@ export default function PlayAiBullshit() {
 
         {state.phase === "submitting" && (
           <div className="py-4">
-            {hasSubmitted ? (
-              <div className="py-12 rounded-3xl border border-pink-500/30 bg-pink-950/30 p-6">
+            {myBluffs.length > 0 && (
+              <ul className="mb-4 space-y-2 text-left">
+                {myBluffs.map((b, i) => (
+                  <li key={i} className="rounded-2xl border border-pink-500/30 bg-pink-950/30 px-4 py-2 text-sm text-pink-100">
+                    💡 陷阱 {i + 1}：{b}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {isDone ? (
+              <div className="py-10 rounded-3xl border border-pink-500/30 bg-pink-950/30 p-6">
                 <p className="mb-2 text-5xl animate-bounce" aria-hidden="true">
                   💡
                 </p>
                 <h3 className="text-xl font-black text-white">假答案已成功埋伏！</h3>
-                <p className="mt-1 text-sm text-pink-200/80">靜待其他人上鉤，請看大螢幕！</p>
+                <p className="mt-1 text-sm text-pink-200/80">等其他人寫完就開始投票，請看大螢幕！</p>
               </div>
             ) : (
               <form
@@ -105,8 +127,14 @@ export default function PlayAiBullshit() {
                   disabled={!fakeInput.trim()}
                   loading={pending}
                 >
-                  送出假答案陷阱
+                  {myBluffs.length === 0 ? "送出假答案陷阱" : "再送一個陷阱"}
                 </Button>
+                {myBluffs.length > 0 && (
+                  <Button type="button" variant="ghost" size="lg" className="w-full" onClick={() => void handleFinish()}>
+                    我寫完了 ✓
+                  </Button>
+                )}
+                <p className="text-xs text-white/50">每人最多 {MAX_BLUFFS_PER_PLAYER} 個假答案，選項越多越好騙！</p>
               </form>
             )}
           </div>

@@ -5,7 +5,7 @@ import { EverybodyKnowsEngine, EVERYBODY_GAME_ID } from "./everybodyKnows";
 import { AIBullshitEngine, AIBULLSHIT_GAME_ID } from "./aiBullshit";
 import { WhoIsUndercoverEngine, UNDERCOVER_GAME_ID } from "./whoIsUndercover";
 import { Song3SecondsEngine, SONG_GAME_ID } from "./song3Seconds";
-import { KingTonightEngine, KING_GAME_ID } from "./kingTonight";
+import { KingTonightEngine, KING_GAME_ID, MINI_CHALLENGES } from "./kingTonight";
 import { FireworkMasterEngine, FIREWORK_GAME_ID } from "./fireworkMaster";
 import { DrawAndGuessEngine, DRAW_GAME_ID } from "./drawAndGuess";
 import { RealBattleEngine, BATTLE_GAME_ID } from "./realBattle";
@@ -14,7 +14,8 @@ import { CHAIRS_GAME_ID } from "./musicalChairs";
 import { MOLES_GAME_ID } from "./whackMoles";
 import { SIMON_GAME_ID } from "./simonSays";
 import { CHAIN_GAME_ID } from "./wordChain";
-import { POKER_GAME_ID } from "./pokerLite";
+import { BRAIN_GAME_ID } from "./brainTeaser";
+import { AMONG_GAME_ID } from "./amongUs";
 
 function createMockRoom(gameId: string): Room<any> {
   return {
@@ -39,9 +40,9 @@ function createMockRoom(gameId: string): Room<any> {
   };
 }
 
-describe("All 15 Games Engine Registry", () => {
-  it("registers all 15 games as playable", () => {
-    expect(playableGameIds()).toHaveLength(15);
+describe("All 16 Games Engine Registry", () => {
+  it("registers all 16 games as playable", () => {
+    expect(playableGameIds()).toHaveLength(16);
     const ids = [
       "bombcountdown",
       EVERYBODY_GAME_ID,
@@ -57,7 +58,8 @@ describe("All 15 Games Engine Registry", () => {
       MOLES_GAME_ID,
       SIMON_GAME_ID,
       CHAIN_GAME_ID,
-      POKER_GAME_ID,
+      BRAIN_GAME_ID,
+      AMONG_GAME_ID,
     ];
     for (const id of ids) {
       expect(isPlayable(id)).toBe(true);
@@ -98,12 +100,19 @@ describe("AI Bullshit Engine", () => {
     room.gameState = state;
     let next = AIBullshitEngine.handlePlayerAction(room, "p1", { type: "submitBluff", text: "把頭放在水裡" });
     room.gameState = next;
+    next = AIBullshitEngine.handlePlayerAction(room, "p1", { type: "submitBluff", text: "吃三顆檸檬" });
+    room.gameState = next;
     next = AIBullshitEngine.handlePlayerAction(room, "p2", { type: "submitBluff", text: "倒立吃香蕉" });
     room.gameState = next;
+    next = AIBullshitEngine.handlePlayerAction(room, "p2", { type: "finishBluffs" });
+    room.gameState = next;
     next = AIBullshitEngine.handlePlayerAction(room, "p3", { type: "submitBluff", text: "敲鑼打鼓" });
+    room.gameState = next;
+    expect(next.phase).toBe("submitting"); // p3 may still add a second bluff
+    next = AIBullshitEngine.handlePlayerAction(room, "p3", { type: "finishBluffs" });
 
     expect(next.phase).toBe("voting");
-    expect(next.options.length).toBe(4); // 3 fakes + 1 real
+    expect(next.options.length).toBe(5); // 4 player bluffs + 1 real
 
     // Now players vote
     room.gameState = next;
@@ -111,7 +120,7 @@ describe("AI Bullshit Engine", () => {
     next = AIBullshitEngine.handlePlayerAction(room, "p1", { type: "voteAnswer", optionId: "real" });
     room.gameState = next;
     // p2 votes for p1's fake
-    next = AIBullshitEngine.handlePlayerAction(room, "p2", { type: "voteAnswer", optionId: "fake_p1" });
+    next = AIBullshitEngine.handlePlayerAction(room, "p2", { type: "voteAnswer", optionId: "fake_p1_0" });
     room.gameState = next;
     // p3 votes for real
     next = AIBullshitEngine.handlePlayerAction(room, "p3", { type: "voteAnswer", optionId: "real" });
@@ -183,6 +192,7 @@ describe("King Tonight Engine", () => {
     expect(state.phase).toBe("briefing");
 
     state.phase = "action";
+    state.challenge = MINI_CHALLENGES[0];
     room.gameState = state;
 
     let next = state;
@@ -204,17 +214,17 @@ describe("Firework Master Engine", () => {
     room.gameState = state;
     let next = FireworkMasterEngine.handlePlayerAction(room, "p1", {
       type: "submitDesign",
-      design: { color: "#ff0000", shape: "heart", trailEffect: "sparkle", density: 40 },
+      design: { strokes: [{ c: "#ff0000", w: 6, p: [100, 100, 300, 300] }] },
     });
     room.gameState = next;
     next = FireworkMasterEngine.handlePlayerAction(room, "p2", {
       type: "submitDesign",
-      design: { color: "#00ff00", shape: "star", trailEffect: "glitter", density: 50 },
+      design: { strokes: [{ c: "#ff0000", w: 6, p: [100, 100, 300, 300] }] },
     });
     room.gameState = next;
     next = FireworkMasterEngine.handlePlayerAction(room, "p3", {
       type: "submitDesign",
-      design: { color: "#0000ff", shape: "circle", trailEffect: "smoke", density: 20 },
+      design: { strokes: [{ c: "#ff0000", w: 6, p: [100, 100, 300, 300] }] },
     });
 
     expect(next.phase).toBe("show");

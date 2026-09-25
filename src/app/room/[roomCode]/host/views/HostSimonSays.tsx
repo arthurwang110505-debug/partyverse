@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRoom } from "@/providers/RoomContext";
 import { engineRoom } from "@/engine/participants";
-import { SIMON_QUADRANTS, simonSequence } from "@/engine/simonSays";
+import { SIMON_QUADRANTS, repeatSeconds, simonSequence } from "@/engine/simonSays";
 import type { SimonGameState } from "@/engine/simonSays";
 import { HostGameControls } from "@/components/game/HostGameControls";
 import { HostShell } from "@/components/game/HostShell";
@@ -49,7 +49,7 @@ export default function HostSimonSays() {
   const ids = Object.keys(players);
   const seq = simonSequence(state.seqSeed, state.level);
   const flashing = state.phase === "learning" && state.learnIndex > 0 ? seq[state.learnIndex - 1] : -1;
-  const doneCount = ids.filter((id) => !state.outThisRound.includes(id) && !state.maxedOut.includes(id) && (state.playerProgress[id] ?? 0) >= state.level).length;
+  const doneCount = ids.filter((id) => !state.outThisRound.includes(id) && (state.maxedOut.includes(id) || (state.playerProgress[id] ?? 0) >= state.level)).length;
 
   return (
     <HostShell>
@@ -74,13 +74,15 @@ export default function HostSimonSays() {
         <div className="mx-auto mb-8 grid w-full max-w-md grid-cols-2 gap-4" aria-label="西蒙四色方塊">
           {Array.from({ length: SIMON_QUADRANTS }, (_, q) => (
             <div
-              key={q}
+              key={`${q}-${q === flashing ? state.learnIndex : "off"}`}
               className={cn(
-                "aspect-square rounded-3xl border-4 transition-all duration-150",
-                q === flashing ? `${QUADRANT_STYLES[q]} border-white scale-105` : "border-white/15 bg-white/5",
-                state.phase === "repeat" && "opacity-80",
+                "flex aspect-square items-center justify-center rounded-3xl border-4 text-5xl font-black text-black/50",
+                QUADRANT_STYLES[q],
+                q === flashing ? "animate-simon-flash border-white" : "border-transparent opacity-25 shadow-none",
               )}
-            />
+            >
+              {q + 1}
+            </div>
           ))}
         </div>
 
@@ -102,7 +104,7 @@ export default function HostSimonSays() {
           <div className="mx-auto mb-6 max-w-xs">
             <RoundTimer
               timeLeft={state.timeLeft}
-              total={state.phase === "repeat" ? 20 : 4}
+              total={state.phase === "repeat" ? repeatSeconds(state.level) : 4}
               endLabel={state.phase === "repeat" ? "還沒點完的人淘汰" : "下一輪"}
               compact
             />
@@ -129,7 +131,7 @@ export default function HostSimonSays() {
                       : maxed
                         ? "已達滿級"
                         : state.phase === "repeat"
-                          ? `Lv.${state.level} · ${progress}/${state.level}`
+                          ? progress >= state.level ? "✅ 完成" : "作答中…"
                           : `Lv.${state.level}`
                 }
               />

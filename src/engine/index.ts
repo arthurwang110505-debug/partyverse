@@ -15,7 +15,8 @@ import { CHAIRS_GAME_ID, MusicalChairsEngine } from "./musicalChairs";
 import { MOLES_GAME_ID, WhackMolesEngine } from "./whackMoles";
 import { SIMON_GAME_ID, SimonSaysEngine } from "./simonSays";
 import { CHAIN_GAME_ID, WordChainEngine } from "./wordChain";
-import { POKER_GAME_ID, PokerLiteEngine } from "./pokerLite";
+import { BRAIN_GAME_ID, BrainTeaserEngine } from "./brainTeaser";
+import { AMONG_GAME_ID, AmongUsEngine } from "./amongUs";
 import { RULES_PHASE, withRulesPhase } from "./rulesTour";
 
 /**
@@ -37,7 +38,8 @@ const engines: Record<string, GameEngine<any>> = {
   [MOLES_GAME_ID]: WhackMolesEngine as GameEngine<any>,
   [SIMON_GAME_ID]: SimonSaysEngine as GameEngine<any>,
   [CHAIN_GAME_ID]: WordChainEngine as GameEngine<any>,
-  [POKER_GAME_ID]: PokerLiteEngine as GameEngine<any>,
+  [BRAIN_GAME_ID]: BrainTeaserEngine as GameEngine<any>,
+  [AMONG_GAME_ID]: AmongUsEngine as GameEngine<any>,
 };
 
 function prepare(room: Room<any>): Room<any> {

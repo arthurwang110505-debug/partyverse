@@ -18,10 +18,11 @@ import {
   initialLyricRevealed,
   lyricMask,
   type SongGameState,
+  songOptions,
 } from "./song3Seconds";
-import { KingTonightEngine, MAX_TAP_BATCH, type KingGameState } from "./kingTonight";
+import { KingTonightEngine, MAX_TAP_BATCH, MINI_CHALLENGES, type KingGameState } from "./kingTonight";
 import { BATTLE_GAME_ID, RealBattleEngine, type BattleGameState } from "./realBattle";
-import { FireworkMasterEngine, sanitizeDesign, type FireworkDesign } from "./fireworkMaster";
+import { FireworkMasterEngine, sanitizeDesign } from "./fireworkMaster";
 
 describe("whoisundercoveragent: tie and offline rules", () => {
   // The guarded registry engine is what production uses: it strips the
@@ -162,9 +163,12 @@ describe("mysteryroom: cases, hints and wrong codes", () => {
 
 describe("song3seconds: masked-lyric flash", () => {
   it("keeps the answer option honest and masks by difficulty", () => {
+    expect(SONG_LIST.length).toBeGreaterThanOrEqual(20);
     for (const song of SONG_LIST) {
-      expect(song.options).toContain(song.title);
-      expect(new Set(song.options).size).toBe(song.options.length);
+      const options = songOptions(song);
+      expect(options).toContain(song.title);
+      expect(options).toHaveLength(4);
+      expect(new Set(options).size).toBe(options.length);
       expect(song.lyric.length).toBeGreaterThan(3);
     }
     const song = SONG_LIST[0];
@@ -216,7 +220,7 @@ describe("kingtonight: batched tap-mash", () => {
   it("adds a batch of taps in one action", () => {
     const room = testRoom("kingtonight", 4) as unknown as Room<KingGameState>;
     const state = KingTonightEngine.createGame(room);
-    room.gameState = { ...state, phase: "action" };
+    room.gameState = { ...state, phase: "action", challenge: MINI_CHALLENGES[0] };
 
     const next = KingTonightEngine.handlePlayerAction(room, "p1", { type: "taps", count: 7 });
     expect(next.playerInputs["p1"]).toBe(7);
@@ -229,7 +233,7 @@ describe("kingtonight: batched tap-mash", () => {
   it("caps a batch and ignores garbage", () => {
     const room = testRoom("kingtonight", 4) as unknown as Room<KingGameState>;
     const state = KingTonightEngine.createGame(room);
-    room.gameState = { ...state, phase: "action" };
+    room.gameState = { ...state, phase: "action", challenge: MINI_CHALLENGES[0] };
 
     const next = KingTonightEngine.handlePlayerAction(room, "p1", { type: "taps", count: 999 });
     expect(next.playerInputs["p1"]).toBe(MAX_TAP_BATCH);
@@ -294,36 +298,32 @@ describe("realbattle: body checks and the mega star", () => {
   });
 });
 
-describe("fireworkmaster: design sanitizing", () => {
-  it("clamps density and falls back for bad shapes/colors", () => {
-    const good = sanitizeDesign({ color: "#123abc", shape: "heart", trailEffect: "smoke", density: 25 });
-    expect(good).toEqual({ color: "#123abc", shape: "heart", trailEffect: "smoke", density: 25 });
+describe("fireworkmaster: hand-drawn designs", () => {
+  it("keeps valid strokes and repairs bad ones", () => {
+    const good = sanitizeDesign({ strokes: [{ c: "#123abc", w: 6, p: [10, 10, 50, 60] }] });
+    expect(good).toEqual({ strokes: [{ c: "#123abc", w: 6, p: [10, 10, 50, 60] }] });
 
-    const clamped = sanitizeDesign({ color: "#123abc", shape: "star", trailEffect: "glitter", density: 999 });
-    expect(clamped.density).toBe(80);
+    const repaired = sanitizeDesign({ strokes: [{ c: "banana", w: 99, p: [-5, 500, 20, 30, 7] }] });
+    expect(repaired.strokes[0]).toEqual({ c: "#ff3b6b", w: 16, p: [0, 400, 20, 30] });
 
-    // Deliberately invalid payload: the engine must fall back, not crash.
-    const fallback = sanitizeDesign({ color: "notacolor", shape: "diamond", trailEffect: "laser", density: "loud" } as unknown as FireworkDesign);
-    expect(fallback.shape).toBe("circle");
-    expect(fallback.color).toBe("#ff007f");
-    expect(fallback.trailEffect).toBe("sparkle");
-    expect(fallback.density).toBe(30);
+    // RTDB may hand arrays back as index-keyed objects.
+    const roundTrip = sanitizeDesign({ strokes: { 0: { c: "#ffffff", w: 3, p: { 0: 1, 1: 2 } } } });
+    expect(roundTrip.strokes[0].p).toEqual([1, 2]);
 
-    const clampedLow = sanitizeDesign({ color: "#123abc", shape: "star", trailEffect: "glitter", density: -4 });
-    expect(clampedLow.density).toBe(5);
-
-    expect(sanitizeDesign(null).shape).toBe("circle");
+    expect(sanitizeDesign(null).strokes).toEqual([]);
+    expect(sanitizeDesign({ strokes: [{ c: "#ffffff", w: 3, p: [1] }] }).strokes).toEqual([]);
   });
 
-  it("stores sanitized designs on submit", () => {
+  it("rejects an empty drawing and gives no-shows a fallback at the deadline", () => {
     const room = testRoom("fireworkmaster", 4) as unknown as Room<
       Awaited<ReturnType<typeof FireworkMasterEngine.createGame>>
     >;
     room.gameState = FireworkMasterEngine.createGame(room);
-    const next = FireworkMasterEngine.handlePlayerAction(room, "p1", {
-      type: "submitDesign",
-      design: { color: "banana", shape: "nope", trailEffect: "nope", density: 1000 },
-    });
-    expect(next.designs["p1"]).toEqual({ color: "#ff007f", shape: "circle", trailEffect: "sparkle", density: 80 });
+    const empty = FireworkMasterEngine.handlePlayerAction(room, "p1", { type: "submitDesign", design: { strokes: [] } });
+    expect(empty.designs["p1"]).toBeUndefined();
+    room.gameState = { ...room.gameState, timeLeft: 1 };
+    const shown = FireworkMasterEngine.updateGameState(room);
+    expect(shown.phase).toBe("show");
+    expect(shown.designs["p1"].strokes.length).toBeGreaterThan(0);
   });
 });

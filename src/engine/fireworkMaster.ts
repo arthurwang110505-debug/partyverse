@@ -2,19 +2,21 @@ import type { Achievement, GameEngine, GameSummary, Room } from "@/types";
 
 export const FIREWORK_GAME_ID = "fireworkmaster";
 
-export interface FireworkDesign {
-  color: string;
-  shape: "circle" | "star" | "heart" | "ring";
-  trailEffect: "sparkle" | "smoke" | "glitter";
-  density: number;
+/** One hand-drawn line; points are x,y pairs on a 400×400 canvas. */
+export interface FireworkStroke {
+  c: string;
+  w: number;
+  p: number[];
 }
 
-export const DEFAULT_DESIGN: FireworkDesign = {
-  color: "#ff007f",
-  shape: "circle",
-  trailEffect: "sparkle",
-  density: 30,
-};
+/** A firework is whatever the player drew on their phone. */
+export interface FireworkDesign {
+  strokes: FireworkStroke[];
+}
+
+export const FIREWORK_COLORS = ["#ff3b6b", "#ff9f1c", "#ffe600", "#39ff14", "#00f0ff", "#4d7cff", "#bf00ff", "#ffffff"];
+export const MAX_FW_STROKES = 40;
+export const MAX_FW_POINTS = 240; // numbers per stroke (= 120 points)
 
 export type FireworkPhase = "designing" | "show" | "voting" | "result";
 
@@ -51,22 +53,48 @@ function initialScores(players: Room["players"]): Record<string, number> {
   return scores;
 }
 
-const SHAPES: FireworkDesign["shape"][] = ["circle", "star", "heart", "ring"];
-const TRAILS: FireworkDesign["trailEffect"][] = ["sparkle", "smoke", "glitter"];
+function arr(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") return Object.values(value as Record<string, unknown>);
+  return [];
+}
 
-/** Coerce a submitted design to safe, in-range values. */
-export function sanitizeDesign(input: Partial<FireworkDesign> | null | undefined): FireworkDesign {
-  const base = DEFAULT_DESIGN;
-  return {
-    color:
-      input?.color && /^#[0-9a-fA-F]{6}$/.test(input.color) ? input.color : base.color,
-    shape: input?.shape && (SHAPES as string[]).includes(input.shape) ? input.shape : base.shape,
-    trailEffect: input?.trailEffect && (TRAILS as string[]).includes(input.trailEffect) ? input.trailEffect : base.trailEffect,
-    density:
-      typeof input?.density === "number" && Number.isFinite(input.density)
-        ? Math.round(Math.min(80, Math.max(5, input.density)))
-        : base.density,
-  };
+/** Coerce a submitted drawing to safe, in-range values (also repairs RTDB round trips). */
+export function sanitizeDesign(input: unknown): FireworkDesign {
+  const strokes: FireworkStroke[] = [];
+  for (const raw of arr((input as { strokes?: unknown } | null)?.strokes).slice(0, MAX_FW_STROKES)) {
+    const line = raw as Partial<FireworkStroke> | null;
+    if (!line) continue;
+    const nums = arr(line.p).filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+    const even = nums.slice(0, Math.min(MAX_FW_POINTS, nums.length - (nums.length % 2)));
+    if (even.length < 2) continue;
+    strokes.push({
+      c: typeof line.c === "string" && /^#[0-9a-fA-F]{6}$/.test(line.c) ? line.c : FIREWORK_COLORS[0],
+      w: typeof line.w === "number" && Number.isFinite(line.w) ? Math.round(Math.min(16, Math.max(2, line.w))) : 6,
+      p: even.map((n) => Math.round(Math.min(400, Math.max(0, n)))),
+    });
+  }
+  return { strokes };
+}
+
+/** A simple starburst for anyone who ran out of time without drawing. */
+export function fallbackDesign(rand: () => number = Math.random): FireworkDesign {
+  const c = FIREWORK_COLORS[Math.floor(rand() * (FIREWORK_COLORS.length - 1))];
+  const rays = 10 + Math.floor(rand() * 6);
+  const strokes: FireworkStroke[] = [];
+  for (let i = 0; i < rays; i++) {
+    const a = (i / rays) * Math.PI * 2;
+    strokes.push({ c, w: 5, p: [200 + Math.cos(a) * 40, 200 + Math.sin(a) * 40, 200 + Math.cos(a) * 150, 200 + Math.sin(a) * 150].map(Math.round) });
+  }
+  return { strokes };
+}
+
+function drawTime(room: Room<FireworkGameState>): number {
+  return Math.max(30, room.settings?.timer ?? 60);
+}
+
+function showTime(count: number): number {
+  return Math.max(12, count * 3 + 4);
 }
 
 export const FireworkMasterEngine: GameEngine<FireworkGameState> = {
@@ -74,7 +102,7 @@ export const FireworkMasterEngine: GameEngine<FireworkGameState> = {
     return {
       phase: "designing",
       currentRound: 1,
-      timeLeft: Math.max(25, room.settings?.timer ?? 30),
+      timeLeft: drawTime(room),
       designs: {},
       votes: {},
       voteCounts: {},
@@ -95,7 +123,9 @@ export const FireworkMasterEngine: GameEngine<FireworkGameState> = {
       const act = action as SubmitDesignAction;
       if (act?.type !== "submitDesign") return state;
 
-      const designs = { ...state.designs, [playerId]: sanitizeDesign(act.design) };
+      const design = sanitizeDesign(act.design);
+      if (design.strokes.length === 0) return state;
+      const designs = { ...state.designs, [playerId]: design };
       const livingIds = Object.keys(room.players).filter((id) => room.players[id]?.isConnected !== false);
       const allSubmitted = livingIds.every((id) => Boolean(designs[id]));
 
@@ -104,7 +134,7 @@ export const FireworkMasterEngine: GameEngine<FireworkGameState> = {
           ...state,
           designs,
           phase: "show",
-          timeLeft: 12, // 12 seconds grand firework show
+          timeLeft: showTime(Object.keys(designs).length),
         };
       }
       return { ...state, designs };
@@ -138,13 +168,13 @@ export const FireworkMasterEngine: GameEngine<FireworkGameState> = {
         // Fallback default designs for players who didn't submit
         const designs = { ...state.designs };
         for (const id of Object.keys(room.players)) {
-          if (!designs[id]) designs[id] = { ...DEFAULT_DESIGN, color: "#" + Math.floor(Math.random()*16777215).toString(16) };
+          if (!designs[id] || sanitizeDesign(designs[id]).strokes.length === 0) designs[id] = fallbackDesign();
         }
         return {
           ...state,
           designs,
           phase: "show",
-          timeLeft: 12,
+          timeLeft: showTime(Object.keys(designs).length),
         };
       }
       return { ...state, timeLeft: nextTime };

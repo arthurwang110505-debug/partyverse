@@ -49,6 +49,7 @@ import {
   startRoomGame,
 } from "@/lib/gameSession";
 import { isParticipant } from "@/engine/participants";
+import { setServerOffset } from "@/engine/clock";
 
 /** How often the host advances the game clock. */
 const TICK_MS = 1000;
@@ -437,6 +438,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     const uid = user?.uid;
     const unsubscribeOffset = onValue(ref(database, ".info/serverTimeOffset"), (snap) => {
       serverOffset.current = Number(snap.val()) || 0;
+      setServerOffset(serverOffset.current);
     });
     const connectedRef = ref(database, ".info/connected");
 

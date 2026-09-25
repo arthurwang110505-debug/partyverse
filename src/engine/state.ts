@@ -2,10 +2,10 @@
 const COLLECTIONS: Record<string, { arrays: string[]; maps: string[] }> = {
   bombcountdown: { arrays: ["eliminatedPlayers"], maps: ["correctAnswers", "roundWins"] },
   everybodyknows: { arrays: ["mostVotedPlayerIds"], maps: ["votes", "voteCounts"] },
-  aibullshit: { arrays: ["options", "usedPromptIds"], maps: ["submissions", "votes"] },
+  aibullshit: { arrays: ["options", "usedPromptIds"], maps: ["submissions", "votes", "doneIds"] },
   whoisundercoveragent: { arrays: ["eliminatedPlayerIds"], maps: ["playerWords", "votes"] },
-  song3seconds: { arrays: [], maps: ["playerAnswers", "answerTimes"] },
-  kingtonight: { arrays: [], maps: ["playerInputs"] },
+  song3seconds: { arrays: ["songOrder", "usedPromptIds"], maps: ["playerAnswers", "answerTimes"] },
+  kingtonight: { arrays: ["challengeOrder"], maps: ["playerInputs"] },
   fireworkmaster: { arrays: [], maps: ["designs", "votes", "voteCounts"] },
   drawandguess: {
     arrays: ["strokes", "correctPlayerIds", "drawerOrder", "usedPromptIds"],
@@ -17,19 +17,10 @@ const COLLECTIONS: Record<string, { arrays: string[]; maps: string[] }> = {
   whackmoles: { arrays: ["spawns"], maps: ["hits", "misses", "streaks", "totalHits"] },
   simonsays: { arrays: ["outThisRound", "maxedOut"], maps: ["playerProgress"] },
   wordchain: { arrays: ["chain", "objectors"], maps: ["votes"] },
-  pokerlite: {
-    arrays: ["seats", "deck", "board", "activePlayers", "foldedIds", "allInIds", "handWinnerIds"],
-    maps: [
-      "holeCards",
-      "chips",
-      "committed",
-      "streetCommitted",
-      "toCall",
-      "streetActed",
-      "actedAtBet",
-      "showdownHands",
-      "potSplit",
-    ],
+  brainteaser: { arrays: ["options", "riddleOrder", "usedPromptIds"], maps: ["answers", "roundPoints"] },
+  amongus: {
+    arrays: ["impostorIds", "deadIds", "bodies", "meetingBodies"],
+    maps: ["tasks", "taskMask", "killCooldowns", "emergencyUsed", "votes"],
   },
 };
 export function arrayValue(value: unknown): unknown[] {
@@ -57,6 +48,28 @@ export function normalizeGameState(gameId: string, value: unknown): Record<strin
       .filter((stroke) => stroke && typeof stroke === "object")
       .map((stroke) => ({ ...(stroke as object), points: arrayValue((stroke as { points?: unknown }).points) }));
     state.canvasVersion ??= 0;
+  }
+  if (gameId === "amongus") {
+    state.tasks = Object.fromEntries(
+      Object.entries(state.tasks as Record<string, unknown>).map(([id, list]) => [id, arrayValue(list)]),
+    );
+  }
+  if (gameId === "fireworkmaster") {
+    // Nested stroke arrays can come back as index-keyed objects.
+    state.designs = Object.fromEntries(
+      Object.entries(state.designs as Record<string, unknown>).map(([id, d]) => [
+        id,
+        {
+          strokes: arrayValue((d as { strokes?: unknown })?.strokes).map((st) => ({
+            ...(st as object),
+            p: arrayValue((st as { p?: unknown })?.p),
+          })),
+        },
+      ]),
+    );
+  }
+  if (gameId === "whackmoles") {
+    state.spawns = (state.spawns as unknown[]).filter((s) => s && typeof s === "object");
   }
   return state;
 }

@@ -27,17 +27,20 @@ export interface SimonGameState {
   winnerIds: string[];
 }
 
-export interface SimonTapAction {
-  type: "tap";
-  quadrant: number;
+export interface SimonSubmitAction {
+  type: "submitSequence";
+  taps: number[];
 }
 
-export type SimonAction = SimonTapAction;
+export type SimonAction = SimonSubmitAction;
 
 export const SIMON_QUADRANTS = 4;
 export const START_LEVEL = 3;
 export const MAX_LEVEL = 12;
-const REPEAT_SECONDS = 20;
+/** Seconds to repeat a sequence: longer sequences get more time. */
+export function repeatSeconds(level: number): number {
+  return 10 + level * 2;
+}
 const REVEAL_SECONDS = 4;
 
 /**
@@ -77,7 +80,7 @@ export const SimonSaysEngine: GameEngine<SimonGameState> = {
     const rounds = room.settings?.rounds ?? 3;
     return {
       phase: "learning",
-      timeLeft: START_LEVEL,
+      timeLeft: START_LEVEL + 1,
       currentRound: 1,
       totalRounds: Math.max(1, Math.min(5, rounds)),
       seqSeed: freshSeed(),
@@ -102,63 +105,44 @@ export const SimonSaysEngine: GameEngine<SimonGameState> = {
     const state = room.gameState;
     if (!state || state.phase !== "repeat") return state;
     const act = action as SimonAction;
-    if (act?.type !== "tap" || typeof act.quadrant !== "number" || !Number.isInteger(act.quadrant) || act.quadrant < 0 || act.quadrant >= SIMON_QUADRANTS) {
+    if (state.outThisRound.includes(playerId) || state.maxedOut.includes(playerId)) return state;
+    if ((state.playerProgress[playerId] ?? 0) >= state.level) return state; // already done this level
+
+    // Phones collect the whole answer locally and submit it in one go, so a
+    // dropped/late transaction or a double-fired tap can't desync the index.
+    let taps: number[] | null = null;
+    if (act?.type === "submitSequence" && Array.isArray(act.taps)) taps = act.taps.slice(0, MAX_LEVEL);
+    if (!taps || taps.some((q) => typeof q !== "number" || !Number.isInteger(q) || q < 0 || q >= SIMON_QUADRANTS)) {
       return state;
     }
-    if (state.outThisRound.includes(playerId) || state.maxedOut.includes(playerId)) return state;
 
     const seq = simonSequence(state.seqSeed, state.level);
-    const progress = state.playerProgress[playerId] ?? 0;
+    const correct = taps.length === seq.length && taps.every((q, i) => q === seq[i]);
 
-    if (seq[progress] !== act.quadrant) {
+    if (!correct) {
       const out = [...state.outThisRound, playerId];
-      if (out.length >= Object.keys(room.players).length) {
-        return endRound(state, out, state.maxedOut);
+      const remaining = stillPlaying({ ...state, outThisRound: out }, room);
+      if (remaining.length === 0) return endRound(state, out, state.maxedOut);
+      // Everyone left has already finished this level → advance.
+      if (remaining.every((id) => (state.playerProgress[id] ?? 0) >= state.level)) {
+        return nextLevel({ ...state, outThisRound: out }, state.lastLevelUpId);
       }
       return { ...state, outThisRound: out };
     }
 
-    const nextProgress = progress + 1;
-    if (nextProgress < state.level) {
-      return { ...state, playerProgress: { ...state.playerProgress, [playerId]: nextProgress } };
-    }
-
     // Completed the current level.
     const scores = { ...state.currentScores, [playerId]: (state.currentScores[playerId] ?? 0) + state.level };
-    const maxed = state.level >= MAX_LEVEL ? [...state.maxedOut, playerId] : state.maxedOut;
-    const others = stillPlaying({ ...state, outThisRound: state.outThisRound, maxedOut: maxed }, room).filter(
-      (id) => id !== playerId,
-    );
-    const allDone = others.every((id) => (state.playerProgress[id] ?? 0) >= state.level);
-
-    if (state.level >= MAX_LEVEL || allDone) {
-      if (state.level >= MAX_LEVEL) {
-        // Cap reached: whoever finished gets the points, round is over.
-        return endRound({ ...state, currentScores: scores, maxedOut: maxed, maxLevelReached: state.level }, state.outThisRound, maxed);
-      }
-      const nextLevel = state.level + 1;
-      return {
-        ...state,
-        phase: "learning",
-        level: nextLevel,
-        learnIndex: 0,
-        timeLeft: nextLevel,
-        playerProgress: {},
-        currentScores: scores,
-        maxedOut: maxed,
-        maxLevelReached: nextLevel,
-        lastLevelUpId: playerId,
-      };
+    const progress = { ...state.playerProgress, [playerId]: state.level };
+    if (state.level >= MAX_LEVEL) {
+      const maxed = [...state.maxedOut, playerId];
+      const done = { ...state, currentScores: scores, playerProgress: progress, maxedOut: maxed, maxLevelReached: state.level };
+      const others = stillPlaying(done, room);
+      if (others.every((id) => (progress[id] ?? 0) >= state.level)) return endRound(done, state.outThisRound, maxed);
+      return done;
     }
-
-    return {
-      ...state,
-      playerProgress: { ...state.playerProgress, [playerId]: nextProgress },
-      currentScores: scores,
-      maxedOut: maxed,
-      maxLevelReached: Math.max(state.maxLevelReached, state.level),
-      lastLevelUpId: playerId,
-    };
+    const updated = { ...state, playerProgress: progress, currentScores: scores, lastLevelUpId: playerId };
+    const allDone = stillPlaying(updated, room).every((id) => (progress[id] ?? 0) >= state.level);
+    return allDone ? nextLevel(updated, playerId) : updated;
   },
 
   updateGameState(room) {
@@ -166,16 +150,21 @@ export const SimonSaysEngine: GameEngine<SimonGameState> = {
     if (!state) return state;
 
     if (state.phase === "learning") {
-      if (state.learnIndex + 1 < state.level) {
-        return { ...state, learnIndex: state.learnIndex + 1, timeLeft: state.level - state.learnIndex - 1 };
+      // learnIndex N means element N-1 is lit; every element (including the
+      // last one) stays lit for a full tick before the repeat phase begins.
+      if (state.learnIndex < state.level) {
+        return { ...state, learnIndex: state.learnIndex + 1, timeLeft: state.level - state.learnIndex };
       }
-      return { ...state, learnIndex: state.level, timeLeft: REPEAT_SECONDS, phase: "repeat", playerProgress: {} };
+      return { ...state, timeLeft: repeatSeconds(state.level), phase: "repeat", playerProgress: {} };
     }
 
     if (state.phase === "repeat") {
       if (state.timeLeft > 1) return { ...state, timeLeft: state.timeLeft - 1 };
       // Time is up: everyone still mid-sequence misses.
-      const out = [...state.outThisRound, ...stillPlaying(state, room)];
+      const late = stillPlaying(state, room).filter((id) => (state.playerProgress[id] ?? 0) < state.level);
+      const out = [...state.outThisRound, ...late];
+      const survivors = stillPlaying({ ...state, outThisRound: out }, room);
+      if (survivors.length > 0) return nextLevel({ ...state, outThisRound: out }, state.lastLevelUpId);
       return endRound(state, out, state.maxedOut);
     }
 
@@ -192,7 +181,7 @@ export const SimonSaysEngine: GameEngine<SimonGameState> = {
         seqSeed: freshSeed(),
         level: START_LEVEL,
         learnIndex: 0,
-        timeLeft: START_LEVEL,
+        timeLeft: START_LEVEL + 1,
         outThisRound: [],
         maxedOut: [],
         playerProgress: {},
@@ -246,5 +235,19 @@ function endRound(state: SimonGameState, out: string[], maxed: string[]): SimonG
     outThisRound: out,
     maxedOut: maxed,
     currentScores: scores,
+  };
+}
+
+function nextLevel(state: SimonGameState, leaderId: string | null): SimonGameState {
+  const level = state.level + 1;
+  return {
+    ...state,
+    phase: "learning",
+    level,
+    learnIndex: 0,
+    timeLeft: level + 1,
+    playerProgress: {},
+    maxLevelReached: Math.max(state.maxLevelReached, level),
+    lastLevelUpId: leaderId,
   };
 }

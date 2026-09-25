@@ -19,7 +19,8 @@ import HostMusicalChairs from "./views/HostMusicalChairs";
 import HostWhackMoles from "./views/HostWhackMoles";
 import HostSimonSays from "./views/HostSimonSays";
 import HostWordChain from "./views/HostWordChain";
-import HostPokerLite from "./views/HostPokerLite";
+import HostBrainTeaser from "./views/HostBrainTeaser";
+import HostAmongUs from "./views/HostAmongUs";
 
 const VIEWS: Record<string, ComponentType> = {
   bombcountdown: HostBombCountdown,
@@ -36,7 +37,8 @@ const VIEWS: Record<string, ComponentType> = {
   whackmoles: HostWhackMoles,
   simonsays: HostSimonSays,
   wordchain: HostWordChain,
-  pokerlite: HostPokerLite,
+  brainteaser: HostBrainTeaser,
+  amongus: HostAmongUs,
 };
 
 /** Dispatch first: never interpret another game's state as bomb state. */

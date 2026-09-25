@@ -1,5 +1,6 @@
 import type { Achievement, GameEngine, GameSummary, Room } from "@/types";
 import { topScorers } from "./scoring";
+import { serverNow } from "./clock";
 
 export const MOLES_GAME_ID = "whackmoles";
 
@@ -9,7 +10,16 @@ export interface MoleSpawn {
   cell: number;
   startAt: number;
   endAt: number;
-  hitBy: string[];
+  /** Who whacked it. RTDB drops empty values, so "not hit" is simply absent. */
+  hitBy?: string | null;
+}
+
+/** Tolerate taps that land a moment early/late (network + human reaction). */
+export const HIT_GRACE_BEFORE_MS = 250;
+export const HIT_GRACE_AFTER_MS = 450;
+
+export function isMoleUp(spawn: MoleSpawn, now: number): boolean {
+  return !spawn.hitBy && now >= spawn.startAt && now < spawn.endAt;
 }
 
 export interface MolesGameState {
@@ -35,11 +45,13 @@ export interface MolesGameState {
 export interface WhackAction {
   type: "whack";
   cell: number;
+  /** Index of the spawn the phone saw; optional for older clients. */
+  spawn?: number;
 }
 
 export type MolesAction = WhackAction;
 
-const INTRO_SECONDS = 2;
+const INTRO_SECONDS = 3;
 const REVEAL_SECONDS = 3;
 export const COMBO_SIZE = 5;
 const COMBO_BONUS = 5;
@@ -69,7 +81,7 @@ export function generateSpawns(now: number, round: number, duration: number): Mo
   while (now + t < endAt) {
     let cell = Math.floor(Math.random() * 9);
     if (cell === prevCell) cell = (cell + 1 + Math.floor(Math.random() * 8)) % 9;
-    spawns.push({ cell, startAt: now + t, endAt: now + t + windowMs, hitBy: [] });
+    spawns.push({ cell, startAt: now + t, endAt: now + t + windowMs });
     prevCell = cell;
     t += baseInterval + Math.floor(Math.random() * 400 - 200);
   }
@@ -110,10 +122,16 @@ export const WhackMolesEngine: GameEngine<MolesGameState> = {
     if (act?.type !== "whack" || typeof act.cell !== "number" || !Number.isInteger(act.cell) || act.cell < 0 || act.cell > 8) {
       return state;
     }
-    const now = Date.now();
-    const spawn = state.spawns.find(
-      (s) => s.cell === act.cell && now >= s.startAt && now < s.endAt && s.hitBy.length === 0,
-    );
+    const now = serverNow();
+    const spawns = Array.isArray(state.spawns) ? state.spawns : [];
+    const inWindow = (s: MoleSpawn | undefined): s is MoleSpawn =>
+      Boolean(s) &&
+      s!.cell === act.cell &&
+      !s!.hitBy &&
+      now >= s!.startAt - HIT_GRACE_BEFORE_MS &&
+      now < s!.endAt + HIT_GRACE_AFTER_MS;
+    const hinted = typeof act.spawn === "number" ? spawns[act.spawn] : undefined;
+    const spawn = inWindow(hinted) ? hinted : spawns.find(inWindow);
     if (!spawn) {
       // Whacking air: no penalty, but the streak resets.
       return {
@@ -126,7 +144,7 @@ export const WhackMolesEngine: GameEngine<MolesGameState> = {
     const bonus = streak % COMBO_SIZE === 0 ? COMBO_BONUS : 0;
     return {
       ...state,
-      spawns: state.spawns.map((s) => (s === spawn ? { ...s, hitBy: [playerId] } : s)),
+      spawns: spawns.map((s) => (s === spawn ? { ...s, hitBy: playerId } : s)),
       hits: { ...state.hits, [playerId]: (state.hits[playerId] ?? 0) + 1 },
       totalHits: { ...state.totalHits, [playerId]: (state.totalHits[playerId] ?? 0) + 1 },
       streaks: { ...state.streaks, [playerId]: streak },
@@ -141,7 +159,8 @@ export const WhackMolesEngine: GameEngine<MolesGameState> = {
 
     if (state.phase === "round_intro") {
       if (state.timeLeft > 1) return { ...state, timeLeft: state.timeLeft - 1 };
-      const now = Date.now();
+      // Schedule slightly ahead so every phone has the spawns before mole #1.
+      const now = serverNow() + 1000;
       const duration = moleRoundDuration(state.currentRound);
       return {
         ...state,
