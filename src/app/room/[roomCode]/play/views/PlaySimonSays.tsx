@@ -9,6 +9,7 @@ import { PlayShell } from "@/components/game/PlayShell";
 import { RoundTimer } from "@/components/game/RoundTimer";
 import { vibrate } from "@/lib/sound";
 import { cn } from "@/lib/utils";
+import { screenNoun } from "@/lib/hostMode";
 
 const BUTTON_STYLES = [
   "border-cyan-300 bg-cyan-400/90 active:bg-cyan-300",
@@ -169,7 +170,7 @@ export default function PlaySimonSays() {
             <h1 className="text-2xl font-black text-white">
               {state.winnerId === player.id ? "你就是記憶之王！" : "比賽結束！"}
             </h1>
-            <p className="mt-2 text-sm text-white/60">排名看大螢幕。</p>
+            <p className="mt-2 text-sm text-white/60">排名看{screenNoun(room)}。</p>
           </>
         )}
       </div>

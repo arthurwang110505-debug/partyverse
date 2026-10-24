@@ -1,6 +1,7 @@
 import type { Player, ReactionItem, Room, RoomSessionEntry, RoomSessionPlan, RoomSettings } from "@/types";
 import { normalizeSettings } from "@/constants/gameSettings";
 import { isPlayModeId } from "@/constants/playModes";
+import { isHostMode } from "@/constants/hostMode";
 import { arrayValue, normalizeGameState } from "@/engine/state";
 
 /**
@@ -105,6 +106,8 @@ export function parseRoom(data: Record<string, unknown> | null, roomCode: string
         : arrayValue(data.participantIds).filter((id): id is string => typeof id === "string"),
     contentHistory: (data.contentHistory ?? {}) as Room["contentHistory"],
     sessionPlan: parseSessionPlan(data.sessionPlan),
+    // Absent for every room created before phone-host mode: those are TV rooms.
+    hostMode: isHostMode(data.hostMode) ? data.hostMode : undefined,
     nextGameVotes:
       data.nextGameVotes && typeof data.nextGameVotes === "object"
         ? Object.fromEntries(

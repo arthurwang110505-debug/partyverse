@@ -68,6 +68,27 @@ export interface RoomSessionPlan {
   completedAt?: number;
 }
 
+/**
+ * How a room is presented.
+ *
+ * - `tv` (default): the host device is a display-only big screen. It never
+ *   counts as a participant, and every player joins from their own phone.
+ * - `phone`: the host phone *is* the stage. No TV, projector or computer is
+ *   needed. The host may additionally play (`role: "player"`) on that same
+ *   phone, switching between the stage and their own controller.
+ *
+ * Rooms created before this feature have no `hostMode` and must keep behaving
+ * like `tv`; never branch on `"phone"` without a fallback.
+ */
+export type HostMode = "tv" | "phone";
+
+/** How the host device should be set up when the room is created. */
+export interface HostModeOptions {
+  hostMode: HostMode;
+  /** Phone mode only: the host also plays. Ignored for `tv` rooms. */
+  hostPlays?: boolean;
+}
+
 export interface ReactionItem {
   id: string;
   emoji: string;
@@ -113,6 +134,11 @@ export interface Room<S = Record<string, unknown>> {
    * Absent for rooms that were created by picking a single game.
    */
   sessionPlan?: RoomSessionPlan;
+  /**
+   * How this room is presented. Absent means `"tv"` (legacy rooms and the
+   * default big-screen flow). See `HostMode`.
+   */
+  hostMode?: HostMode;
   /**
    * Host-only secret mirror of gameState fields (roles, words, passcodes).
    * Engines hydrate from this; phones never receive it unless they are host.

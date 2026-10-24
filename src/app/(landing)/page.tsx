@@ -116,7 +116,7 @@ export default function Home() {
 
           {/* Cyberpunk Terminal Description */}
           <p className="mx-auto mt-6 mb-10 max-w-2xl font-mono text-sm leading-relaxed text-cyan-100/70 sm:text-base md:text-lg">
-            一間房，16 款遊戲。電視就是舞台，手機就是手把。
+            一間房，16 款遊戲。電視當舞台，也可以只用一支手機主持。
             <br />
             免下載、免註冊，揪朋友一起開趴！
           </p>
@@ -305,7 +305,7 @@ export default function Home() {
             <h2 className="text-3xl font-black md:text-5xl text-white">時間有多少，就玩多少</h2>
             <p className="mx-auto mt-3 max-w-2xl font-mono text-sm leading-relaxed text-cyan-100/60">
               不用挑遊戲。選一個長度，系統隨機抽出剛好塞得滿的遊戲清單，
-              盡量避開你們剛玩過的遊戲；玩完一款，大螢幕按一下自動接下一款。
+              盡量避開你們剛玩過的遊戲；玩完一款，按一下自動接下一款。
             </p>
           </div>
 
@@ -359,7 +359,7 @@ export default function Home() {
             </span>
             <h2 className="text-3xl font-black md:text-5xl tracking-tight text-white">三步驟，啟動派對核心！</h2>
             <p className="mx-auto mt-3 max-w-md font-mono text-sm text-cyan-100/60">
-              免下載、免帳號註冊，以大螢幕為中樞，手機即終端手把。
+              免下載、免帳號註冊。有電視就用電視當舞台，沒有電視就用手機主持。
             </p>
           </div>
 
@@ -373,9 +373,10 @@ export default function Home() {
               <span className="font-mono mb-1 block text-xs font-black uppercase tracking-wider text-cyan-400">
                 STAGE_01 // HOST
               </span>
-              <h3 className="mb-3 text-xl font-black text-white">開一間電視房</h3>
+              <h3 className="mb-3 text-xl font-black text-white">開一間房</h3>
               <p className="font-mono text-sm leading-relaxed text-white/60">
-                在客廳電視或電腦大螢幕挑選遊戲，一鍵生成專屬五位數房間代碼與高解析 QR Code。
+                電視或電腦大螢幕挑選遊戲，一鍵生成五位數房間代碼與 QR Code；
+                沒有大螢幕也能直接用手機主持，主持人自己也能下場玩。
               </p>
             </div>
 
@@ -390,7 +391,7 @@ export default function Home() {
               </span>
               <h3 className="mb-3 text-xl font-black text-white">朋友掃碼秒速加入</h3>
               <p className="font-mono text-sm leading-relaxed text-white/60">
-                所有人拿起手機鏡頭掃描電視畫面，輸入暱稱即時連入同一個派對房間，免安裝 App。
+                所有人拿起手機鏡頭掃描主持畫面，輸入暱稱即時連入同一個派對房間，免安裝 App。
               </p>
             </div>
 
@@ -405,7 +406,7 @@ export default function Home() {
               </span>
               <h3 className="mb-3 text-xl font-black text-white">手機化身手把開戰</h3>
               <p className="font-mono text-sm leading-relaxed text-white/60">
-                大螢幕同步遊戲舞台動畫與音效，手機自動載入按鈕手把、調色盤或投票控制器！
+                主持畫面同步遊戲舞台動畫與音效，手機自動載入按鈕手把、調色盤或投票控制器！
               </p>
             </div>
           </div>
@@ -531,7 +532,7 @@ export default function Home() {
               READY TO IGNITE THE PARTY?
             </h3>
             <p className="font-mono text-cyan-200/70 max-w-xl mx-auto mb-8 text-sm sm:text-base">
-              現在就打開客廳電視開啟房間，邀請身旁的親朋好友一起同樂對決！
+              現在就開一間房，邀請身旁的親朋好友一起同樂對決——有電視很好，沒有電視也行！
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4 font-mono">
               <Link

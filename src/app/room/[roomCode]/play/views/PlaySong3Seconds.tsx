@@ -7,6 +7,7 @@ import { PlayShell } from "@/components/game/PlayShell";
 import { Music2, Sparkles, Zap } from "lucide-react";
 import { vibrate } from "@/lib/sound";
 import { cn } from "@/lib/utils";
+import { screenNoun } from "@/lib/hostMode";
 
 export default function PlaySong3Seconds() {
   const { room, player, submitAction } = useRoom();
@@ -47,8 +48,8 @@ export default function PlaySong3Seconds() {
               <Music2 className="h-14 w-14 animate-pulse" aria-hidden="true" />
               <span className="absolute inset-0 rounded-full border border-emerald-400/40 animate-ping opacity-40" />
             </div>
-            <p className="text-xl font-black text-white">大螢幕即將閃現歌詞線索！</p>
-            <p className="mt-1 text-xs text-white/50">只剩三秒鐘！盯緊大螢幕，準備搶答！</p>
+            <p className="text-xl font-black text-white">{screenNoun(room)}即將閃現歌詞線索！</p>
+            <p className="mt-1 text-xs text-white/50">只剩三秒鐘！盯緊{screenNoun(room)}，準備搶答！</p>
           </div>
         )}
 
@@ -112,7 +113,7 @@ export default function PlaySong3Seconds() {
             </div>
             <p className="text-xs text-white/40 flex items-center justify-center gap-1">
               <Sparkles className="h-3.5 w-3.5 text-yellow-400" />
-              請看電視大螢幕即時積分排行榜！
+              請看{screenNoun(room)}即時積分排行榜！
             </p>
           </div>
         )}

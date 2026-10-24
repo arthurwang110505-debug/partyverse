@@ -5,6 +5,8 @@ import { RoomGate } from "../RoomGate";
 import HostLobbyClient from "./HostLobbyClient";
 import HostGameView from "./HostGameView";
 import PlayGameView from "../play/PlayGameView";
+import PhoneHostGameView from "./PhoneHostGameView";
+import { isPhoneHostRoom } from "@/lib/hostMode";
 
 interface Props {
   roomCode: string;
@@ -21,6 +23,10 @@ export default function HostPage({ roomCode }: Props) {
 /** Rendered only once the gate has confirmed we are the host of a live room. */
 function HostRoomBody({ roomCode }: Props) {
   const { room, player } = useRoom();
-  if (room?.status === "PLAYING") return player?.role === "display" ? <HostGameView /> : <PlayGameView />;
+  if (room?.status === "PLAYING") {
+    // Phone-hosted rooms keep the stage and the host's own controller in one tab.
+    if (isPhoneHostRoom(room)) return <PhoneHostGameView />;
+    return player?.role === "display" ? <HostGameView /> : <PlayGameView />;
+  }
   return <HostLobbyClient roomCode={roomCode} />;
 }

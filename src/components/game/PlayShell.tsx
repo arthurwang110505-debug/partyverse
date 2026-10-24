@@ -12,6 +12,7 @@ import { ScoreDelta } from "@/components/game/ScoreDelta";
 import { HostGameControls } from "./HostGameControls";
 import { HostRecoveryNotice } from "./HostRecoveryNotice";
 import { GameplayFeedback } from "./GameplayFeedback";
+import { usePhoneHostEmbedded } from "./PhoneHostChrome";
 import { cn } from "@/lib/utils";
 
 interface PlayShellProps {
@@ -37,17 +38,25 @@ interface PlayShellProps {
 export function PlayShell({ children, className, round }: PlayShellProps) {
   const { room, player, isHost } = useRoom();
   const game = GAMES.find((g) => g.id === room?.gameId);
+  // Embedded in the phone-host wrapper: the wrapper renders the identity bar,
+  // the score and the tab switch, so this shell drops its duplicate chrome and
+  // its fixed bottom dock (which would sit under the switch).
+  const embedded = usePhoneHostEmbedded();
   const score =
     (room?.gameState as { currentScores?: Record<string, number> } | undefined)?.currentScores?.[player?.id ?? ""] ?? 0;
 
   return (
     <main
-      className="player-shell flex min-h-[100dvh] flex-col bg-[#0b0c14] text-white relative overflow-hidden overscroll-none before:pointer-events-none before:fixed before:inset-y-0 before:left-0 before:w-2 before:bg-gradient-to-r before:from-cyan-500/30 before:to-transparent before:z-50 after:pointer-events-none after:fixed after:inset-y-0 after:right-0 after:w-2 after:bg-gradient-to-l after:from-rose-500/30 after:to-transparent after:z-50"
+      className={cn(
+        "player-shell flex flex-col bg-[#0b0c14] text-white relative overflow-hidden overscroll-none before:pointer-events-none before:fixed before:inset-y-0 before:left-0 before:w-2 before:bg-gradient-to-r before:from-cyan-500/30 before:to-transparent before:z-50 after:pointer-events-none after:fixed after:inset-y-0 after:right-0 after:w-2 after:bg-gradient-to-l after:from-rose-500/30 after:to-transparent after:z-50",
+        embedded ? "min-h-0" : "min-h-[100dvh]",
+      )}
       style={{ "--game-accent": game?.color, "--game-gradient": game?.gradient } as CSSProperties}
     >
       <FloatingReactions />
       <LeaveGuard />
 
+      {!embedded && (
       <div className="mx-auto w-full max-w-md px-4 pt-4 pt-safe relative z-10">
         <div className="glass flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/10 px-3.5 py-2.5 shadow-lg shadow-black/40 ring-1 ring-white/5">
           <span className="flex min-w-0 items-center gap-2">
@@ -80,8 +89,15 @@ export function PlayShell({ children, className, round }: PlayShellProps) {
           </span>
         </div>
       </div>
+      )}
 
-      <div className={cn("mx-auto w-full max-w-md flex-1 px-4 pb-28 relative z-10", className)}>
+      <div
+        className={cn(
+          "mx-auto w-full max-w-md flex-1 px-4 relative z-10",
+          embedded ? "pb-6 pt-3" : "pb-28",
+          className,
+        )}
+      >
         <HostRecoveryNotice />
         <GameplayFeedback phone />
         {children}
@@ -89,6 +105,7 @@ export function PlayShell({ children, className, round }: PlayShellProps) {
       </div>
 
       {/* Bottom dock — sits above the iPhone home indicator thanks to dock-safe. */}
+      {!embedded && (
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex items-center justify-center gap-2 px-4 dock-safe">
         <div className="pointer-events-auto relative">
           <ScoreDelta score={score} />
@@ -98,6 +115,7 @@ export function PlayShell({ children, className, round }: PlayShellProps) {
         </div>
         <MuteToggle className="pointer-events-auto shadow-lg" />
       </div>
+      )}
     </main>
   );
 }

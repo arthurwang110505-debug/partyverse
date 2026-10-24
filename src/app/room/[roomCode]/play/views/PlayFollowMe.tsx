@@ -8,6 +8,7 @@ import { PlayShell } from "@/components/game/PlayShell";
 import { RoundTimer } from "@/components/game/RoundTimer";
 import { vibrate } from "@/lib/sound";
 import { cn } from "@/lib/utils";
+import { screenNoun } from "@/lib/hostMode";
 
 const BUTTON_STYLES = [
   "border-cyan-300 bg-cyan-400/90 active:bg-cyan-300",
@@ -46,7 +47,7 @@ export default function PlayFollowMe() {
       <div className="flex flex-1 flex-col items-center px-4 py-5 text-center">
         {state.phase === "command" && (
           <>
-            <p className="mb-1 text-sm font-bold tracking-wider text-indigo-300">大螢幕喊什麼，就按什麼！</p>
+            <p className="mb-1 text-sm font-bold tracking-wider text-indigo-300">{screenNoun(room)}喊什麼，就按什麼！</p>
             <div
               className={cn(
                 "mb-4 flex items-center justify-center gap-3 rounded-3xl bg-gradient-to-br px-6 py-3 text-white",
@@ -133,7 +134,7 @@ export default function PlayFollowMe() {
             <h1 className="text-2xl font-black text-white">
               {state.winnerId === player.id ? "你就是手感之王！" : "比賽結束！"}
             </h1>
-            <p className="mt-2 text-sm text-white/60">排名看大螢幕。</p>
+            <p className="mt-2 text-sm text-white/60">排名看{screenNoun(room)}。</p>
           </>
         )}
       </div>

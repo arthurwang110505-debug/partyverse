@@ -13,7 +13,7 @@ import {
   update,
 } from "firebase/database";
 import { onAuthStateChanged, signInAnonymously, type User } from "firebase/auth";
-import type { Player, ReactionItem, Room, RoomSessionPlan, RoomSettings } from "@/types";
+import type { HostModeOptions, Player, ReactionItem, Room, RoomSessionPlan, RoomSettings } from "@/types";
 import { GAMES } from "@/constants/games";
 import { NICKNAME_KEY, ROOM_TTL_MS, SESSION_KEY } from "@/constants/room";
 import { db, auth as authInstance } from "@/lib/firebase";
@@ -52,6 +52,7 @@ import {
   startRoomSession,
 } from "@/lib/gameSession";
 import { isParticipant } from "@/engine/participants";
+import { resolveHostRole } from "@/lib/hostMode";
 import { setServerOffset } from "@/engine/clock";
 
 /** How often the host advances the game clock. */
@@ -90,6 +91,8 @@ interface RoomContextValue {
     nickname: string,
     settings?: RoomSettings,
     sessionPlan?: RoomSessionPlan,
+    /** How the host device is set up. Omitted = the classic big-screen room. */
+    options?: HostModeOptions,
   ) => Promise<string>;
   joinRoom: (roomCode: string, nickname: string) => Promise<void>;
   leaveRoom: () => Promise<void>;
@@ -515,6 +518,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       rawNickname: string,
       settings?: RoomSettings,
       sessionPlan?: RoomSessionPlan,
+      options?: HostModeOptions,
     ): Promise<string> => {
       const game = GAMES.find((g) => g.id === gameId);
       if (!game) throw new Error("找不到這個遊戲");
@@ -523,6 +527,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       const authUser = await ensureAuth();
       const nickname = sanitizeNickname(rawNickname) || "房主";
       const baseSettings = normalizeSettings(gameId, settings);
+      // Phone-host rooms keep the same schema; the only difference is whether the
+      // host seat is a display or a participant.
+      const hostMode = options?.hostMode ?? "tv";
+      const hostSeat = resolveHostRole(hostMode, options?.hostPlays);
 
       // Attempt Firebase mode first if available
       if (db && !localModeRef.current) {
@@ -535,9 +543,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               nickname,
               avatar: pickAvatar(nickname, []),
               isHost: true,
-              role: "display",
+              role: hostSeat.role,
               isConnected: true,
-              isReady: true,
+              isReady: hostSeat.isReady,
               score: 0,
             };
             const now = Date.now();
@@ -552,6 +560,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               players: { [authUser.uid]: hostPlayer },
               gameState: {},
               ...(sessionPlan ? { sessionPlan } : {}),
+              ...(hostMode === "phone" ? { hostMode } : {}),
             };
             const result = await withTimeout(
               runTransaction(ref(db, `rooms/${candidate}`), (current) => {
@@ -598,9 +607,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         nickname,
         avatar: pickAvatar(nickname, []),
         isHost: true,
-        role: "display",
+        role: hostSeat.role,
         isConnected: true,
-        isReady: true,
+        isReady: hostSeat.isReady,
         score: 0,
       };
       const now = Date.now();
@@ -615,6 +624,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         players: { [authUser.uid]: hostPlayer },
         gameState: {},
         ...(sessionPlan ? { sessionPlan } : {}),
+        ...(hostMode === "phone" ? { hostMode } : {}),
       };
       if (!saveLocalRoom(newRoom))
         throw new Error("這個瀏覽器的儲存空間不足，房間無法建立。請關閉其他分頁或清除網站資料後再試一次。");

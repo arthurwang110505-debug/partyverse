@@ -20,6 +20,7 @@ import { PlayShell } from "@/components/game/PlayShell";
 import { useGameViewState } from "@/hooks/useGameViewState";
 import { vibrate } from "@/lib/sound";
 import { cn } from "@/lib/utils";
+import { screenNoun } from "@/lib/hostMode";
 
 const COLORS = ["白色", "紅色", "藍色", "綠色", "黃色", "粉紅色", "紫色", "橘色"];
 const BRUSHES = [
@@ -206,7 +207,7 @@ export default function PlayDrawAndGuess() {
             <p className="text-sm leading-relaxed text-white/70">
               {amDrawer
                 ? "用圖畫表達，別寫出答案！每有人猜中，你得 5 分。"
-                : "看大螢幕的畫作，在手機輸入答案。越早猜中，得分越高！"}
+                : `看${screenNoun(room)}的畫作，在手機輸入答案。越早猜中，得分越高！`}
             </p>
           </section>
         )}
@@ -306,7 +307,7 @@ export default function PlayDrawAndGuess() {
                     ? "畫布已滿，請復原或清除後繼續。"
                     : syncing
                       ? "正在同步畫筆…"
-                      : "邊畫邊同步到大螢幕 · 可在畫布外放開手指"}
+                      : `邊畫邊同步到${screenNoun(room)} · 可在畫布外放開手指`}
                 </p>
               </>
             ) : solved ? (
@@ -328,7 +329,7 @@ export default function PlayDrawAndGuess() {
                 }}
               >
                 <label htmlFor="draw-guess" className="block text-sm text-white/70">
-                  看看大螢幕，你猜這是什麼？
+                  看看{screenNoun(room)}，你猜這是什麼？
                 </label>
                 <input
                   id="draw-guess"

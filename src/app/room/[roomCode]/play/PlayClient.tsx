@@ -14,6 +14,7 @@ import { FloatingReactions } from "@/components/game/FloatingReactions";
 import { SessionPlanPanel } from "@/components/game/SessionPlanPanel";
 import { vibrate } from "@/lib/sound";
 import { cn } from "@/lib/utils";
+import { screenNoun } from "@/lib/hostMode";
 
 interface Props {
   roomCode: string;
@@ -147,7 +148,7 @@ export default function PlayClient({ roomCode }: Props) {
           <p className="mb-2 text-4xl animate-bounce" aria-hidden="true">
             📺
           </p>
-          <h2 className="mb-1 text-lg font-bold">請看電視大螢幕</h2>
+          <h2 className="mb-1 text-lg font-bold">請看{screenNoun(room)}</h2>
           <p className="text-xs text-white/50 max-w-xs">
             目前 {onlineCount} 人在線
             {game ? `（最少 ${game.minPlayers} 人開局）` : ""}，等待房主開啟遊戲！
@@ -158,7 +159,7 @@ export default function PlayClient({ roomCode }: Props) {
         <div className="mt-auto pt-4 pb-2">
           <p className="mb-2 text-center text-xs text-white/40 flex items-center justify-center gap-1">
             <Sparkles className="h-3 w-3 text-pink-400" aria-hidden="true" />
-            點擊表情，發送即時氣氛到大螢幕：
+            點擊表情，發送即時氣氛到{screenNoun(room)}：
           </p>
           <div className="grid grid-cols-6 gap-2">
             {REACTIONS.map((emoji) => (

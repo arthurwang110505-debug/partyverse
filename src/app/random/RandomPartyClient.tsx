@@ -25,6 +25,8 @@ import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { ErrorNote } from "@/components/ui/ErrorNote";
 import { PlayModePicker } from "@/components/game/PlayModePicker";
+import { HostModePicker } from "@/components/game/HostModePicker";
+import { useHostModeChoice } from "@/hooks/useHostModeChoice";
 
 const ROLL_MS = 520;
 
@@ -51,6 +53,7 @@ export default function RandomPartyClient({ initialMode, initialPlayerCount }: P
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hostChoice = useHostModeChoice();
 
   const draw = useCallback((nextMode: PlayModeId, nextCount: number) => {
     // Draw on the client only: the same RNG must not run on the server render.
@@ -90,7 +93,7 @@ export default function RandomPartyClient({ initialMode, initialPlayerCount }: P
       const cleanName = sanitizeNickname(effectiveNickname);
       setSavedNickname(cleanName);
       const plan = toSessionPlan(playlist);
-      const roomCode = await createRoom(first.gameId, cleanName, first.settings, plan);
+      const roomCode = await createRoom(first.gameId, cleanName, first.settings, plan, hostChoice.options);
       addRecentRoom({ code: roomCode, nickname: cleanName, role: "host" });
       router.push(`/room/${roomCode}/host`);
     } catch (e) {
@@ -277,7 +280,7 @@ export default function RandomPartyClient({ initialMode, initialPlayerCount }: P
         >
           <h2 className="text-sm font-semibold text-white/80">3. 開房，然後就開始玩</h2>
           <Field
-            label="房主暱稱（顯示在電視上）"
+            label={hostChoice.mode === "phone" ? "房主暱稱（顯示在主持畫面）" : "房主暱稱（顯示在電視上）"}
             name="nickname"
             value={effectiveNickname}
             onChange={(e) => setNickname(e.target.value)}
@@ -285,9 +288,17 @@ export default function RandomPartyClient({ initialMode, initialPlayerCount }: P
             maxLength={MAX_NICKNAME_LENGTH}
             autoComplete="nickname"
           />
-          <p className="text-sm leading-relaxed text-white/60">
-            這個裝置是電視主畫面，不占玩家名額。想在遊戲裡得分，請用手機掃碼加入。
-          </p>
+          <fieldset>
+            <legend className="mb-2 text-sm font-medium text-white/75">主持方式</legend>
+            <HostModePicker
+              mode={hostChoice.mode}
+              hostPlays={hostChoice.hostPlays}
+              onChange={(next) => hostChoice.chooseMode(next.id)}
+              onHostPlaysChange={hostChoice.chooseHostPlays}
+              disabled={creating}
+              size="sm"
+            />
+          </fieldset>
 
           <ErrorNote>{error}</ErrorNote>
 

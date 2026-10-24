@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { PlayShell } from "@/components/game/PlayShell";
 import { vibrate, sfx } from "@/lib/sound";
 import { cn } from "@/lib/utils";
+import { screenNoun } from "@/lib/hostMode";
 
 /** Tap-mash flush cadence: ~2-3 room writes/sec instead of one per tap. */
 const TAP_FLUSH_MS = 400;
@@ -160,7 +161,7 @@ export default function PlayKingTonight() {
                 <p className="mt-1 text-sm text-white/70">
                   反應時間：<span className="font-bold text-yellow-300">{myInput} ms</span>
                 </p>
-                <p className="mt-2 text-xs text-white/50">看大螢幕揭曉誰最神速！</p>
+                <p className="mt-2 text-xs text-white/50">看{screenNoun(room)}揭曉誰最神速！</p>
               </div>
             ) : (
               <button
@@ -242,7 +243,7 @@ export default function PlayKingTonight() {
               🏆
             </p>
             <p className="text-xl font-black text-yellow-400">
-              {state.roundWinnerId === player.id ? "🎉 恭喜你奪得本輪王者！" : "看大螢幕公布本輪王者！"}
+              {state.roundWinnerId === player.id ? "🎉 恭喜你奪得本輪王者！" : `看${screenNoun(room)}公布本輪王者！`}
             </p>
           </div>
         )}

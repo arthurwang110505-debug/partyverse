@@ -12,6 +12,7 @@ import { PlayShell } from "@/components/game/PlayShell";
 import { RoundTimer } from "@/components/game/RoundTimer";
 import { vibrate, sfx } from "@/lib/sound";
 import { cn } from "@/lib/utils";
+import { screenNoun } from "@/lib/hostMode";
 
 export default function PlayUndercover() {
   const { room, player } = useRoom();
@@ -66,7 +67,7 @@ export default function PlayUndercover() {
             💀
           </p>
           <h2 className="text-xl font-bold text-red-400">你已被投票處決出局</h2>
-          <p className="mt-1 text-sm text-white/50">請保持緘默，觀看大螢幕精彩辯論與投票！</p>
+          <p className="mt-1 text-sm text-white/50">請保持緘默，觀看{screenNoun(room)}精彩辯論與投票！</p>
         </div>
       </PlayShell>
     );
@@ -175,7 +176,7 @@ export default function PlayUndercover() {
             <p className="text-sm font-semibold text-red-300">
               {players[state.lastVotedOutId]?.nickname} 被處決出局
             </p>
-            <p className="mt-1 text-xs leading-relaxed text-white/60">觀戰大螢幕，看看誰是臥底…</p>
+            <p className="mt-1 text-xs leading-relaxed text-white/60">觀戰{screenNoun(room)}，看看誰是臥底…</p>
           </div>
         )}
 
@@ -263,7 +264,7 @@ export default function PlayUndercover() {
             <p className="text-4xl" aria-hidden="true">
               🏆
             </p>
-            <p className="mt-2 text-sm font-bold text-white">本局結束，看大螢幕揭曉臥底與兩個詞！</p>
+            <p className="mt-2 text-sm font-bold text-white">本局結束，看{screenNoun(room)}揭曉臥底與兩個詞！</p>
           </div>
         )}
       </div>
