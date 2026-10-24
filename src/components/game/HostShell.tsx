@@ -8,6 +8,7 @@ import { ConnectionBadge } from "@/components/game/ConnectionBadge";
 import { FloatingReactions } from "@/components/game/FloatingReactions";
 import { sfx } from "@/lib/sound";
 import { GameplayFeedback } from "./GameplayFeedback";
+import { usePhoneHostEmbedded } from "./PhoneHostChrome";
 import { cn } from "@/lib/utils";
 
 interface HostShellProps {
@@ -31,6 +32,9 @@ interface HostShellProps {
 export function HostShell({ children, className, wide = true }: HostShellProps) {
   const { room } = useRoom();
   const game = GAMES.find((g) => g.id === room?.gameId);
+  // Inside the phone-host wrapper the wrapper owns the top bar, the score and
+  // the safe areas; this shell only supplies the stage body.
+  const embedded = usePhoneHostEmbedded();
 
   // Engines all expose `timeLeft`; the bomb engine calls it `bombTimeLeft`.
   const state = room?.gameState as { phase?: string; timeLeft?: number; bombTimeLeft?: number } | undefined;
@@ -57,31 +61,36 @@ export function HostShell({ children, className, wide = true }: HostShellProps) 
 
   return (
     <main
-      className="min-h-[100dvh] bg-ink p-4 text-white md:p-8 relative"
+      className={cn(
+        "bg-ink text-white relative",
+        embedded ? "phone-stage min-h-0 px-3 py-3" : "min-h-[100dvh] p-4 md:p-8",
+      )}
       style={{ "--game-accent": game?.color, "--game-gradient": game?.gradient } as CSSProperties}
     >
       <FloatingReactions />
 
-      <div
-        className={cn(
-          "mx-auto mb-6 flex flex-wrap items-center justify-between gap-3 relative z-10",
-          wide ? "max-w-5xl" : "max-w-3xl",
-        )}
-      >
-        <p className="glass inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-1.5 text-sm text-white/60">
-          {game && <span aria-hidden="true">{game.icon}</span>}
-          <span className="font-medium text-white/80">{game?.name ?? "PARTYVERSE"}</span>
-          <span className="text-white/25" aria-hidden="true">
-            ·
-          </span>
-          <span className="font-bold tracking-widest text-white/70">房間 {room?.id}</span>
-        </p>
+      {!embedded && (
+        <div
+          className={cn(
+            "mx-auto mb-6 flex flex-wrap items-center justify-between gap-3 relative z-10",
+            wide ? "max-w-5xl" : "max-w-3xl",
+          )}
+        >
+          <p className="glass inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-1.5 text-sm text-white/60">
+            {game && <span aria-hidden="true">{game.icon}</span>}
+            <span className="font-medium text-white/80">{game?.name ?? "PARTYVERSE"}</span>
+            <span className="text-white/25" aria-hidden="true">
+              ·
+            </span>
+            <span className="font-bold tracking-widest text-white/70">房間 {room?.id}</span>
+          </p>
 
-        <div className="flex items-center gap-2">
-          <ConnectionBadge className="hidden sm:inline-flex text-[11px] px-2.5 py-0.5" />
-          <MuteToggle />
+          <div className="flex items-center gap-2">
+            <ConnectionBadge className="hidden sm:inline-flex text-[11px] px-2.5 py-0.5" />
+            <MuteToggle />
+          </div>
         </div>
-      </div>
+      )}
       <div className={cn("relative z-10", className)}>
         <GameplayFeedback />
         {children}

@@ -347,3 +347,70 @@
  * restored and stays as-is. `prefers-reduced-motion` above still honours the
  * OS-level "reduce motion" setting.
  */
+
+/*
+ * Phone-host stage (2026-10-23)
+ *
+ * The host views were built for a television: five-xl headlines, wide grids and
+ * generous card padding. When the host device is a phone the same stage has to
+ * fit in ~390 CSS pixels, but rewriting 16 views would fork their markup. This
+ * scope tightens the typography and spacing of whatever is inside it, and keeps
+ * a single accidental overflow from pushing the whole page sideways (which on
+ * mobile also hides the fixed tab switch).
+ *
+ * Game-specific sizing stays in the views: a drawing canvas stays square, Simon
+ * tiles stay thumb-sized.
+ */
+.phone-stage {
+  overflow-x: clip;
+  overflow-wrap: anywhere;
+  container-type: inline-size;
+}
+.phone-stage h1 {
+  font-size: 1.5rem;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+.phone-stage h2 {
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+/* Oversized TV type: "第 3 回合", reveal headlines, timers. */
+.phone-stage .text-5xl,
+.phone-stage .text-6xl,
+.phone-stage .text-7xl,
+.phone-stage .text-8xl {
+  font-size: 2.125rem;
+  line-height: 1.1;
+}
+.phone-stage .text-4xl {
+  font-size: 1.75rem;
+  line-height: 1.15;
+}
+.phone-stage .text-3xl {
+  font-size: 1.375rem;
+  line-height: 1.2;
+}
+/* Vertical rhythm set for a 1080p screen is just dead space on a phone. */
+.phone-stage .my-12 {
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.phone-stage .my-10 {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+.phone-stage .my-8 {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.phone-stage .p-8 {
+  padding: 1rem;
+}
+.phone-stage .p-6 {
+  padding: 0.875rem;
+}
+/* Reveal cards hard-code a 200px minimum so they line up on a TV. */
+.phone-stage [class~="min-w-[200px]"] {
+  min-width: 0;
+}

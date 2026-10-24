@@ -7,6 +7,7 @@ import { connectedParticipantIds, isParticipant, participantIds } from "@/engine
 import { topScorers } from "@/engine/scoring";
 import { normalizeGameState } from "@/engine/state";
 import { hydrateGameState, splitSecrets } from "@/lib/privateState";
+import { hostIsPlaying, isPhoneHostRoom } from "@/lib/hostMode";
 
 type State = Record<string, unknown>;
 export interface ActionPhase {
@@ -111,8 +112,17 @@ export function startRoomGame(room: Room, now = Date.now()): Room {
     .filter((p) => isParticipant(p) && p.isConnected !== false)
     .map((p) => p.id);
   const game = GAMES.find((entry) => entry.id === room.gameId);
-  if (ids.length < (game?.minPlayers ?? 2))
-    throw new Error(`至少需要 ${game?.minPlayers ?? 2} 位手機玩家才能開始（電視不計入）`);
+  if (ids.length < (game?.minPlayers ?? 2)) {
+    // Phone-host rooms have no separate screen: either the host counts (they
+    // play) or the host phone is the display and only the other phones count.
+    const need = game?.minPlayers ?? 2;
+    const reason = !isPhoneHostRoom(room)
+      ? "（電視不計入）"
+      : hostIsPlaying(room)
+        ? ""
+        : "（主持手機不計入）";
+    throw new Error(`至少需要 ${need} 位${isPhoneHostRoom(room) ? "玩家" : "手機玩家"}才能開始${reason}`);
+  }
   if (ids.length > (game?.maxPlayers ?? 20)) throw new Error(`這款遊戲最多支援 ${game?.maxPlayers ?? 20} 位玩家`);
   const current: Room = { ...room, settings: normalizeSettings(room.gameId, room.settings), participantIds: ids };
   const { finishedAt: _finished, privateHost: _ph, private: _pv, ...base } = current;

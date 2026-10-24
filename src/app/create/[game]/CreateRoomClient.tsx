@@ -18,6 +18,8 @@ import { Field } from "@/components/ui/Field";
 import { ErrorNote } from "@/components/ui/ErrorNote";
 import { normalizeSettings } from "@/constants/gameSettings";
 import { RoomSettingsFields } from "@/components/game/RoomSettingsFields";
+import { HostModePicker } from "@/components/game/HostModePicker";
+import { useHostModeChoice } from "@/hooks/useHostModeChoice";
 
 interface Props {
   gameId: string;
@@ -33,6 +35,7 @@ export default function CreateRoomClient({ gameId }: Props) {
   const [settings, setSettings] = useState<RoomSettings>(() => normalizeSettings(gameId));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const hostChoice = useHostModeChoice();
 
   if (!game) {
     return <main className="flex min-h-screen items-center justify-center bg-ink text-white/50">找不到這個遊戲</main>;
@@ -49,7 +52,7 @@ export default function CreateRoomClient({ gameId }: Props) {
     try {
       const cleanName = sanitizeNickname(effectiveNickname);
       setSavedNickname(cleanName);
-      const roomCode = await createRoom(game.id, cleanName, settings);
+      const roomCode = await createRoom(game.id, cleanName, settings, undefined, hostChoice.options);
       addRecentRoom({ code: roomCode, nickname: cleanName, role: "host" });
       router.push(`/room/${roomCode}/host`);
     } catch (e) {
@@ -92,7 +95,7 @@ export default function CreateRoomClient({ gameId }: Props) {
           }}
         >
           <Field
-            label="房主暱稱（顯示在電視上）"
+            label={hostChoice.mode === "phone" ? "房主暱稱（顯示在主持畫面）" : "房主暱稱（顯示在電視上）"}
             name="nickname"
             value={effectiveNickname}
             onChange={(e) => setNickname(e.target.value)}
@@ -102,9 +105,16 @@ export default function CreateRoomClient({ gameId }: Props) {
             autoFocus
           />
 
-          <p className="text-sm leading-relaxed text-white/65">
-            此裝置作為電視主畫面，不占玩家名額。房主想參賽，也請用手機掃碼加入。
-          </p>
+          <fieldset>
+            <legend className="mb-2 text-sm font-medium text-white/75">主持方式</legend>
+            <HostModePicker
+              mode={hostChoice.mode}
+              hostPlays={hostChoice.hostPlays}
+              onChange={(next) => hostChoice.chooseMode(next.id)}
+              onHostPlaysChange={hostChoice.chooseHostPlays}
+              disabled={submitting}
+            />
+          </fieldset>
           <RoomSettingsFields
             gameId={gameId}
             settings={settings}

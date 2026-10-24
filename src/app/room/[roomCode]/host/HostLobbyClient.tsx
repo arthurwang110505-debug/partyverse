@@ -39,11 +39,30 @@ import { cn } from "@/lib/utils";
 import { isParticipant } from "@/engine/participants";
 import { normalizeSettings } from "@/constants/gameSettings";
 import { RoomSettingsFields } from "@/components/game/RoomSettingsFields";
+import { hostIsPlaying, isPhoneHostRoom } from "@/lib/hostMode";
+import { useScreenWakeLock } from "@/hooks/useScreenWakeLock";
 
 export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
   const router = useRouter();
-  const { room, startGame, kickPlayer, endRoom, updateSettings, isLocalMode, isHost, startSession, advanceSession } =
-    useRoom();
+  const {
+    room,
+    startGame,
+    kickPlayer,
+    endRoom,
+    updateSettings,
+    isLocalMode,
+    isHost,
+    startSession,
+    advanceSession,
+    toggleReady,
+  } = useRoom();
+
+  // A phone is now the room's only screen: keep it from dimming mid-lobby.
+  const phoneHost = isPhoneHostRoom(room);
+  const hostPlays = hostIsPlaying(room);
+  const hostSeat = room?.players[room.hostPlayerId];
+  const { supported: wakeLockSupported } = useScreenWakeLock(Boolean(room) && phoneHost);
+  const [sharing, setSharing] = useState(false);
 
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -110,6 +129,29 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
     }
   };
 
+  /**
+   * Phones are usually in someone's hand, not on a shelf: the native share
+   * sheet beats "point your camera at my screen". Falls back to copying the
+   * link when the browser has no share support (or the user cancels).
+   */
+  const handleShare = async () => {
+    if (!joinUrl || sharing) return;
+    const title = `${game?.name ?? "PARTYVERSE"} · 房間 ${roomCode}`;
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      setSharing(true);
+      try {
+        await navigator.share({ title, text: `一起玩 ${game?.name ?? "派對遊戲"}！房間代碼 ${roomCode}`, url: joinUrl });
+        return;
+      } catch (e) {
+        // AbortError means the sheet was dismissed — do not also copy.
+        if (e instanceof Error && e.name === "AbortError") return;
+      } finally {
+        setSharing(false);
+      }
+    }
+    await copyText(joinUrl, setCopiedLink, "無法分享，請手動複製連結");
+  };
+
   const handleEnd = async () => {
     try {
       await endRoom();
@@ -174,9 +216,26 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
               <span className="text-xs text-white/50">{game?.estimatedDuration}</span>
             </p>
           </div>
-          <h1 className="mb-2 text-4xl font-bold tracking-tight md:text-5xl">遊戲大廳</h1>
-          <p className="text-sm text-white/40">把代碼或 QR code 分享給朋友，手機掃描即可加入</p>
-          <p className="mt-3 text-sm text-cyan-200/80">📺 電視不占玩家名額，所有參賽者請用手機加入。</p>
+          <h1 className="mb-2 text-3xl font-bold tracking-tight md:text-5xl">
+            {phoneHost ? "手機主持" : "遊戲大廳"}
+          </h1>
+          <p className="text-sm text-white/40">
+            {phoneHost ? "這支手機就是全場的主持畫面，不用電視或電腦" : "把代碼或 QR code 分享給朋友，手機掃描即可加入"}
+          </p>
+          {phoneHost ? (
+            <p className="mt-3 text-sm text-violet-200/85">
+              📱 {hostPlays ? "你也是玩家：開打後可切換「主持畫面」與「我的手把」。" : "這支手機只負責主持與顯示，不占玩家名額。"}
+            </p>
+          ) : (
+            <p className="mt-3 text-sm text-cyan-200/80">📺 電視不占玩家名額，所有參賽者請用手機加入。</p>
+          )}
+          {phoneHost && (
+            <p className="mt-2 text-xs leading-relaxed text-white/40">
+              {wakeLockSupported
+                ? "主持中會請瀏覽器保持螢幕亮著；仍請保持這個分頁在前景。"
+                : "主持中請保持這個畫面開啟、螢幕不要關閉，遊戲計時才會繼續。"}
+            </p>
+          )}
           {isLocalMode && (
             <p className="mt-2 rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
               本地展示：房間只在這個瀏覽器內同步，請用「開新分頁當玩家」。跨手機或無痕視窗需設定 Firebase。
@@ -189,19 +248,24 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
           <h2 id="room-code-heading" className="mb-2 text-xs uppercase tracking-wider text-white/40">
             房間代碼
           </h2>
-          <p className="mb-4 text-5xl font-bold tracking-[0.2em] [color:var(--game-accent,#a855f7)] md:text-6xl">
+          <p className="mb-4 text-4xl font-bold tracking-[0.2em] [color:var(--game-accent,#a855f7)] sm:text-5xl md:text-6xl">
             {roomCode}
           </p>
 
           {joinUrl && (
             <>
-              <div className="mb-4 inline-block rounded-2xl bg-white p-5 shadow-xl ring-4 ring-white/10">
+              <div
+                className={cn(
+                  "mb-4 inline-block rounded-2xl bg-white shadow-xl ring-4 ring-white/10",
+                  phoneHost ? "p-3.5" : "p-5",
+                )}
+              >
                 <QRCodeSVG
                   value={joinUrl}
-                  size={280}
+                  size={phoneHost ? 200 : 280}
                   level="H"
                   aria-label={`加入房間 ${roomCode} 的 QR code`}
-                  className="h-auto w-[min(70vw,280px)]"
+                  className={phoneHost ? "h-auto w-[min(48vw,200px)]" : "h-auto w-[min(70vw,280px)]"}
                 />
               </div>
               <p className="mb-1 text-xs uppercase tracking-wider text-white/50">手機瀏覽器直接輸入網址</p>
@@ -210,6 +274,18 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
           )}
 
           <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {phoneHost && (
+              <Button
+                variant="accent"
+                size="md"
+                className="min-w-40 font-bold"
+                disabled={!joinUrl || sharing}
+                loading={sharing}
+                onClick={() => void handleShare()}
+              >
+                <Share2 className="h-4 w-4" aria-hidden="true" /> 分享邀請
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="md"
@@ -269,8 +345,14 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
               <div className="flex items-center gap-2.5 rounded-xl border border-white/5 bg-white/5 p-3">
                 <span className="text-xl">🏆</span>
                 <div>
-                  <p className="font-semibold text-white/80">3. 手機即手把</p>
-                  <p className="text-[11px] text-white/40">電視看局面，手機同步搶分！</p>
+                  <p className="font-semibold text-white/80">3. {phoneHost ? "一支手機搞定" : "手機即手把"}</p>
+                  <p className="text-[11px] text-white/40">
+                    {phoneHost
+                      ? hostPlays
+                        ? "主持畫面與我的手把隨時切換"
+                        : "這支手機顯示局面，其他人手機搶分"
+                      : "電視看局面，手機同步搶分！"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -356,8 +438,20 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
                   </span>
                   <span className="flex items-center gap-2">
                     {p.isHost ? (
-                      <span className="rounded-full bg-yellow-400/15 border border-yellow-400/30 px-2.5 py-0.5 text-xs font-semibold text-yellow-300">
-                        房主
+                      <span className="flex items-center gap-1.5">
+                        <span className="rounded-full bg-yellow-400/15 border border-yellow-400/30 px-2.5 py-0.5 text-xs font-semibold text-yellow-300">
+                          房主
+                        </span>
+                        {isParticipant(p) &&
+                          (p.isReady ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-0.5 text-xs font-semibold text-emerald-300">
+                              <CheckCircle2 className="h-3 w-3" /> 已就緒
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 border border-white/10 px-2.5 py-0.5 text-xs font-medium text-white/40">
+                              <Clock className="h-3 w-3" /> 待命中
+                            </span>
+                          ))}
                       </span>
                     ) : p.isReady ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-0.5 text-xs font-semibold text-emerald-300">
@@ -400,6 +494,24 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
         </section>
 
         <ErrorNote className="mb-4">{error}</ErrorNote>
+
+        {isHost && hostPlays && hostSeat && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-400/25 bg-violet-500/10 p-3">
+            <p className="min-w-0 text-xs leading-relaxed text-violet-100/80">
+              <span className="font-bold text-white">你也在這場比賽裡。</span> 按「就緒」告訴大家你準備好了。
+            </p>
+            <Button
+              size="sm"
+              variant={hostSeat.isReady ? "ghost" : "accent"}
+              className="shrink-0 font-bold"
+              onClick={() =>
+                void toggleReady().catch((e) => setError(e instanceof Error ? e.message : "無法更新就緒狀態"))
+              }
+            >
+              {hostSeat.isReady ? "取消我的就緒" : "我也準備好了"}
+            </Button>
+          </div>
+        )}
 
         {isHost && (
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
@@ -462,7 +574,9 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
       <Modal open={showQR && Boolean(joinUrl)} onClose={() => setShowQR(false)} label="全螢幕 QR code">
         <div className="text-center">
           <div className="mb-6 inline-block rounded-3xl bg-white p-8 shadow-2xl">
-            {joinUrl && <QRCodeSVG value={joinUrl} size={300} level="H" />}
+            {joinUrl && (
+              <QRCodeSVG value={joinUrl} size={300} level="H" className="h-auto w-[min(70vw,300px)]" />
+            )}
           </div>
           <p className="mb-2 text-3xl font-bold tracking-[0.2em] [color:var(--game-accent,#a855f7)]">{roomCode}</p>
           <p className="text-sm text-white/40">手機相機掃描，立即加入</p>

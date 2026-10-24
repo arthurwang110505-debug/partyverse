@@ -10,6 +10,7 @@ import { PlayShell } from "@/components/game/PlayShell";
 import { RoundTimer } from "@/components/game/RoundTimer";
 import { vibrate } from "@/lib/sound";
 import { cn } from "@/lib/utils";
+import { screenNoun } from "@/lib/hostMode";
 
 export default function PlayMusicalChairs() {
   const { room, player } = useRoom();
@@ -61,7 +62,7 @@ export default function PlayMusicalChairs() {
           <>
             <p className="mb-3 text-6xl animate-bounce" aria-hidden="true">🎶</p>
             <h1 className="text-2xl font-black text-white">音樂進行中…</h1>
-            <p className="mt-2 text-sm text-white/60">盯緊大螢幕，節拍越來越快，停了就馬上坐下！</p>
+            <p className="mt-2 text-sm text-white/60">盯緊{screenNoun(room)}，節拍越來越快，停了就馬上坐下！</p>
             <div className="mt-6 flex gap-2" aria-hidden="true">
               {Array.from({ length: Math.min(8, chairs) }, (_, i) => (
                 <span key={i} className="animate-pulse text-3xl" style={{ animationDelay: `${i * 120}ms` }}>
@@ -122,7 +123,7 @@ export default function PlayMusicalChairs() {
               {iAmLastStand ? "你就是音樂椅之王！" : `${players[state.lastStandId ?? ""]?.nickname ?? "倖存者"} 是音樂椅之王`}
             </h1>
             <p className="mt-2 text-sm text-white/60">
-              {iAmOut ? "你的最終分數見大螢幕。" : "最終分數見大螢幕！"}
+              {iAmOut ? `你的最終分數見${screenNoun(room)}。` : `最終分數見${screenNoun(room)}！`}
             </p>
           </>
         )}

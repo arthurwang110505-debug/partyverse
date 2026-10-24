@@ -397,3 +397,55 @@ describe("creating a room after closing one", () => {
     expect(switched.sessionPlan).toBeUndefined();
   });
 });
+
+describe("phone-host rooms", () => {
+  type HostSeat = { role?: string; isReady?: boolean; hostMode?: string };
+
+  it("makes a playing phone host a participant who still has to get ready", async () => {
+    render(<CreateTree />);
+    let code = "";
+    await act(async () => {
+      code = await api!.createRoom("brainteaser", "主持手機", undefined, undefined, {
+        hostMode: "phone",
+        hostPlays: true,
+      });
+    });
+
+    const stored = fake.read(`rooms/${code}`) as { hostMode?: string; players: Record<string, HostSeat> };
+    expect(stored.hostMode).toBe("phone");
+    const host = stored.players["tv-uid"];
+    expect(host.role).toBe("player");
+    expect(host.isReady).toBe(false);
+
+    // A reloaded provider parses the mode back instead of silently downgrading
+    // the room to the big-screen flow.
+    await flush("rooms");
+    expect(api!.room?.hostMode).toBe("phone");
+    expect(api!.room?.players["tv-uid"].role).toBe("player");
+  });
+
+  it("keeps a presenting phone host out of the roster", async () => {
+    render(<CreateTree />);
+    let code = "";
+    await act(async () => {
+      code = await api!.createRoom("brainteaser", "主持手機", undefined, undefined, {
+        hostMode: "phone",
+        hostPlays: false,
+      });
+    });
+    const stored = fake.read(`rooms/${code}`) as { players: Record<string, HostSeat> };
+    expect(stored.players["tv-uid"].role).toBe("display");
+    expect(stored.players["tv-uid"].isReady).toBe(true);
+  });
+
+  it("leaves big-screen rooms exactly as they were", async () => {
+    render(<CreateTree />);
+    const code = await createRoom();
+    const stored = fake.read(`rooms/${code}`) as { hostMode?: string; players: Record<string, HostSeat> };
+    // No new field is written, so old clients keep reading the same room shape.
+    expect(stored.hostMode).toBeUndefined();
+    expect(stored.players["tv-uid"].role).toBe("display");
+    expect(stored.players["tv-uid"].isReady).toBe(true);
+    expect(api!.room?.hostMode).toBeUndefined();
+  });
+});

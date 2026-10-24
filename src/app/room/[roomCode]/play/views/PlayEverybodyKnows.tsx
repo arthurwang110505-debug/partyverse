@@ -9,6 +9,7 @@ import { PlayShell } from "@/components/game/PlayShell";
 import { Users2, Check } from "lucide-react";
 import { vibrate } from "@/lib/sound";
 import { cn } from "@/lib/utils";
+import { screenNoun } from "@/lib/hostMode";
 
 export default function PlayEverybodyKnows() {
   const { room, player, submitAction } = useRoom();
@@ -90,7 +91,7 @@ export default function PlayEverybodyKnows() {
             <p className="text-sm text-white/70">
               {state.mostVotedPlayerIds.includes(player.id)
                 ? "👑 高票當選！大家最心知肚明的人就是你！"
-                : "快看電視大螢幕誰是全場最高票！"}
+                : `快看${screenNoun(room)}誰是全場最高票！`}
             </p>
           </div>
         )}

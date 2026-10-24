@@ -19,6 +19,7 @@ import { RoundTimer } from "@/components/game/RoundTimer";
 import { FireworkSketch } from "@/components/game/FireworkSketch";
 import { vibrate, sfx } from "@/lib/sound";
 import { cn } from "@/lib/utils";
+import { screenNoun } from "@/lib/hostMode";
 
 const BRUSHES = [
   { label: "細", width: 3 },
@@ -136,7 +137,7 @@ export default function PlayFireworkMaster() {
                   className="mx-auto mb-3 aspect-square w-40 rounded-2xl bg-black/70"
                 />
                 <h3 className="text-xl font-black text-white">煙火已填裝完成！</h3>
-                <p className="mt-1 text-sm text-cyan-200/80">等大家畫完，就會在大螢幕一起施放！</p>
+                <p className="mt-1 text-sm text-cyan-200/80">等大家畫完，就會在{screenNoun(room)}一起施放！</p>
               </div>
             ) : (
               <>
@@ -234,7 +235,7 @@ export default function PlayFireworkMaster() {
             <p className="animate-bounce text-6xl" aria-hidden="true">
               🎆
             </p>
-            <h3 className="text-xl font-black text-white">大螢幕煙火秀施放中！</h3>
+            <h3 className="text-xl font-black text-white">{screenNoun(room)}煙火秀施放中！</h3>
             <p className="text-xs text-white/60">抬頭看看大家畫的煙火在夜空綻放！</p>
             <div className="pt-4">
               <button

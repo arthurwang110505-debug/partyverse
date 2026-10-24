@@ -20,7 +20,7 @@ const inter = localFont({
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 const title = "PARTYVERSE — 一間房，16 款遊戲，無限混亂";
 const description =
-  "多人派對遊戲平台。用手機加入房間，電視當主畫面，和朋友即時同樂。16 款派對遊戲全部可玩，掃 QR 立刻開局。";
+  "多人派對遊戲平台。一支手機就能開場：電視當主畫面，或直接用手機主持，和朋友即時同樂。16 款派對遊戲全部可玩，掃 QR 立刻開局。";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

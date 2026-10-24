@@ -9,6 +9,7 @@ import { serverNow } from "@/engine/clock";
 import { PlayShell } from "@/components/game/PlayShell";
 import { RoundTimer } from "@/components/game/RoundTimer";
 import { vibrate } from "@/lib/sound";
+import { screenNoun } from "@/lib/hostMode";
 
 export default function PlayWhackMoles() {
   const { room, player } = useRoom();
@@ -49,7 +50,7 @@ export default function PlayWhackMoles() {
           <>
             <p className="mb-3 text-6xl animate-bounce" aria-hidden="true">🪵</p>
             <h1 className="text-2xl font-black text-white">第 {state.currentRound} 回合，準備…</h1>
-            <p className="mt-2 text-sm text-white/60">木頭冒出來（手機和大螢幕同步）就立刻點它！</p>
+            <p className="mt-2 text-sm text-white/60">木頭冒出來（手機和{screenNoun(room)}同步）就立刻點它！</p>
             <div className="mt-6">
               <RoundTimer timeLeft={state.timeLeft} total={3} endLabel="開始！" compact haptic />
             </div>
@@ -106,7 +107,7 @@ export default function PlayWhackMoles() {
             <h1 className="text-2xl font-black text-white">
               {state.winnerId === player.id ? "你就是敲木頭之王！" : "比賽結束！"}
             </h1>
-            <p className="mt-2 text-sm text-white/60">你總共敲了 {state.totalHits[player.id] ?? 0} 下，詳細排名看大螢幕。</p>
+            <p className="mt-2 text-sm text-white/60">你總共敲了 {state.totalHits[player.id] ?? 0} 下，詳細排名看{screenNoun(room)}。</p>
           </>
         )}
       </div>

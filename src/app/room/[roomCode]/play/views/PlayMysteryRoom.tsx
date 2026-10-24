@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/Button";
 import { PlayShell } from "@/components/game/PlayShell";
 import { vibrate, sfx } from "@/lib/sound";
 import { Delete, KeyRound, Lightbulb } from "lucide-react";
+import { screenNoun } from "@/lib/hostMode";
 
 export default function PlayMysteryRoom() {
-  const { player, submitAction } = useRoom();
+  const { room, player, submitAction } = useRoom();
   const { toast } = useToast();
   const state = useGameViewState<MysteryGameState & { myClue?: MysteryGameState["playerClues"][string] }>();
   const [code, setCode] = useState("");
@@ -228,7 +229,7 @@ export default function PlayMysteryRoom() {
             <h3 className="text-xl font-black text-white">
               {state.isUnlocked ? "🎉 成功逃出密室！" : "逃脫失敗！"}
             </h3>
-            <p className="text-xs text-white/50 mt-1">請看大螢幕結算通關名單！</p>
+            <p className="text-xs text-white/50 mt-1">請看{screenNoun(room)}結算通關名單！</p>
           </div>
         )}
       </div>

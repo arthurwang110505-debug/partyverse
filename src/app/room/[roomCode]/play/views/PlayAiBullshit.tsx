@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { PlayShell } from "@/components/game/PlayShell";
 import { vibrate, sfx } from "@/lib/sound";
 import { Sparkles } from "lucide-react";
+import { screenNoun } from "@/lib/hostMode";
 
 const BLUFF_TIPS = [
   "用煞有介事的科學術語包裝",
@@ -91,7 +92,7 @@ export default function PlayAiBullshit() {
                   💡
                 </p>
                 <h3 className="text-xl font-black text-white">假答案已成功埋伏！</h3>
-                <p className="mt-1 text-sm text-pink-200/80">等其他人寫完就開始投票，請看大螢幕！</p>
+                <p className="mt-1 text-sm text-pink-200/80">等其他人寫完就開始投票，請看{screenNoun(room)}！</p>
               </div>
             ) : (
               <form
@@ -178,7 +179,7 @@ export default function PlayAiBullshit() {
             <p className="mb-2 text-5xl animate-bounce" aria-hidden="true">
               🎭
             </p>
-            <h3 className="text-xl font-black text-white">大螢幕揭曉騙局中！</h3>
+            <h3 className="text-xl font-black text-white">{screenNoun(room)}揭曉騙局中！</h3>
             <p className="text-xs text-white/60 mt-1">誰騙了最多人？誰又慧眼識破真相？</p>
           </div>
         )}
