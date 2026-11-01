@@ -33,8 +33,8 @@ export interface RoomSettings {
   ageMode: "family" | "adults";
 }
 
-/** The three time-boxed random-party modes: 3 / 5 / 10 minutes of games. */
-export type PlayModeId = "flash" | "standard" | "marathon";
+/** Random-party modes: three time boxes plus the 8-game championship. */
+export type PlayModeId = "flash" | "standard" | "marathon" | "battle";
 
 /** One game of a randomized party-session playlist. */
 export interface RoomSessionEntry {
@@ -59,10 +59,13 @@ export interface RoomSessionEntry {
  */
 export interface RoomSessionPlan {
   mode: PlayModeId;
-  budgetMinutes: number;
+  /** Wall-clock cap for time-box modes; null for fixed-count modes. */
+  budgetMinutes: number | null;
   entries: RoomSessionEntry[];
   /** Games finished (or skipped) earlier in this session, in play order. */
   played: string[];
+  /** Cumulative raw game scores for the 8-game battle mode. */
+  totalScores?: Record<string, number>;
   startedAt: number;
   /** Set once the last entry has been played: the session is over. */
   completedAt?: number;
@@ -130,7 +133,7 @@ export interface Room<S = Record<string, unknown>> {
    */
   nextGameVotes?: Record<string, string>;
   /**
-   * Active randomized party session ("3分鐘快閃" / "5分鐘正常" / "10分鐘最久").
+   * Active randomized party session (time-boxed modes or the 8-game battle mode).
    * Absent for rooms that were created by picking a single game.
    */
   sessionPlan?: RoomSessionPlan;

@@ -300,16 +300,16 @@ export default function Home() {
         <div className="mx-auto max-w-6xl">
           <div className="mb-12 text-center">
             <span className="font-mono inline-block rounded-full border border-violet-400/40 bg-violet-950/40 px-4 py-1 text-xs font-bold uppercase tracking-wider text-violet-300 mb-3 shadow-[0_0_10px_rgba(168,85,247,0.2)]">
-              {"//"} TIMEBOX_MODES
+              {"//"} RANDOM_MODES
             </span>
-            <h2 className="text-3xl font-black md:text-5xl text-white">時間有多少，就玩多少</h2>
+            <h2 className="text-3xl font-black md:text-5xl text-white">選一種玩法，剩下交給派對</h2>
             <p className="mx-auto mt-3 max-w-2xl font-mono text-sm leading-relaxed text-cyan-100/60">
-              不用挑遊戲。選一個長度，系統隨機抽出剛好塞得滿的遊戲清單，
-              盡量避開你們剛玩過的遊戲；玩完一款，按一下自動接下一款。
+              不用挑遊戲。選時間盒，或抽 8 款不同遊戲一路決戰；玩完一款接著下一款，
+              決戰總排名會等全部遊戲完成後才公布。
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
             {PLAY_MODES.map((mode) => (
               <Link
                 key={mode.id}
@@ -329,15 +329,17 @@ export default function Home() {
                 <span className="relative mt-1 block font-mono text-xs text-white/50">{mode.tagline}</span>
                 <span className="relative mt-4 flex flex-wrap gap-1.5 font-mono text-[10px] text-white/45">
                   <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
-                    上限 {mode.budgetMinutes} 分鐘
+                    {mode.gameCount ? `${mode.gameCount} 款不同遊戲` : `上限 ${mode.budgetMinutes} 分鐘`}
                   </span>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">同一時段不重複</span>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
+                    {mode.gameCount ? "全部完成才公布排名" : "同一時段不重複"}
+                  </span>
                 </span>
                 <span
                   className="relative mt-5 inline-flex items-center gap-1.5 font-mono text-xs font-bold"
                   style={{ color: mode.color }}
                 >
-                  抽一段來玩
+                  {mode.gameCount ? "開啟決戰" : "抽一段來玩"}
                   <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" aria-hidden="true" />
                 </span>
               </Link>
@@ -345,7 +347,7 @@ export default function Home() {
           </div>
 
           <p className="mt-8 text-center font-mono text-xs text-white/40">
-            抽到的遊戲會自動套用「玩得完」的回合數與秒數建議，房主在大廳仍可自由調整。
+            抽到的遊戲會自動套用建議節奏，房主在大廳仍可自由調整；決戰至少 4 人，總分以各局原始分數直接相加。
           </p>
         </div>
       </section>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { testRoom } from "@/test/fixtures";
-import { buildMatchRecap, formatMatchReport } from "./matchRecap";
+import { buildMatchRecap, formatMatchReport, formatTournamentReport } from "./matchRecap";
 
 describe("matchRecap", () => {
   it("surfaces MVP and duration facts from scores", () => {
@@ -29,6 +29,14 @@ describe("matchRecap", () => {
     expect(text).toContain("PARTYVERSE 戰報");
     expect(text).toContain("腦筋急轉彎");
     expect(text).toContain("30 分");
+  });
+
+  it("formats a cumulative battle-mode report including all tournament players", () => {
+    const room = testRoom("brainteaser", 3);
+    const report = formatTournamentReport(room, { p1: 120, p2: 95, p3: 40 }, 8);
+    expect(report).toContain("決戰戰報 · 8 款遊戲");
+    expect(report.indexOf("玩家1：120 分")).toBeLessThan(report.indexOf("玩家2：95 分"));
+    expect(report).toContain("玩家3：40 分");
   });
 
   it("detects a photo-finish duel", () => {

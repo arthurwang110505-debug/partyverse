@@ -32,11 +32,29 @@ function parseSessionPlan(raw: unknown): RoomSessionPlan | undefined {
   const budgetMinutes = Number(data.budgetMinutes);
   const startedAt = Number(data.startedAt);
   const completedAt = Number(data.completedAt);
+  const rawScores = data.totalScores;
+  const totalScores =
+    rawScores && typeof rawScores === "object" && !Array.isArray(rawScores)
+      ? Object.fromEntries(
+          Object.entries(rawScores as Record<string, unknown>).filter(
+            (entry): entry is [string, number] =>
+              typeof entry[0] === "string" && typeof entry[1] === "number" && Number.isFinite(entry[1]),
+          ),
+        )
+      : undefined;
   return {
     mode,
-    budgetMinutes: Number.isFinite(budgetMinutes) && budgetMinutes > 0 ? Math.round(budgetMinutes) : 3,
+    // Realtime Database omits null values, so use the mode to restore this
+    // distinction: battle has no time cap; the legacy modes default to 3 min.
+    budgetMinutes:
+      mode === "battle"
+        ? null
+        : Number.isFinite(budgetMinutes) && budgetMinutes > 0
+          ? Math.round(budgetMinutes)
+          : 3,
     entries,
     played: arrayValue(data.played).filter((id): id is string => typeof id === "string"),
+    ...(totalScores && Object.keys(totalScores).length ? { totalScores } : {}),
     startedAt: Number.isFinite(startedAt) && startedAt > 0 ? startedAt : Date.now(),
     ...(Number.isFinite(completedAt) && completedAt > 0 ? { completedAt } : {}),
   };

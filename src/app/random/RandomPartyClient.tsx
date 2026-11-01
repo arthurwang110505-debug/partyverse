@@ -10,7 +10,7 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { addRecentRoom } from "@/hooks/useRecentRooms";
 import { GAMES } from "@/constants/games";
 import { MAX_NICKNAME_LENGTH, NICKNAME_KEY } from "@/constants/room";
-import { playModeById } from "@/constants/playModes";
+import { BATTLE_MIN_PLAYERS, playModeById } from "@/constants/playModes";
 import type { PlayModeId } from "@/types";
 import {
   buildPlaylist,
@@ -36,9 +36,9 @@ interface Props {
 }
 
 /**
- * The draw: pick a time box, watch the playlist land, then open the room on the
- * first game. The playlist is stored on the room so every device — and the
- * results screen at the end of each game — knows what comes next.
+ * The draw: pick a party mode, watch the playlist land, then open the room on
+ * the first game. The playlist is stored on the room so every device — and the
+ * results screen after each game — knows what comes next.
  */
 export default function RandomPartyClient({ initialMode, initialPlayerCount }: Props) {
   const router = useRouter();
@@ -83,7 +83,8 @@ export default function RandomPartyClient({ initialMode, initialPlayerCount }: P
   const rawNickname = nickname || (typeof savedNickname === "string" ? savedNickname : "");
   const effectiveNickname = typeof rawNickname === "string" ? rawNickname : String(rawNickname ?? "");
   const first = playlist?.entries[0];
-  const canSubmit = Boolean(first) && effectiveNickname.trim().length > 0 && !creating && !drawing;
+  const hasCompleteDraw = Boolean(playlist) && (!preset.gameCount || playlist!.entries.length === preset.gameCount);
+  const canSubmit = Boolean(first) && hasCompleteDraw && effectiveNickname.trim().length > 0 && !creating && !drawing;
 
   const handleCreate = async () => {
     if (!first || !playlist || !canSubmit) return;
@@ -121,18 +122,18 @@ export default function RandomPartyClient({ initialMode, initialPlayerCount }: P
         <header className="mb-8">
           <p className="glass mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm text-violet-300">
             <Dices className="h-4 w-4" aria-hidden="true" />
-            隨機時段派對
+            隨機派對模式
           </p>
-          <h1 className="mb-2 text-3xl font-bold md:text-4xl">時間有多少，就玩多少</h1>
+          <h1 className="mb-2 text-3xl font-bold md:text-4xl">挑一種玩法，剩下交給派對</h1>
           <p className="text-sm leading-relaxed text-white/45">
-            選一個長度，系統會隨機抽出剛好塞得進去的遊戲清單，並盡量避開你們剛玩過的遊戲。
-            玩完一款，房主在大螢幕按一下就能接著下一款，不用重新掃碼。
+            選時間盒，或挑戰 8 款隨機遊戲的決戰模式。系統會依人數抽出不同遊戲並套用建議設定；
+            每款玩完接著下一款，決戰模式則以各局原始分數直接相加，等 8 款全部結束才公布總排名。
           </p>
         </header>
 
         <section className="glass-card mb-6 rounded-2xl p-5" aria-labelledby="mode-heading">
           <h2 id="mode-heading" className="mb-3 text-sm font-semibold text-white/80">
-            1. 選時間長度
+            1. 選擇派對模式
           </h2>
           <PlayModePicker value={mode} onChange={(next) => setMode(next.id)} disabled={creating} />
 
@@ -156,7 +157,9 @@ export default function RandomPartyClient({ initialMode, initialPlayerCount }: P
               </select>
             </label>
             <p className="text-xs leading-relaxed text-white/40">
-              只會抽到人數坐得下的遊戲（{playerCount} 人）。
+              {mode === "battle"
+                ? `決戰模式至少需要 ${BATTLE_MIN_PLAYERS} 位玩家，才能抽出 8 款人數合適且不重複的遊戲。`
+                : `只會抽到人數坐得下的遊戲（${playerCount} 人）。`}
             </p>
           </div>
         </section>
@@ -179,7 +182,7 @@ export default function RandomPartyClient({ initialMode, initialPlayerCount }: P
           <div aria-live="polite" aria-busy={drawing}>
             {drawing || !playlist ? (
               <div className="space-y-2">
-                {Array.from({ length: mode === "flash" ? 2 : 3 }, (_, i) => (
+                {Array.from({ length: preset.gameCount ?? (mode === "flash" ? 2 : 3) }, (_, i) => (
                   <div
                     key={i}
                     className="flex items-center gap-3 rounded-2xl border border-white/5 bg-black/20 p-4"
@@ -237,24 +240,41 @@ export default function RandomPartyClient({ initialMode, initialPlayerCount }: P
 
           {playlist && !drawing && (
             <div className="mt-4 space-y-2">
+              {preset.gameCount && playlist.entries.length < preset.gameCount && (
+                <p className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-100" role="status">
+                  決戰模式需要 {preset.gameCount} 款不同遊戲，目前只有 {playlist.entries.length} 款符合人數。
+                  請至少邀請 {BATTLE_MIN_PLAYERS} 位玩家再開始。
+                </p>
+              )}
               <div className="flex items-center justify-between text-xs text-white/50 tabular-nums">
                 <span className="flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-                  預估總計 {playlist.totalMinutes} 分（上限 {playlist.budgetMinutes} 分）
+                  {playlist.budgetMinutes === null
+                    ? `8 款遊戲 · 預估總長約 ${playlist.totalMinutes} 分`
+                    : `預估總計 ${playlist.totalMinutes} 分（上限 ${playlist.budgetMinutes} 分）`}
                 </span>
-                <span>{playlist.entries.length} 款遊戲</span>
+                <span>
+                  {playlist.entries.length} 款遊戲{preset.gameCount ? ` / ${preset.gameCount} 款` : ""}
+                </span>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/40" aria-hidden="true">
                 <div
                   className="h-full rounded-full"
                   style={{
-                    width: `${Math.min(100, (playlist.totalMinutes / playlist.budgetMinutes) * 100)}%`,
+                    width: `${Math.min(
+                      100,
+                      preset.gameCount
+                        ? (playlist.entries.length / preset.gameCount) * 100
+                        : ((playlist.totalMinutes / (playlist.budgetMinutes ?? 1)) * 100),
+                    )}%`,
                     background: preset.gradient,
                   }}
                 />
               </div>
               <p className="text-[11px] leading-relaxed text-white/35">
-                預估時間以遊戲的最快節奏計算，不含換場與規則講解，所以實際會略長一些。
+                {preset.gameCount
+                  ? "建議設定採快速節奏；預估總長不含換場與規則講解。決戰排名會等八款遊戲全部完成後才公布。"
+                  : "預估時間以遊戲的最快節奏計算，不含換場與規則講解，所以實際會略長一些。"}
               </p>
             </div>
           )}
@@ -327,10 +347,10 @@ export default function RandomPartyClient({ initialMode, initialPlayerCount }: P
             <Sparkles className="h-3.5 w-3.5 text-yellow-300" aria-hidden="true" /> 這是怎麼抽的？
           </h2>
           <ul className="list-disc space-y-1 pl-4">
-            <li>只抽「在時間上限內玩得完」的遊戲，並把回合數與秒數縮到剛好，所以不會超時。</li>
-            <li>同一個時段不會重複同一款遊戲；跨時段則優先挑這台裝置還沒玩過的。</li>
+            <li>3 / 5 / 10 分鐘模式會抽出時間內玩得完的清單；決戰模式固定抽 8 款不同遊戲。</li>
+            <li>抽選只會包含符合玩家人數的遊戲，並優先挑最近沒玩過的；決戰模式至少需要 4 位玩家。</li>
             <li>抽到的建議設定只是建議，房主在大廳仍可自由調整秒數與回合數。</li>
-            <li>每一款玩完，結算畫面會自動倒數接著下一款，也可以中途停下來。</li>
+            <li>每一款玩完，結算畫面會自動倒數接著下一款；決戰模式會在第 8 款後才公布累積總排名。</li>
           </ul>
         </section>
 

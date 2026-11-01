@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { PlayModeId } from "@/types";
 import { GAMES } from "@/constants/games";
-import { PLAY_MODES, playModeById, playModeOrDefault } from "@/constants/playModes";
+import { BATTLE_GAME_COUNT, PLAY_MODES, playModeById, playModeOrDefault } from "@/constants/playModes";
 import { playableGameIds } from "@/engine";
 import { normalizeSettings } from "@/constants/gameSettings";
 import { testRoom } from "@/test/fixtures";
@@ -54,24 +55,30 @@ describe("duration estimates", () => {
 });
 
 describe("play modes", () => {
-  it("ships the three advertised time boxes", () => {
-    expect(PLAY_MODES.map((mode) => mode.label)).toEqual(["3分鐘快閃", "5分鐘正常", "10分鐘最久"]);
-    expect(PLAY_MODES.map((mode) => mode.budgetMinutes)).toEqual([3, 5, 10]);
+  it("ships three time boxes and the 8-game battle mode", () => {
+    expect(PLAY_MODES.map((mode) => mode.label)).toEqual([
+      "3分鐘快閃",
+      "5分鐘正常",
+      "10分鐘最久",
+      "決戰模式",
+    ]);
+    expect(PLAY_MODES.map((mode) => mode.budgetMinutes)).toEqual([3, 5, 10, null]);
     expect(playModeById("standard")?.budgetMinutes).toBe(5);
+    expect(playModeById("battle")?.gameCount).toBe(8);
     expect(playModeOrDefault("nope").id).toBe("standard");
   });
 });
 
 describe("playlist drawing", () => {
-  const draw = (mode: "flash" | "standard" | "marathon", options: Parameters<typeof buildPlaylist>[0] = { mode }) =>
+  const draw = (mode: PlayModeId, options: Parameters<typeof buildPlaylist>[0] = { mode }) =>
     buildPlaylist({ ...options, mode, random: options.random ?? (() => 0) });
 
-  it.each(PLAY_MODES.map((mode) => mode.id))("%s stays inside its budget on every seed", (mode) => {
+  it.each(["flash", "standard", "marathon"] as const)("%s stays inside its budget on every seed", (mode) => {
     for (let seed = 0; seed < 60; seed++) {
       // Deterministic seeds: walk the RNG so each draw is a different shuffle.
       let step = seed;
       const playlist = buildPlaylist({ mode, random: () => ((step = (step * 1103515245 + 12345) % 2147483648) / 2147483648) });
-      const budget = playModeById(mode)!.budgetMinutes;
+      const budget = playModeById(mode)!.budgetMinutes!;
       expect(playlist.entries.length).toBeGreaterThan(0);
       expect(playlist.totalMinutes).toBeLessThanOrEqual(budget);
       expect(new Set(ids(playlist.entries)).size).toBe(playlist.entries.length);
@@ -81,6 +88,43 @@ describe("playlist drawing", () => {
         expect(entry.settings.rounds).toBeGreaterThan(0);
       }
     }
+  });
+
+  it("draws eight distinct, seat-compatible games for battle mode", () => {
+    const battle = buildPlaylist({ mode: "battle", playerCount: 4, random: () => 0.37 });
+    expect(battle.mode).toBe("battle");
+    expect(battle.budgetMinutes).toBeNull();
+    expect(battle.targetGames).toBe(8);
+    expect(battle.entries).toHaveLength(8);
+    expect(new Set(ids(battle.entries)).size).toBe(8);
+    for (const entry of battle.entries) {
+      const game = GAMES.find((candidate) => candidate.id === entry.gameId)!;
+      expect(game.minPlayers).toBeLessThanOrEqual(4);
+      expect(game.maxPlayers).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  it("does not fill battle mode with games that the group cannot play", () => {
+    const battle = buildPlaylist({ mode: "battle", playerCount: 3, random: () => 0 });
+    expect(battle.entries).toHaveLength(7);
+    expect(battle.targetGames).toBe(8);
+    for (const entry of battle.entries) {
+      expect(GAMES.find((game) => game.id === entry.gameId)!.minPlayers).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("prefers unplayed games and brings back older games before recent repeats in battle mode", () => {
+    const candidates = GAMES.filter(
+      (game) => playableGameIds().includes(game.id) && game.minPlayers <= 4 && game.maxPlayers >= 4,
+    )
+      .slice(0, 8)
+      .map((game) => game.id);
+    const freshFirst = buildPlaylist({ mode: "battle", playerCount: 4, gameIds: candidates, history: candidates.slice(0, 7), random: () => 0 });
+    expect(freshFirst.entries[0].gameId).toBe(candidates[7]);
+
+    const oldestFirst = buildPlaylist({ mode: "battle", playerCount: 4, gameIds: candidates, history: candidates, random: () => 0 });
+    expect(oldestFirst.entries[0].gameId).toBe(candidates[0]);
+    expect(oldestFirst.entries.every((entry) => entry.repeated)).toBe(true);
   });
 
   it("fits several games into the longest mode and keeps the fastest mode short", () => {
@@ -148,6 +192,7 @@ describe("session progress", () => {
 
 describe("room session transitions", () => {
   const plan = toSessionPlan(buildPlaylist({ mode: "marathon", gameIds: ["followme", "whackmoles", "musicalchairs"] }), 500);
+  const battlePlan = toSessionPlan(buildPlaylist({ mode: "battle", playerCount: 4, random: () => 0.31 }), 600);
 
   it("loads the first entry with its suggested settings", () => {
     const room = startRoomSession(testRoom("bombcountdown"), plan, 700);
@@ -155,6 +200,56 @@ describe("room session transitions", () => {
     expect(room.status).toBe("LOBBY");
     expect(room.settings).toEqual(plan.entries[0].settings);
     expect(room.sessionPlan?.startedAt).toBe(500);
+  });
+
+  it("requires eight unique entries to start a battle session", () => {
+    const shortPlan = toSessionPlan(buildPlaylist({ mode: "battle", playerCount: 3 }), 600);
+    expect(shortPlan.entries).toHaveLength(7);
+    expect(() => startRoomSession(testRoom("brainteaser"), shortPlan, 700)).toThrow(/8 款不同/);
+
+    const valid = startRoomSession(testRoom(battlePlan.entries[0].gameId), battlePlan, 700);
+    expect(valid.sessionPlan?.mode).toBe("battle");
+    expect(valid.sessionPlan?.entries).toHaveLength(8);
+    expect(valid.sessionPlan?.totalScores).toBeUndefined();
+  });
+
+  it("accumulates game scores and completes a battle only after all eight results", () => {
+    let room = startRoomSession(testRoom(battlePlan.entries[0].gameId), battlePlan, 700);
+    let firstAdvance: ReturnType<typeof advanceRoomSession> = null;
+
+    battlePlan.entries.forEach((entry, index) => {
+      const result = {
+        ...room,
+        status: "RESULTS" as const,
+        participantIds: ["p1", "p2"],
+        gameState: { currentScores: { p1: 10 + index, p2: 5 } },
+      };
+      firstAdvance = advanceRoomSession(result, 900 + index);
+      expect(firstAdvance?.sessionPlan?.played).toHaveLength(index + 1);
+      if (index < BATTLE_GAME_COUNT - 1) {
+        expect(firstAdvance?.status).toBe("LOBBY");
+        expect(firstAdvance?.sessionPlan?.entries[0].gameId).toBe(battlePlan.entries[index + 1].gameId);
+        expect(() => advanceRoomSession(firstAdvance!, 950 + index)).toThrow(/不能跳過/);
+      } else {
+        expect(firstAdvance?.status).toBe("RESULTS");
+        expect(firstAdvance?.sessionPlan?.entries).toEqual([]);
+        expect(firstAdvance?.sessionPlan?.completedAt).toBe(900 + index);
+        expect(firstAdvance?.sessionPlan?.totalScores).toEqual({ p1: 108, p2: 40 });
+      }
+      room = firstAdvance ?? room;
+    });
+  });
+
+  it("preserves cumulative battle scores across the database round trip", () => {
+    let room = startRoomSession(testRoom(battlePlan.entries[0].gameId), battlePlan, 700);
+    room = advanceRoomSession(
+      { ...room, status: "RESULTS", participantIds: ["p1", "p2"], gameState: { currentScores: { p1: 12, p2: 4 } } },
+      900,
+    )!;
+    const parsed = parseRoom(databaseRoundTrip(room) as unknown as Record<string, unknown>, room.id)!;
+    expect(parsed.sessionPlan?.budgetMinutes).toBeNull();
+    expect(parsed.sessionPlan?.totalScores).toEqual({ p1: 12, p2: 4 });
+    expect(parsed.sessionPlan?.played).toEqual([battlePlan.entries[0].gameId]);
   });
 
   it("promotes the next entry and records the one that finished", () => {

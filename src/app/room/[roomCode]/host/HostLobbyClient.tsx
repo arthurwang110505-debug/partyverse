@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
 import { GAMES } from "@/constants/games";
-import { playModeById } from "@/constants/playModes";
+import { BATTLE_MIN_PLAYERS, playModeById } from "@/constants/playModes";
 import type { PlayModeId, Player } from "@/types";
 import { buildPlaylist, toSessionPlan } from "@/lib/playlist";
 import { loadPlayHistory } from "@/lib/playHistory";
@@ -172,6 +172,9 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
         playerCount: Math.max(2, onlineCount),
         history: loadPlayHistory(),
       });
+      if (playlist.targetGames && playlist.entries.length !== playlist.targetGames) {
+        throw new Error(`決戰模式需要 ${playlist.targetGames} 款不同遊戲；至少需要 ${BATTLE_MIN_PLAYERS} 位玩家。`);
+      }
       if (!playlist.entries.length) throw new Error("這個人數與時間找不到合適的遊戲，換個模式再試");
       setShowSessionModal(false);
       await startSession(toSessionPlan(playlist));
@@ -364,7 +367,7 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
           <div className="mb-6">
             <SessionPlanPanel plan={plan} showSettings />
             <div className="mt-2 flex flex-wrap gap-2">
-              {nextEntry && (
+              {nextEntry && plan?.mode !== "battle" && (
                 <Button variant="ghost" size="sm" loading={skipping} onClick={() => void handleSkipSession()}>
                   <SkipForward className="h-3.5 w-3.5" aria-hidden="true" /> 跳過這款，先玩 {nextGame?.name}
                 </Button>
@@ -384,11 +387,10 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
                 <Dices className="h-4 w-4" aria-hidden="true" /> 不知道玩什麼？抽一個隨機時段
               </p>
               <p className="mb-3 text-xs leading-relaxed text-cyan-100/75">
-                選 3 / 5 / 10 分鐘，系統隨機抽出塞得進這段時間的遊戲清單，並盡量避開最近玩過的遊戲。
-                玩完一款自動接下一款，全場都不用重新掃碼。
+                選 3 / 5 / 10 分鐘接力，或抽 8 款不同遊戲進行決戰。玩完一款自動接下一款；決戰排名只在全部玩完後公布。
               </p>
               <Button variant="accent" size="md" className="font-bold" onClick={() => setShowSessionModal(true)}>
-                <Dices className="h-4 w-4" aria-hidden="true" /> 抽一個時段
+                <Dices className="h-4 w-4" aria-hidden="true" /> 抽一個隨機模式
               </Button>
             </section>
           )
@@ -608,11 +610,17 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
       </Modal>
 
       {/* Random session draw */}
-      <Modal open={showSessionModal} onClose={() => setShowSessionModal(false)} title="抽一個隨機時段">
+      <Modal open={showSessionModal} onClose={() => setShowSessionModal(false)} title="抽一個隨機派對模式">
         <p className="mb-4 text-xs leading-relaxed text-white/55">
-          目前有 {onlineCount} 位手機玩家，只會抽他們玩得起的遊戲。抽完會直接換到第一款的大廳。
+          目前有 {onlineCount} 位玩家，只會抽他們玩得起的遊戲。抽完會直接換到第一款的大廳。
+          決戰模式固定玩 8 款不同遊戲，且需要至少 {BATTLE_MIN_PLAYERS} 位玩家。
         </p>
         <PlayModePicker value={sessionMode} onChange={(next) => setSessionMode(next.id)} />
+        {sessionMode === "battle" && onlineCount < BATTLE_MIN_PLAYERS && (
+          <p className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100" role="status">
+            目前只有 {onlineCount} 位玩家，決戰模式需要至少 {BATTLE_MIN_PLAYERS} 人。
+          </p>
+        )}
         <div className="mt-5 flex gap-2">
           <Button variant="ghost" size="md" className="flex-1" onClick={() => setShowSessionModal(false)}>
             取消
@@ -624,7 +632,7 @@ export default function HostLobbyClient({ roomCode }: { roomCode: string }) {
             loading={drawingSession}
             onClick={() => void handleDrawSession()}
           >
-            <Dices className="h-4 w-4" aria-hidden="true" /> 開始抽
+            <Dices className="h-4 w-4" aria-hidden="true" /> {sessionMode === "battle" ? "抽 8 款決戰遊戲" : "開始抽"}
           </Button>
         </div>
         <p className="mt-3 text-[11px] leading-relaxed text-white/40">

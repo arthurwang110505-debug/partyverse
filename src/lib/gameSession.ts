@@ -1,5 +1,6 @@
 import type { Room, RoomSessionPlan } from "@/types";
 import { HOST_STALE_MS } from "@/constants/room";
+import { BATTLE_GAME_COUNT } from "@/constants/playModes";
 import { GAMES } from "@/constants/games";
 import { normalizeSettings } from "@/constants/gameSettings";
 import { getGameEngine } from "@/engine";
@@ -236,37 +237,78 @@ export function restartRoomGame(room: Room, now = Date.now()): Room {
 export function startRoomSession(room: Room, plan: RoomSessionPlan, now = Date.now()): Room {
   const entry = plan.entries[0];
   if (!entry) throw new Error("這個時段沒有排到遊戲，請重新抽一次");
-  if (!getGameEngine(entry.gameId)) throw new Error("找不到這個遊戲");
+  if (
+    plan.mode === "battle" &&
+    (plan.entries.length !== BATTLE_GAME_COUNT || new Set(plan.entries.map((item) => item.gameId)).size !== BATTLE_GAME_COUNT)
+  ) {
+    throw new Error(`決戰模式需要 ${BATTLE_GAME_COUNT} 款不同的遊戲，請重新抽選`);
+  }
+  if (plan.entries.some((item) => !getGameEngine(item.gameId))) throw new Error("清單中有找不到的遊戲，請重新抽選");
   const lobby = returnRoomToLobby(room, entry.gameId);
+  const { totalScores: _oldScores, completedAt: _oldCompletion, ...freshPlan } = plan;
   return {
     ...lobby,
     settings: normalizeSettings(entry.gameId, entry.settings),
-    sessionPlan: { ...plan, startedAt: plan.startedAt || now },
+    sessionPlan: {
+      ...freshPlan,
+      played: [],
+      startedAt: plan.startedAt || now,
+    },
   };
+}
+
+function accumulatedScores(plan: RoomSessionPlan, room: Room): Record<string, number> {
+  const totals = { ...(plan.totalScores ?? {}) };
+  const gameScores = (room.gameState as { currentScores?: unknown } | null)?.currentScores;
+  const scores =
+    gameScores && typeof gameScores === "object" && !Array.isArray(gameScores)
+      ? (gameScores as Record<string, unknown>)
+      : {};
+
+  // Keep a zero score for every participant who took part, even if they never
+  // earned points in this particular game. Scores from past games remain when
+  // a player disconnects before the next one.
+  for (const id of participantIds(room)) totals[id] ??= 0;
+  for (const [id, value] of Object.entries(scores)) {
+    if (typeof value === "number" && Number.isFinite(value)) totals[id] = (totals[id] ?? 0) + value;
+  }
+  return totals;
 }
 
 /**
  * Finish the session's current game and promote the next entry.
  *
- * Returns `null` when the room has no session at all; when the last game is
- * done it keeps the room on RESULTS and stamps `completedAt` instead, so the
- * host screen can present the session summary.
+ * Battle sessions can only advance from RESULTS, so a game cannot be skipped.
+ * Its score is added once as the current entry is removed. The last advance
+ * leaves the room on RESULTS with the complete cumulative scoreboard.
+ * Returns `null` when there is no active session to advance.
  */
 export function advanceRoomSession(room: Room, now = Date.now()): Room | null {
   const plan = room.sessionPlan;
   if (!plan || !plan.entries.length) return null;
+  if (plan.mode === "battle" && room.status !== "RESULTS") {
+    throw new Error("決戰模式不能跳過遊戲，請先完成目前這一局");
+  }
+
   const [current, ...rest] = plan.entries;
   const played = plan.played.includes(current.gameId) ? plan.played : [...plan.played, current.gameId];
+  const totalScores = plan.mode === "battle" ? accumulatedScores(plan, room) : plan.totalScores;
+  const nextPlan = {
+    ...plan,
+    entries: rest,
+    played,
+    ...(totalScores ? { totalScores } : {}),
+  };
+
   if (!rest.length) {
-    return { ...room, sessionPlan: { ...plan, entries: [], played, completedAt: now } };
+    return { ...room, sessionPlan: { ...nextPlan, completedAt: now } };
   }
   const next = rest[0];
-  if (!getGameEngine(next.gameId)) throw new Error("找不到下一款遊戲");
   const lobby = returnRoomToLobby(room, next.gameId);
   return {
     ...lobby,
     settings: normalizeSettings(next.gameId, next.settings),
-    sessionPlan: { ...plan, entries: rest, played },
+    sessionPlan: nextPlan,
   };
 }
 

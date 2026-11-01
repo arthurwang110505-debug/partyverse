@@ -7,10 +7,10 @@ import { PLAY_MODES, type PlayMode } from "@/constants/playModes";
 import { cn } from "@/lib/utils";
 
 /**
- * The three time boxes, as a radio group.
+ * Random-party modes, as an accessible radio group.
  *
- * Shared by the draw page, the host lobby and the results screen so
- * "3分鐘快閃 / 5分鐘正常 / 10分鐘最久" always look and behave the same.
+ * Shared by the draw page, the host lobby and the results screen so the time
+ * boxes and the fixed-length battle mode always look and behave the same.
  */
 export function PlayModePicker({
   value,
@@ -41,8 +41,8 @@ export function PlayModePicker({
   return (
     <div
       role="radiogroup"
-      aria-label="時段長度"
-      className={cn("grid grid-cols-1 gap-2 sm:grid-cols-3", className)}
+      aria-label="派對模式"
+      className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4", className)}
     >
       {PLAY_MODES.map((mode, index) => {
         const selected = mode.id === value;
@@ -85,7 +85,7 @@ export function PlayModePicker({
                   selected ? "bg-black/25 text-white" : "bg-white/10 text-white/50",
                 )}
               >
-                {mode.budgetMinutes} 分
+                {mode.gameCount ? `${mode.gameCount} 款` : `${mode.budgetMinutes} 分`}
               </span>
             </span>
             {!compact && (

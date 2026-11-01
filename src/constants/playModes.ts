@@ -1,13 +1,16 @@
 import type { PlayModeId } from "@/types";
 
+/** Fixed-length championship playlist size. */
+export const BATTLE_GAME_COUNT = 8;
+/** Eight distinct games cannot be seated unless at least four players are available. */
+export const BATTLE_MIN_PLAYERS = 4;
+
 /**
- * A time-boxed way to start a party.
+ * A way to start a randomly drawn party.
  *
- * The host picks how long the group has ("3分鐘快閃" / "5分鐘正常" / "10分鐘最久"),
- * and `lib/playlist.ts` randomly draws a list of games whose (shortened)
- * durations add up to that budget. The budget is wall-clock for the whole
- * session, so it decides both *which* games are eligible and *how* they are
- * configured.
+ * The first three modes are time-boxed. `battle` is a fixed-length tournament:
+ * eight distinct games are drawn and the cumulative ranking is revealed only
+ * after the final game.
  */
 export interface PlayMode {
   id: PlayModeId;
@@ -16,8 +19,10 @@ export interface PlayMode {
   /** One-word name for chips and badges. */
   short: string;
   icon: string;
-  /** Total wall-clock budget the drawn playlist must fit inside, in minutes. */
-  budgetMinutes: number;
+  /** Wall-clock budget for time-boxed modes; `null` when the mode is game-count based. */
+  budgetMinutes: number | null;
+  /** Fixed game count for modes that are not time-boxed. */
+  gameCount?: number;
   tagline: string;
   hint: string;
   color: string;
@@ -58,6 +63,18 @@ export const PLAY_MODES: readonly PlayMode[] = [
     color: "#ff2d95",
     gradient: "linear-gradient(135deg, #ff2d95, #ff6b00)",
   },
+  {
+    id: "battle",
+    label: "決戰模式",
+    short: "決戰",
+    icon: "⚔️",
+    budgetMinutes: null,
+    gameCount: BATTLE_GAME_COUNT,
+    tagline: "8 款不同遊戲一路比到底",
+    hint: "各局原始分數直接累加，8 款玩完才公布總排名。",
+    color: "#facc15",
+    gradient: "linear-gradient(135deg, #facc15, #f97316, #ef4444)",
+  },
 ];
 
 export function isPlayModeId(value: unknown): value is PlayModeId {
@@ -69,7 +86,7 @@ export function playModeById(id: string | null | undefined): PlayMode | null {
   return PLAY_MODES.find((mode) => mode.id === id) ?? null;
 }
 
-/** Falls back to the middle mode so callers never deal with `null`. */
+/** Falls back to the middle time-box mode so callers never deal with `null`. */
 export function playModeOrDefault(id: string | null | undefined): PlayMode {
   return playModeById(id) ?? PLAY_MODES[1];
 }

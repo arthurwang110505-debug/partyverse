@@ -104,7 +104,7 @@ interface RoomContextValue {
   rematch: () => Promise<void>;
   endGame: () => Promise<void>;
   switchGame: (newGameId: string) => Promise<void>;
-  /** Start a drawn randomized session ("3分鐘快閃" / "5分鐘正常" / "10分鐘最久"). */
+  /** Start a drawn random session (time-boxed or the 8-game battle mode). */
   startSession: (plan: RoomSessionPlan) => Promise<void>;
   /** Finish the current session game and load the next one. Null once the session is over. */
   advanceSession: () => Promise<RoomSessionPlan | null>;
@@ -828,6 +828,13 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       mutateHostRoom((current) => {
         const next = returnRoomToLobby(current);
         const { nextGameVotes: _votes, ...rest } = next as Room & { nextGameVotes?: Record<string, string> };
+        // A completed fixed-length tournament has no queued entry to replay.
+        // Returning to the last game's lobby should therefore become a normal
+        // single-game rematch, not leave a stale empty tournament attached.
+        if (rest.sessionPlan?.mode === "battle" && rest.sessionPlan.entries.length === 0) {
+          const { sessionPlan: _completedPlan, ...withoutCompletedPlan } = rest;
+          return withoutCompletedPlan;
+        }
         return rest;
       }),
     [mutateHostRoom],
