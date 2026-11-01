@@ -148,6 +148,6 @@ export function formatMatchReport(room: Room, gameName: string): string {
     lines.push("------------------------");
     for (const f of facts) lines.push(`${f.icon} ${f.title}：${f.detail}`);
   }
-  lines.push("------------------------", "一起玩 → partyverse");
+  lines.push("------------------------", "一起玩 → https://partyverse-xi.vercel.app/");
   return lines.join("\n");
 }
