@@ -149,7 +149,9 @@ test("drawing streams before pointer-up, guesses stay secret, and controls stop 
   await drawer.mouse.move(box.x + 180, box.y + 200, { steps: 8 });
   await drawer.mouse.up();
   await expect.poll(async () => (await readRoom(tv, room.id)).gameState.strokes as unknown[]).toHaveLength(1);
-  const prompt = (room.gameState.prompt as { word: string }).word;
+  const stored = await readRoom(tv, room.id);
+  expect(stored.gameState.prompt).toBeUndefined();
+  const prompt = ((stored.privateHost?.prompt ?? stored.gameState.prompt) as { word: string }).word;
   await guesser.getByLabel("看看大螢幕，你猜這是什麼？").fill(prompt);
   await guesser.getByRole("button", { name: "送出答案", exact: true }).click();
   await expect(guesser.getByText(/答對了！\+/)).toBeVisible();

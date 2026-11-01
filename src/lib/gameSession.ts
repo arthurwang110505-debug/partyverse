@@ -156,7 +156,7 @@ export function advanceRoomGame(room: Room, now = Date.now(), heartbeat = false)
     ...(heartbeat ? { lastTickAt: now } : {}),
     gameState: stamp({ ...state, phaseEndsAt: deadline }, next, now),
   });
-  return finish(forEngine(updated), now);
+  return finish(updated, now);
 }
 
 export function applyRoomAction(
@@ -193,7 +193,7 @@ export function applyRoomAction(
   const engine = getGameEngine(current.gameId)!;
   const next = engine.handlePlayerAction(live, playerId, action);
   const stamped = stamp(live.gameState as State, next as State, now, true);
-  return finish(forEngine(publish({ ...current, gameState: stamped })), now);
+  return finish(publish({ ...current, gameState: stamped }), now);
 }
 
 /** Rematch and switching games are lobby transitions, not an in-game endRound. */
@@ -297,6 +297,10 @@ export function claimRoomHost(room: Room, userId: string, expectedHostId: string
     ...room,
     hostPlayerId: userId,
     lastTickAt: now,
+    // A phone player recovering a TV room must still be able to present the
+    // shared stage (e.g. the Draw & Guess canvas). Phone-host mode gives them
+    // both the stage and their own controller.
+    ...(isParticipant(room.players[userId]) ? { hostMode: "phone" as const } : {}),
     players: Object.fromEntries(Object.entries(room.players).map(([id, p]) => [id, { ...p, isHost: id === userId }])),
   };
 }

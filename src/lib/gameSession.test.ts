@@ -173,6 +173,7 @@ describe("host recovery compare-and-swap", () => {
     expect(claimed.gameState.phaseEndsAt).toBe(room.gameState.phaseEndsAt);
     expect(claimed.players.tv.isHost).toBe(false);
     expect(claimed.players.p1.isHost).toBe(true);
+    expect(claimed.hostMode).toBe("phone");
     expect(claimRoomHost(claimed, "p2", "tv", NOW + 21000)).toBeNull();
   });
   it("rejects takeover from a healthy host but allows an explicitly disconnected host", async () => {
@@ -181,5 +182,18 @@ describe("host recovery compare-and-swap", () => {
     expect(claimRoomHost(room, "p1", "tv", NOW + 1000)).toBeNull();
     room.players.tv.isConnected = false;
     expect(claimRoomHost(room, "p1", "tv", NOW + 1000)?.hostPlayerId).toBe("p1");
+  });
+});
+
+describe("published state keeps secrets out of gameState", () => {
+  it("does not rehydrate host secrets after a tick or a player action", () => {
+    let room = startPlayingRoom(testRoom("brainteaser"), NOW);
+    expect((room.gameState.riddle as { answer?: string }).answer).toBeUndefined();
+    expect((room.privateHost?.riddle as { answer?: string })?.answer).toBeTruthy();
+    room = advanceRoomGame(room, NOW + 1000);
+    expect((room.gameState.riddle as { answer?: string }).answer).toBeUndefined();
+    room = applyRoomAction(room, "p1", { type: "answer", choice: "wrong" }, phase(room), NOW + 1000);
+    expect((room.gameState.riddle as { answer?: string }).answer).toBeUndefined();
+    expect((room.privateHost?.riddle as { answer?: string })?.answer).toBeTruthy();
   });
 });

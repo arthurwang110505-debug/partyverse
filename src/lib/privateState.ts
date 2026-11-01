@@ -12,6 +12,7 @@
  */
 
 import type { Room } from "@/types";
+import { lyricMask } from "@/engine/song3Seconds";
 
 /** Fields that must never sit on the public gameState blob. */
 export const SECRET_FIELDS_BY_GAME: Record<string, string[]> = {
@@ -36,24 +37,29 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+/** Quiz games hide nested answer fields rather than whole top-level keys. */
+const QUIZ_SECRET_GAMES = new Set(["brainteaser", "song3seconds", "aibullshit"]);
+
+function answerRevealed(phase: unknown): boolean {
+  return phase === "reveal" || phase === "result";
+}
+
 /** Pull secret fields out of a fully-hydrated engine state. */
 export function splitSecrets(gameId: string, fullState: Record<string, unknown>): SecretSplit {
-  const secretKeys = SECRET_FIELDS_BY_GAME[gameId] ?? [];
-  if (secretKeys.length === 0 || !fullState || typeof fullState !== "object") {
-    return { publicState: { ...fullState }, hostSecrets: {}, playerSecrets: {} };
-  }
-
   const publicState: Record<string, unknown> = { ...fullState };
   const hostSecrets: HostSecrets = {};
+  const playerSecrets: Record<string, PlayerPrivate> = {};
+  if (!fullState || typeof fullState !== "object") {
+    return { publicState, hostSecrets, playerSecrets };
+  }
 
+  const secretKeys = SECRET_FIELDS_BY_GAME[gameId] ?? [];
   for (const key of secretKeys) {
     if (key in publicState) {
       hostSecrets[key] = publicState[key];
       delete publicState[key];
     }
   }
-
-  const playerSecrets: Record<string, PlayerPrivate> = {};
 
   if (gameId === "whoisundercoveragent") {
     const words = (hostSecrets.playerWords ?? {}) as Record<string, string>;
@@ -96,6 +102,51 @@ export function splitSecrets(gameId: string, fullState: Record<string, unknown>)
         .map((d, i) => (i < revealed ? d : null))
         .filter((d): d is string => d != null)
         .join("");
+    }
+  }
+
+  // Quiz answers stay host-only until the reveal/result phase. Players still
+  // receive the question, choices and any intentionally public clue.
+  if (QUIZ_SECRET_GAMES.has(gameId) && !answerRevealed(fullState.phase)) {
+    if (gameId === "brainteaser") {
+      const riddle = fullState.riddle;
+      if (riddle && typeof riddle === "object") {
+        const r = riddle as Record<string, unknown>;
+        hostSecrets.riddle = r;
+        publicState.riddle = { id: r.id, question: r.question };
+      }
+    }
+
+    if (gameId === "song3seconds") {
+      const song = fullState.currentSong;
+      if (song && typeof song === "object") {
+        const s = song as { id?: unknown; category?: unknown; options?: unknown; lyric?: unknown };
+        hostSecrets.currentSong = song;
+        publicState.currentSong = { id: s.id, category: s.category, options: s.options };
+        if (typeof s.lyric === "string") {
+          publicState.lyricClue = lyricMask(
+            song as Parameters<typeof lyricMask>[0],
+            typeof fullState.lyricRevealed === "number" ? fullState.lyricRevealed : 0,
+          );
+        }
+      }
+    }
+
+    if (gameId === "aibullshit") {
+      const prompt = fullState.prompt;
+      if (prompt && typeof prompt === "object") {
+        const p = prompt as Record<string, unknown>;
+        hostSecrets.prompt = prompt;
+        publicState.prompt = { id: p.id, question: p.question };
+      }
+      const options = fullState.options;
+      if (Array.isArray(options)) {
+        hostSecrets.options = options;
+        publicState.options = options.map((opt) => {
+          const o = (opt ?? {}) as Record<string, unknown>;
+          return { id: o.id, text: o.text, authorPlayerId: o.authorPlayerId };
+        });
+      }
     }
   }
 
@@ -178,5 +229,5 @@ export function viewGameState(
 
 /** True when this game carries secrets that should be split. */
 export function gameHasSecrets(gameId: string): boolean {
-  return (SECRET_FIELDS_BY_GAME[gameId] ?? []).length > 0;
+  return (SECRET_FIELDS_BY_GAME[gameId] ?? []).length > 0 || QUIZ_SECRET_GAMES.has(gameId);
 }

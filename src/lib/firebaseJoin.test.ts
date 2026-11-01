@@ -174,6 +174,22 @@ describe("Firebase joins from independent devices", () => {
     expect(await join("ABCDE", "extra")).toEqual({ outcome: "full" });
   });
 
+  it("does not count a departed player toward capacity", async () => {
+    seedServerRoom(
+      "ABCDE",
+      Object.fromEntries(
+        Array.from({ length: 12 }, (_, i) => [
+          `p${i}`,
+          { ...HOST, id: `p${i}`, isHost: false, isConnected: i !== 0 },
+        ]),
+      ),
+    );
+    expect(await join()).toEqual({ outcome: "joined" });
+    expect(players()["p0"].isConnected).toBe(false);
+    expect(players()["joiner-uid"]).toBeDefined();
+    expect(await join("ABCDE", "extra")).toEqual({ outcome: "full" });
+  });
+
   it("rejoining preserves the player's avatar, score and readiness", async () => {
     seedServerRoom("ABCDE", {
       "host-uid": HOST,

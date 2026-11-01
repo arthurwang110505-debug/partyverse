@@ -114,16 +114,18 @@ describe("AI Bullshit Engine", () => {
     expect(next.phase).toBe("voting");
     expect(next.options.length).toBe(5); // 4 player bluffs + 1 real
 
-    // Now players vote
+    // Now players vote. Ballot ids are opaque, so locate choices by metadata.
     room.gameState = next;
+    const realId = next.options.find((o) => o.isReal)!.id;
+    const p1FakeId = next.options.find((o) => o.authorPlayerId === "p1")!.id;
     // p1 votes for real
-    next = AIBullshitEngine.handlePlayerAction(room, "p1", { type: "voteAnswer", optionId: "real" });
+    next = AIBullshitEngine.handlePlayerAction(room, "p1", { type: "voteAnswer", optionId: realId });
     room.gameState = next;
     // p2 votes for p1's fake
-    next = AIBullshitEngine.handlePlayerAction(room, "p2", { type: "voteAnswer", optionId: "fake_p1_0" });
+    next = AIBullshitEngine.handlePlayerAction(room, "p2", { type: "voteAnswer", optionId: p1FakeId });
     room.gameState = next;
     // p3 votes for real
-    next = AIBullshitEngine.handlePlayerAction(room, "p3", { type: "voteAnswer", optionId: "real" });
+    next = AIBullshitEngine.handlePlayerAction(room, "p3", { type: "voteAnswer", optionId: realId });
 
     expect(next.phase).toBe("reveal");
     expect(next.currentScores["p1"]).toBe(15); // 10 for real + 5 for fooling p2

@@ -92,10 +92,11 @@ describe("full match playthroughs (all games reach results)", () => {
     const room = playMatch(
       "aibullshit",
       (r, runner) => {
-        const s = r.gameState as {
+        const s = hydrateGameState(r.gameState, r.privateHost) as {
           phase: string;
           submissions: Record<string, string>;
           votes: Record<string, string>;
+          options: Array<{ id: string; isReal: boolean }>;
         };
         for (const id of playerIds(r)) {
           if (s.phase === "submitting" && !s.submissions[id]) {
@@ -103,7 +104,8 @@ describe("full match playthroughs (all games reach results)", () => {
             runner.submit(id, { type: "finishBluffs" });
           }
           if (s.phase === "voting" && !s.votes[id]) {
-            runner.submit(id, { type: "voteAnswer", optionId: "real" });
+            const realId = s.options.find((o) => o.isReal)!.id;
+            runner.submit(id, { type: "voteAnswer", optionId: realId });
           }
         }
       },
@@ -160,7 +162,7 @@ describe("full match playthroughs (all games reach results)", () => {
     const room = playMatch(
       "song3seconds",
       (r, runner) => {
-        const s = r.gameState as {
+        const s = hydrateGameState(r.gameState, r.privateHost) as {
           phase: string;
           currentSong: { title: string };
           playerAnswers: Record<string, string>;
@@ -450,7 +452,7 @@ describe("full match playthroughs (all games reach results)", () => {
     const room = playMatch(
       "brainteaser",
       (r, runner) => {
-        const s = r.gameState as { phase: string; answers: Record<string, string>; riddle: { answer: string }; options: string[] };
+        const s = hydrateGameState(r.gameState, r.privateHost) as { phase: string; answers: Record<string, string>; riddle: { answer: string }; options: string[] };
         if (s.phase !== "question") return;
         for (const id of playerIds(r)) {
           if (s.answers[id] !== undefined) continue;
