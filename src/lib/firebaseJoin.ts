@@ -1,7 +1,7 @@
 import { onValue, ref, runTransaction, type Database, type DataSnapshot } from "firebase/database";
 import type { Player } from "@/types";
 import { GAMES } from "@/constants/games";
-import { isParticipant } from "@/engine/participants";
+import { activeParticipantCount } from "@/engine/participants";
 import { pickAvatar } from "@/lib/utils";
 
 /** How long a single Firebase round-trip may take before we give up. */
@@ -83,7 +83,7 @@ export async function joinRoomOnFirebase(
           const room = current as Record<string, unknown>;
           const players = (room.players ?? {}) as Record<string, Player>;
           const existing = players[playerId];
-          if (!existing && Object.values(players).filter(isParticipant).length >= maxPlayersFor(String(room.gameId))) {
+          if (!existing && activeParticipantCount(players) >= maxPlayersFor(String(room.gameId))) {
             abortReason = "full";
             return undefined;
           }

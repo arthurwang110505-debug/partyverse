@@ -4,6 +4,7 @@ import { engineRoom } from "@/engine/participants";
 
 import { useEffect, useState } from "react";
 import { useRoom } from "@/providers/RoomContext";
+import { useGameViewState } from "@/hooks/useGameViewState";
 import { lyricMask, type SongGameState } from "@/engine/song3Seconds";
 import { HostGameControls } from "@/components/game/HostGameControls";
 import { HostShell } from "@/components/game/HostShell";
@@ -13,7 +14,7 @@ import { sfx } from "@/lib/sound";
 
 export default function HostSong3Seconds() {
   const { room } = useRoom();
-  const state = room?.gameState as SongGameState | undefined;
+  const state = useGameViewState<SongGameState>();
   const players = room ? engineRoom(room).players : {};
 
   // Soft tick when a new lyric character pops into view.
@@ -27,7 +28,7 @@ export default function HostSong3Seconds() {
 
   if (!state) return null;
 
-  const mask = state.currentSong ? lyricMask(state.currentSong, state.lyricRevealed ?? 0) : [];
+  const mask = state.lyricClue ?? (state.currentSong ? lyricMask(state.currentSong, state.lyricRevealed ?? 0) : []);
 
   return (
     <HostShell>

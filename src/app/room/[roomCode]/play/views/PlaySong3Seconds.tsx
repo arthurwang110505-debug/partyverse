@@ -2,6 +2,7 @@
 
 import { useRoom } from "@/providers/RoomContext";
 import { useToast } from "@/providers/ToastProvider";
+import { useGameViewState } from "@/hooks/useGameViewState";
 import { lyricMask, type SongGameState } from "@/engine/song3Seconds";
 import { PlayShell } from "@/components/game/PlayShell";
 import { Music2, Sparkles, Zap } from "lucide-react";
@@ -12,14 +13,14 @@ import { screenNoun } from "@/lib/hostMode";
 export default function PlaySong3Seconds() {
   const { room, player, submitAction } = useRoom();
   const { toast } = useToast();
-  const state = room?.gameState as SongGameState | undefined;
+  const state = useGameViewState<SongGameState>();
 
   if (!state || !player) return null;
 
   const myAnswer = state.playerAnswers?.[player.id];
   const options = state.currentSong?.options ?? [];
   const isCorrect = myAnswer === state.currentSong?.title;
-  const mask = state.currentSong ? lyricMask(state.currentSong, state.lyricRevealed ?? 0) : [];
+  const mask = state.lyricClue ?? (state.currentSong ? lyricMask(state.currentSong, state.lyricRevealed ?? 0) : []);
 
   const handleSelect = async (choice: string) => {
     vibrate(20);

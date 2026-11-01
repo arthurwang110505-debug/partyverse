@@ -118,6 +118,8 @@ export interface SongGameState {
   usedPromptIds?: string[];
   /** How many characters of the lyric are un-masked on the TV (and phones). */
   lyricRevealed: number;
+  /** Public, pre-masked lyric clue so phones never need the full lyric. */
+  lyricClue?: Array<{ char: string; shown: boolean }>;
   /** playerId -> chosen song title */
   playerAnswers: Record<string, string>;
   /** playerId -> response time in ms for speed bonus */

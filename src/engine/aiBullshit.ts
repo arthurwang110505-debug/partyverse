@@ -140,7 +140,8 @@ function buildOptions(submissions: Record<string, unknown>, prompt: TriviaPrompt
     seen.add(text);
     options.push({ id: `ai_${i}`, text, authorPlayerId: null, isReal: false });
   }
-  return shuffle(options);
+  // Opaque ids: an id like "real" would tell every client which choice is true.
+  return shuffle(options).map((opt, i) => ({ ...opt, id: `opt_${i}` }));
 }
 
 function toVoting(state: AIBullshitGameState, room: Room<AIBullshitGameState>, submissions = state.submissions) {

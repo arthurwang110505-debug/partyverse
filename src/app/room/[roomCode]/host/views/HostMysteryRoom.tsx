@@ -2,7 +2,7 @@
 
 import { engineRoom } from "@/engine/participants";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRoom } from "@/providers/RoomContext";
 import { useGameViewState } from "@/hooks/useGameViewState";
 import { maskCode, MAX_HINTS, WRONG_CODE_PENALTY, type MysteryGameState } from "@/engine/mysteryRoom";
@@ -22,7 +22,6 @@ export default function HostMysteryRoom() {
   const isUnlocked = state?.isUnlocked;
 
   // Buzz on the TV the moment a wrong code lands.
-  const lastWrongRef = useRef<string | null>(null);
   const [wrongFlashVisible, setWrongFlashVisible] = useState(false);
 
   useEffect(() => {
@@ -35,15 +34,21 @@ export default function HostMysteryRoom() {
     }
   }, [phase, isUnlocked]);
 
+  // Key the flash by its timestamp + code, not the object reference: every room
+  // tick rebuilds `wrongFlash`, and an object dependency would cancel the hide
+  // timer before it ever fires.
+  const wrongFlashAt = state?.wrongFlash?.at;
+  const wrongFlashCode = state?.wrongFlash?.code;
   useEffect(() => {
-    const flash = state?.wrongFlash;
-    if (!flash || lastWrongRef.current === flash.code) return;
-    lastWrongRef.current = flash.code;
+    if (!wrongFlashAt || !wrongFlashCode) {
+      setWrongFlashVisible(false);
+      return;
+    }
     sfx.playBuzzer();
     setWrongFlashVisible(true);
     const timer = window.setTimeout(() => setWrongFlashVisible(false), 2200);
     return () => window.clearTimeout(timer);
-  }, [state?.wrongFlash]);
+  }, [wrongFlashAt, wrongFlashCode]);
 
   if (!state) return null;
 

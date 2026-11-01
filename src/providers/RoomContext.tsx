@@ -51,7 +51,7 @@ import {
   startRoomGame,
   startRoomSession,
 } from "@/lib/gameSession";
-import { isParticipant } from "@/engine/participants";
+import { activeParticipantCount } from "@/engine/participants";
 import { resolveHostRole } from "@/lib/hostMode";
 import { setServerOffset } from "@/engine/clock";
 
@@ -664,7 +664,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       const joined = await updateLocalRoom(roomCode, (current) => {
         const players = current.players ?? {};
         const existing = players[authUser.uid];
-        if (!existing && Object.values(players).filter(isParticipant).length >= maxPlayersFor(current.gameId))
+        if (!existing && activeParticipantCount(players) >= maxPlayersFor(current.gameId))
           throw new Error("房間已額滿");
         return {
           ...current,

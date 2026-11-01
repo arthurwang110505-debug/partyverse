@@ -86,3 +86,72 @@ describe("privateState split / view", () => {
     expect(playerSecrets.p2).toBeUndefined();
   });
 });
+
+describe("quiz answers stay hidden until reveal", () => {
+  it("brainteaser publishes the question but not the answer", () => {
+    const full = {
+      phase: "question",
+      riddle: { id: "r1", question: "Q", answer: "A", wrong: ["B"], explain: "E" },
+      options: ["A", "B"],
+    };
+    const { publicState, hostSecrets } = splitSecrets("brainteaser", full);
+    expect((publicState.riddle as { question?: string }).question).toBe("Q");
+    expect((publicState.riddle as { answer?: string }).answer).toBeUndefined();
+    expect((hostSecrets.riddle as { answer?: string }).answer).toBe("A");
+
+    const room = testRoom("brainteaser", 3);
+    room.gameState = publicState;
+    const view = viewGameState(room, "p1", { hostSecrets });
+    expect((view.riddle as { answer?: string }).answer).toBeUndefined();
+
+    const revealed = splitSecrets("brainteaser", { ...full, phase: "reveal" });
+    expect((revealed.publicState.riddle as { answer?: string }).answer).toBe("A");
+    expect(revealed.hostSecrets.riddle).toBeUndefined();
+  });
+
+  it("song3seconds publishes a masked clue, not the title or full lyric", () => {
+    const full = {
+      phase: "answering",
+      lyricRevealed: 2,
+      currentSong: { id: "s1", title: "T", artist: "A", category: "C", lyric: "abcdef", options: ["T", "X"] },
+    };
+    const { publicState, hostSecrets } = splitSecrets("song3seconds", full);
+    const song = publicState.currentSong as { title?: string; lyric?: string; options?: string[] };
+    expect(song.title).toBeUndefined();
+    expect(song.lyric).toBeUndefined();
+    expect(song.options).toEqual(["T", "X"]);
+    expect(publicState.lyricClue).toEqual([
+      { char: "a", shown: true },
+      { char: "b", shown: true },
+      { char: "c", shown: false },
+      { char: "d", shown: false },
+      { char: "e", shown: false },
+      { char: "f", shown: false },
+    ]);
+    expect((hostSecrets.currentSong as { title?: string }).title).toBe("T");
+
+    const revealed = splitSecrets("song3seconds", { ...full, phase: "reveal" });
+    expect((revealed.publicState.currentSong as { title?: string }).title).toBe("T");
+  });
+
+  it("aibullshit hides the real answer and the isReal ballot flag", () => {
+    const full = {
+      phase: "voting",
+      prompt: { id: "t1", question: "Q", realAnswer: "R", decoys: ["D"] },
+      options: [
+        { id: "opt_0", text: "R", authorPlayerId: null, isReal: true },
+        { id: "opt_1", text: "F", authorPlayerId: "p1", isReal: false },
+      ],
+    };
+    const { publicState, hostSecrets } = splitSecrets("aibullshit", full);
+    expect((publicState.prompt as { realAnswer?: string }).realAnswer).toBeUndefined();
+    const options = publicState.options as Array<{ id: string; isReal?: boolean }>;
+    expect(options.every((o) => o.isReal === undefined)).toBe(true);
+    expect(options.map((o) => o.id)).toEqual(["opt_0", "opt_1"]);
+    expect((hostSecrets.options as Array<{ isReal?: boolean }>)[0].isReal).toBe(true);
+
+    const revealed = splitSecrets("aibullshit", { ...full, phase: "reveal" });
+    expect((revealed.publicState.prompt as { realAnswer?: string }).realAnswer).toBe("R");
+    expect((revealed.publicState.options as Array<{ isReal?: boolean }>)[0].isReal).toBe(true);
+  });
+});

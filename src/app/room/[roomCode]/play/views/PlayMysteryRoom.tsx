@@ -19,21 +19,27 @@ export default function PlayMysteryRoom() {
   const [pending, setPending] = useState(false);
   const [hintPending, setHintPending] = useState(false);
   const [wrong, setWrong] = useState(false);
-  const lastWrongRef = useRef<string | null>(null);
+  const lastSubmittedRef = useRef<string | null>(null);
+  const lastFlashKeyRef = useRef<string | null>(null);
 
-  // A wrong attempt bounces back on the shared state: buzz + shake, then clear.
+  // A wrong attempt bounces back on the shared state. Match it against the code
+  // this phone submitted, not the current input: the input is cleared as soon as
+  // the write succeeds, so comparing against `code` would never match.
+  const wrongFlashAt = state?.wrongFlash?.at;
+  const wrongFlashCode = state?.wrongFlash?.code;
   useEffect(() => {
-    const flash = state?.wrongFlash;
-    if (!flash || lastWrongRef.current === flash.code) return;
-    lastWrongRef.current = flash.code;
-    if (flash.code === code) {
-      setWrong(true);
-      sfx.playBuzzer();
-      vibrate([80, 40, 80]);
-      window.setTimeout(() => setWrong(false), 700);
-      window.setTimeout(() => setCode(""), 900);
-    }
-  }, [state?.wrongFlash, code]);
+    if (!wrongFlashAt || !wrongFlashCode) return;
+    const key = `${wrongFlashAt}:${wrongFlashCode}`;
+    if (lastFlashKeyRef.current === key) return;
+    lastFlashKeyRef.current = key;
+    if (wrongFlashCode !== lastSubmittedRef.current) return;
+    lastSubmittedRef.current = null;
+    setWrong(true);
+    sfx.playBuzzer();
+    vibrate([80, 40, 80]);
+    const timer = window.setTimeout(() => setWrong(false), 700);
+    return () => window.clearTimeout(timer);
+  }, [wrongFlashAt, wrongFlashCode]);
 
   if (!state || !player) return null;
 
@@ -67,10 +73,12 @@ export default function PlayMysteryRoom() {
     if (code.length !== 4) return;
     setPending(true);
     vibrate(25);
+    lastSubmittedRef.current = code;
     try {
       await submitAction({ type: "submitCode", code });
       setCode("");
     } catch {
+      lastSubmittedRef.current = null;
       toast("送出失敗，請再試一次");
     } finally {
       setPending(false);
