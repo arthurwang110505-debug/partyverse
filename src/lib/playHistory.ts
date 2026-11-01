@@ -5,10 +5,10 @@ import { GAMES } from "@/constants/games";
 /**
  * What this browser has already played, newest last.
  *
- * The random party modes ("3分鐘快閃" / "5分鐘正常" / "10分鐘最久") draw a playlist
- * from `GAMES`, and "盡量不重複" only means something if the draw knows what the
- * group just played. One device (the TV) does the drawing, so plain
- * localStorage is enough — no room state and no database field needed.
+ * Random party modes draw playlists from `GAMES`, and "盡量不重複" only means
+ * something if the draw knows what the group just played. One device (the host)
+ * does the drawing, so plain localStorage is enough — no room state and no
+ * database field needed.
  *
  * Entries older than `FRESH_WINDOW_MS` are ignored, so tonight's history does
  * not bias next weekend's party back into the games nobody wanted.

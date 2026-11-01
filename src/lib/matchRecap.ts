@@ -1,5 +1,5 @@
 import type { Room } from "@/types";
-import { participantIds } from "@/engine/participants";
+import { isParticipant, participantIds } from "@/engine/participants";
 
 export interface RecapFact {
   id: string;
@@ -149,5 +149,31 @@ export function formatMatchReport(room: Room, gameName: string): string {
     for (const f of facts) lines.push(`${f.icon} ${f.title}：${f.detail}`);
   }
   lines.push("------------------------", "一起玩 → partyverse");
+  return lines.join("\n");
+}
+
+/** Plain-text cumulative ranking for a completed 8-game battle session. */
+export function formatTournamentReport(
+  room: Room,
+  scores: Record<string, number>,
+  gameCount = 8,
+): string {
+  const ranked = Object.entries(scores)
+    .filter(([id, score]) => room.players[id] && isParticipant(room.players[id]) && Number.isFinite(score))
+    .map(([id, score]) => ({
+      name: room.players[id].nickname || "玩家",
+      avatar: room.players[id].avatar || "",
+      score,
+    }))
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  const medals = ["🥇", "🥈", "🥉"];
+  const lines = [
+    `🏆 PARTYVERSE 決戰戰報 · ${gameCount} 款遊戲`,
+    `房間 ${room.id}`,
+    "------------------------",
+    ...ranked.map((entry, index) => `${medals[index] ?? `#${index + 1}`} ${entry.avatar} ${entry.name}：${entry.score} 分`),
+    "------------------------",
+    "一起玩 → partyverse",
+  ];
   return lines.join("\n");
 }

@@ -35,18 +35,18 @@ export default function CreateSelectorPage() {
           <p className="text-sm text-white/40">選定遊戲後即可設定人數與規則，獲得專屬房間代碼與 QR Code</p>
         </header>
 
-        {/* Time-boxed random playlists: pick a length, let the draw pick the games. */}
+        {/* Random party modes: pick a time box or an 8-game championship. */}
         <section className="mb-10" aria-labelledby="random-heading">
           <div className="mb-4">
             <h2 id="random-heading" className="flex items-center gap-2 text-lg font-bold text-white">
               <Dices className="h-5 w-5 text-cyan-300" aria-hidden="true" />
-              隨機時段派對
+              隨機派對模式
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-white/45">
-              沒時間挑遊戲？選一個長度，系統隨機抽出剛好塞得滿的遊戲清單，並盡量避開你們剛玩過的遊戲。
+              不想挑遊戲？選時間盒，或挑戰 8 款不同遊戲的決戰模式；系統會依人數隨機抽出遊戲清單。
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {PLAY_MODES.map((mode) => (
               <Link
                 key={mode.id}
@@ -67,7 +67,7 @@ export default function CreateSelectorPage() {
                   className="relative mt-3 inline-block text-xs font-bold"
                   style={{ color: mode.color }}
                 >
-                  抽一段來玩 →
+                  開始抽選 →
                 </span>
               </Link>
             ))}

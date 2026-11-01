@@ -6,11 +6,11 @@ import { settingsForPace, type PaceId } from "@/constants/pacePresets";
 import { playModeById, type PlayMode } from "@/constants/playModes";
 
 /**
- * Random playlist drawing for the three time-boxed party modes.
+ * Random playlist drawing for the time-boxed modes and the 8-game battle mode.
  *
  * Everything here is pure: no clock, no storage, no randomness beyond the
  * injected `random()`. Callers pass in what has already been played so the draw
- * can avoid repeats ("盡量不重複"), and the room stores the result as a
+ * can avoid repeats where possible, and the room stores the result as a
  * `RoomSessionPlan`.
  */
 
@@ -22,7 +22,7 @@ const MIN_ENTRY_MINUTES = 1;
 const MIN_VOLUME_RATIO = 0.4;
 /** …and this is how much slower the estimate gets when rounds are pushed up. */
 const MAX_VOLUME_RATIO = 1.5;
-/** How many of the biggest fitting games a single draw chooses between. */
+/** How many of the biggest fitting games a single time-box draw chooses between. */
 const SHORTLIST_SIZE = 3;
 
 export interface DurationRange {
@@ -102,10 +102,12 @@ export function settingsSummary(gameId: string, settings: RoomSettings): string 
 
 export interface Playlist {
   mode: PlayModeId;
-  /** Wall-clock budget the draw had to fit inside, in minutes. */
-  budgetMinutes: number;
+  /** Wall-clock budget for time-boxed modes; null for fixed-count modes. */
+  budgetMinutes: number | null;
+  /** Required playlist size for fixed-count modes such as battle. */
+  targetGames: number | null;
   entries: RoomSessionEntry[];
-  /** Sum of the entries' estimates — always ≤ the budget. */
+  /** Sum of the entries' estimates — at most the budget for time-box modes. */
   totalMinutes: number;
   /** Games that fitted but were passed over because they were played recently. */
   avoided: string[];
@@ -123,16 +125,12 @@ export interface BuildPlaylistOptions {
 }
 
 /**
- * Draw a playlist that fills `mode`'s budget with as many games as fit.
+ * Draw a playlist for the selected mode.
  *
- * Rules, in order of priority:
- *  1. never exceed the budget, and never repeat a game inside one playlist;
- *  2. prefer games that have not been played yet (then the ones played longest
- *     ago), so a session feels fresh — "盡量不重複";
- *  3. prefer a pick that still leaves room for one more game, so a 10-minute
- *     session lands on a few short games instead of one long one;
- *  4. keep the draw random: the shortlist of the biggest fitting games is picked
- *     from uniformly, so pressing 重新抽 produces a different mix.
+ * Time-boxed modes stay inside their budget and draw as many unique games as
+ * fit. Battle mode draws exactly `gameCount` distinct, seat-compatible games
+ * whenever the pool contains enough; it returns a partial list otherwise so
+ * the UI can explain why the tournament cannot start yet.
  */
 export function buildPlaylist({
   mode,
@@ -142,13 +140,17 @@ export function buildPlaylist({
   random = Math.random,
 }: BuildPlaylistOptions): Playlist {
   const preset = typeof mode === "string" ? (playModeById(mode) ?? playModeById("standard")!) : mode;
-  const budget = preset.budgetMinutes;
+  const budget = preset.budgetMinutes ?? 0;
+  const targetGames = preset.gameCount ?? null;
+  const isFixedCount = targetGames !== null;
   const roster = gameIds ?? GAMES.filter((game) => isPlayable(game.id)).map((game) => game.id);
   const played = [...history];
+  const playedSet = new Set(played);
+
   /**
    * Freshness score: bigger is better. Never played scores `Infinity`; otherwise
    * the further back the game sits in `history`, the higher its score — so once
-   * everything has been played the *oldest* favourite comes back first.
+   * everything has been played the oldest games have priority.
    */
   const freshness = (gameId: string): number => {
     const index = played.lastIndexOf(gameId);
@@ -159,46 +161,64 @@ export function buildPlaylist({
     GAMES.filter((game) => roster.includes(game.id) && isPlayable(game.id))
       .filter((game) => !seated || playerCount === undefined || (playerCount >= game.minPlayers && playerCount <= game.maxPlayers))
       .map((game) => {
-        const settings = suggestedSettings(game.id, budget);
+        const settings = isFixedCount ? pacedSettings(game.id, "quick") : suggestedSettings(game.id, budget);
         return { gameId: game.id, minutes: estimatedMinutes(game.id, settings), settings, repeated: false };
       });
 
-  // A group size nobody supports would draw nothing, so seat filtering relaxes.
+  // A time-box draw relaxes seat filtering if nobody can play any candidate.
+  // Battle mode never does: eight incompatible games are worse than an explicit
+  // "need more players" state.
   const seated = draft(true);
-  const candidates = seated.length ? seated : draft(false);
-  const fitting = candidates.filter((entry) => entry.minutes <= budget);
+  const candidates = seated.length ? seated : isFixedCount ? [] : draft(false);
+  const fitting = isFixedCount ? candidates : candidates.filter((entry) => entry.minutes <= budget);
 
   const entries: RoomSessionEntry[] = [];
   const used = new Set<string>();
   let remaining = budget;
 
-  while (true) {
-    const pool = fitting.filter((entry) => !used.has(entry.gameId) && entry.minutes <= remaining);
-    if (!pool.length) break;
-    const freshest = Math.max(...pool.map((entry) => freshness(entry.gameId)));
-    const tier = pool.filter((entry) => freshness(entry.gameId) === freshest);
-    const keepsGoing = tier.filter((entry) =>
-      pool.some((other) => other.gameId !== entry.gameId && other.minutes <= remaining - entry.minutes),
-    );
-    const chooser = keepsGoing.length ? keepsGoing : tier;
-    const shortlist = [...chooser].sort((a, b) => b.minutes - a.minutes).slice(0, SHORTLIST_SIZE);
-    const pick = shortlist[Math.min(shortlist.length - 1, Math.floor(random() * shortlist.length))];
-    entries.push({ ...pick, repeated: freshest !== Number.POSITIVE_INFINITY });
-    used.add(pick.gameId);
-    remaining -= pick.minutes;
+  if (targetGames !== null) {
+    while (entries.length < targetGames) {
+      const pool = fitting.filter((entry) => !used.has(entry.gameId));
+      if (!pool.length) break;
+      const fresh = pool.filter((entry) => freshness(entry.gameId) === Number.POSITIVE_INFINITY);
+      // Use unplayed games first, then bring back the least-recently-played
+      // games before more recent repeats, while still randomizing within a tier.
+      const oldestScore = Math.max(...pool.map((entry) => freshness(entry.gameId)));
+      const oldestRepeats = pool.filter((entry) => freshness(entry.gameId) === oldestScore);
+      const chooser = fresh.length ? fresh : oldestRepeats;
+      const pick = chooser[Math.min(chooser.length - 1, Math.floor(random() * chooser.length))];
+      entries.push({ ...pick, repeated: playedSet.has(pick.gameId) });
+      used.add(pick.gameId);
+    }
+  } else {
+    while (true) {
+      const pool = fitting.filter((entry) => !used.has(entry.gameId) && entry.minutes <= remaining);
+      if (!pool.length) break;
+      const freshest = Math.max(...pool.map((entry) => freshness(entry.gameId)));
+      const tier = pool.filter((entry) => freshness(entry.gameId) === freshest);
+      const keepsGoing = tier.filter((entry) =>
+        pool.some((other) => other.gameId !== entry.gameId && other.minutes <= remaining - entry.minutes),
+      );
+      const chooser = keepsGoing.length ? keepsGoing : tier;
+      const shortlist = [...chooser].sort((a, b) => b.minutes - a.minutes).slice(0, SHORTLIST_SIZE);
+      const pick = shortlist[Math.min(shortlist.length - 1, Math.floor(random() * shortlist.length))];
+      entries.push({ ...pick, repeated: freshness(pick.gameId) !== Number.POSITIVE_INFINITY });
+      used.add(pick.gameId);
+      remaining -= pick.minutes;
+    }
+
+    // A budget tighter than every game still deserves one game to play.
+    if (!entries.length && candidates.length) {
+      const shortest = [...candidates].sort((a, b) => a.minutes - b.minutes)[0];
+      entries.push({ ...shortest, repeated: freshness(shortest.gameId) !== Number.POSITIVE_INFINITY });
+      used.add(shortest.gameId);
+    }
   }
 
-  // A budget tighter than every game still deserves one game to play.
-  if (!entries.length && candidates.length) {
-    const shortest = [...candidates].sort((a, b) => a.minutes - b.minutes)[0];
-    entries.push({ ...shortest, repeated: freshness(shortest.gameId) !== Number.POSITIVE_INFINITY });
-    used.add(shortest.gameId);
-  }
-
-  const playedSet = new Set(played);
   return {
     mode: preset.id,
-    budgetMinutes: budget,
+    budgetMinutes: preset.budgetMinutes,
+    targetGames,
     entries,
     totalMinutes: entries.reduce((sum, entry) => sum + entry.minutes, 0),
     avoided: fitting
@@ -221,7 +241,7 @@ export function toSessionPlan(playlist: Playlist, now = Date.now()): RoomSession
 export interface SessionProgress {
   mode: PlayModeId;
   label: string;
-  budgetMinutes: number;
+  budgetMinutes: number | null;
   /** 1-based position of the game in play; 0 once the session is over. */
   index: number;
   /** Games in the whole session (played + queued). */

@@ -3,9 +3,9 @@ import { isPlayModeId } from "@/constants/playModes";
 import RandomPartyClient from "./RandomPartyClient";
 
 export const metadata: Metadata = {
-  title: "隨機時段派對 — 3分鐘快閃 / 5分鐘正常 / 10分鐘最久",
+  title: "隨機派對模式 — 快閃、正常、最久、決戰",
   description:
-    "選一個時間長度，系統隨機抽出塞得進這段時間的遊戲清單，盡量避開剛玩過的遊戲；玩完一款就自動接下一個。",
+    "選一個時間盒，或挑戰 8 款隨機遊戲的決戰模式。每款玩完接著下一款，決戰總排名在八款全部完成後公布。",
 };
 
 interface Props {

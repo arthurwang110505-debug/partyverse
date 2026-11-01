@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Copy, Dices, Gamepad2, Home, Pause, Play, RotateCcw, Sparkles, Timer } from "lucide-react";
 import { useRoom } from "@/providers/RoomContext";
 import { GAMES } from "@/constants/games";
+import { BATTLE_GAME_COUNT, BATTLE_MIN_PLAYERS } from "@/constants/playModes";
 import { isPlayable } from "@/engine";
 import { buildPlaylist, toSessionPlan } from "@/lib/playlist";
 import { loadPlayHistory, rememberPlayedGame } from "@/lib/playHistory";
@@ -19,7 +20,7 @@ import { Confetti } from "@/components/game/Confetti";
 import { FloatingReactions } from "@/components/game/FloatingReactions";
 import { useCountUp } from "@/hooks/useCountUp";
 import { sfx, vibrate } from "@/lib/sound";
-import { buildMatchRecap, formatMatchReport } from "@/lib/matchRecap";
+import { buildMatchRecap, formatMatchReport, formatTournamentReport } from "@/lib/matchRecap";
 import { participantIds } from "@/engine/participants";
 import { cn, formatTime } from "@/lib/utils";
 
@@ -66,27 +67,61 @@ export default function ResultsClient({ roomCode }: Props) {
 
   const game = GAMES.find((g) => g.id === room?.gameId);
   const state = room?.gameState as (BombGameState & { achievements?: Achievement[] }) | undefined;
+  const plan = room?.sessionPlan;
+  const battleMode = plan?.mode === "battle";
+  const tournamentFinalGame = Boolean(battleMode && room?.status === "RESULTS" && plan?.entries.length === 1);
+  const tournamentFinished = Boolean(
+    battleMode &&
+      ((plan?.entries.length === 0 && plan.played.length === BATTLE_GAME_COUNT) ||
+        (tournamentFinalGame && (plan?.played.length ?? 0) + 1 === BATTLE_GAME_COUNT)),
+  );
+
+  // During game eight, include its just-finished score in the preview. The host
+  // then closes the plan once, persisting this same total before the ranking is
+  // shown to everyone. Earlier rounds never render this scoreboard.
+  const tournamentScores = useMemo<Record<string, number> | null>(() => {
+    if (!battleMode || !plan) return null;
+    const totals = { ...(plan.totalScores ?? {}) };
+    if (tournamentFinalGame) {
+      for (const id of room?.participantIds ?? []) totals[id] ??= 0;
+      for (const [id, score] of Object.entries(state?.currentScores ?? {})) {
+        if (typeof score === "number" && Number.isFinite(score)) totals[id] = (totals[id] ?? 0) + score;
+      }
+    }
+    return totals;
+  }, [battleMode, plan, room?.participantIds, state?.currentScores, tournamentFinalGame]);
 
   const ranked = useMemo<RankedPlayer[]>(() => {
     if (!room) return [];
-    const scores = state?.currentScores ?? {};
-    return Object.entries(room.players)
-      .filter(([id]) => participantIds(room).includes(id))
-      .map(([id, p]) => ({
-        id,
-        nickname: p.nickname,
-        avatar: p.avatar,
-        isHost: p.isHost,
-        isMe: id === player?.id,
-        score: scores[id] ?? 0,
-      }))
+    const scores = battleMode ? tournamentScores ?? {} : state?.currentScores ?? {};
+    const ids = battleMode
+      ? Object.keys(scores).filter((id) => room.players[id] && room.players[id].role !== "display")
+      : participantIds(room);
+    return ids
+      .map((id) => {
+        const p = room.players[id];
+        return {
+          id,
+          nickname: p.nickname,
+          avatar: p.avatar,
+          isHost: p.isHost,
+          isMe: id === player?.id,
+          score: scores[id] ?? 0,
+        };
+      })
       .sort((a, b) => b.score - a.score || a.nickname.localeCompare(b.nickname));
-  }, [room, state?.currentScores, player?.id]);
+  }, [room, state?.currentScores, tournamentScores, battleMode, player?.id]);
 
   const podium = PODIUM_ORDER.map((i) => ({ entry: ranked[i], slot: i })).filter(({ entry }) => Boolean(entry));
-  const winners = (room?.gameState.winnerIds as string[] | undefined) ?? [];
+  const gameWinners = (room?.gameState.winnerIds as string[] | undefined) ?? [];
+  const winners = battleMode
+    ? tournamentFinished && ranked.length > 0
+      ? ranked.filter((entry) => entry.score === ranked[0].score).map((entry) => entry.id)
+      : []
+    : gameWinners;
   const cooperative = room?.gameId === "mysteryroom";
-  const teamVictory = cooperative || room?.gameId === "whoisundercoveragent";
+  const teamVictory = !battleMode && (cooperative || room?.gameId === "whoisundercoveragent");
+  const showRankings = !battleMode || tournamentFinished;
   const rankOf = (entry: RankedPlayer) => ranked.findIndex((p) => p.score === entry.score);
 
   const achievements = state?.achievements ?? [];
@@ -96,13 +131,33 @@ export default function ResultsClient({ roomCode }: Props) {
 
   const totalScore = ranked.reduce((sum, r) => sum + r.score, 0);
   const leader = ranked[0];
-  const recap = useMemo(() => (room ? buildMatchRecap(room) : []), [room]);
+  const recap = useMemo(() => (room && !battleMode ? buildMatchRecap(room) : []), [room, battleMode]);
 
-  // ---- Randomized party session ("3分鐘快閃" / "5分鐘正常" / "10分鐘最久") ----
-  const plan = room?.sessionPlan;
+  // ---- Randomized party sessions: time boxes and the 8-game battle mode ----
   const nextEntry = plan?.entries[1];
   const nextGame = GAMES.find((g) => g.id === nextEntry?.gameId);
   const sessionActive = Boolean(plan && plan.entries.length > 0);
+  const finalizeBattleRef = useRef(false);
+  const [finalizingBattle, setFinalizingBattle] = useState(false);
+
+  const finalizeBattle = useCallback(async () => {
+    if (finalizeBattleRef.current) return;
+    finalizeBattleRef.current = true;
+    setFinalizingBattle(true);
+    setError("");
+    try {
+      await advanceSession();
+    } catch (e) {
+      finalizeBattleRef.current = false;
+      setError(e instanceof Error ? e.message : "無法公布決戰排名");
+    } finally {
+      setFinalizingBattle(false);
+    }
+  }, [advanceSession]);
+
+  useEffect(() => {
+    if (isHost && tournamentFinalGame) void finalizeBattle();
+  }, [finalizeBattle, isHost, tournamentFinalGame]);
 
   // Remember what got played so the next draw can avoid it ("盡量不重複").
   const gameId = room?.gameId;
@@ -137,17 +192,25 @@ export default function ResultsClient({ roomCode }: Props) {
     return () => clearTimeout(timer);
   }, [advancing, autoCountdown, handleAdvance, isHost, nextEntry]);
 
+  const sessionPlayerCount = room ? Math.max(2, participantIds(room).length) : 4;
+  const tournamentGameIds =
+    tournamentFinalGame && plan?.entries[0]
+      ? [...plan.played, plan.entries[0].gameId]
+      : plan?.played ?? [];
+
   const handleDrawSession = async () => {
     setDrawing(true);
     setError("");
     try {
       // Seat the draw to the phones that actually played this match.
-      const players = room ? Math.max(2, participantIds(room).length) : 4;
       const playlist = buildPlaylist({
         mode: sessionMode,
-        playerCount: players,
+        playerCount: sessionPlayerCount,
         history: loadPlayHistory(),
       });
+      if (playlist.targetGames && playlist.entries.length !== playlist.targetGames) {
+        throw new Error(`決戰模式需要 ${playlist.targetGames} 款不同遊戲；至少需要 ${BATTLE_MIN_PLAYERS} 位玩家。`);
+      }
       if (!playlist.entries.length) throw new Error("人數或時間找不到合適的遊戲，換個模式再試");
       setShowSessionModal(false);
       await startSession(toSessionPlan(playlist));
@@ -184,7 +247,11 @@ export default function ResultsClient({ roomCode }: Props) {
     vibrate(15);
     sfx.playPop();
     try {
-      await navigator.clipboard.writeText(formatMatchReport(room, game?.name ?? "遊戲"));
+      await navigator.clipboard.writeText(
+        battleMode && tournamentFinished
+          ? formatTournamentReport(room, tournamentScores ?? {}, BATTLE_GAME_COUNT)
+          : formatMatchReport(room, game?.name ?? "遊戲"),
+      );
       setCopiedScores(true);
       setTimeout(() => setCopiedScores(false), 2000);
     } catch {
@@ -236,15 +303,41 @@ export default function ResultsClient({ roomCode }: Props) {
             🏆
           </p>
           <h1 className="mb-2 text-3xl font-black tracking-tight">
-            {cooperative ? (room.gameState.isUnlocked ? "全員合作成功！" : "挑戰未完成") : "遊戲結算"}
+            {battleMode
+              ? tournamentFinished
+                ? "決戰最終排名"
+                : "決戰進行中"
+              : cooperative
+                ? room.gameState.isUnlocked
+                  ? "全員合作成功！"
+                  : "挑戰未完成"
+                : "遊戲結算"}
           </h1>
-          {winners.length > 0 && (
-            <p className="mb-3 text-sm leading-relaxed text-yellow-200" role="status">
-              {teamVictory ? "獲勝隊伍" : winners.length > 1 ? "並列冠軍" : "本場冠軍"}：
-              {winners.map((id) => room.players[id]?.nickname ?? "玩家").join("、")}
-            </p>
+          {battleMode ? (
+            tournamentFinished ? (
+              winners.length > 0 && (
+                <p className="mb-3 text-sm leading-relaxed text-yellow-200" role="status">
+                  {winners.length > 1 ? "決戰並列冠軍" : "決戰冠軍"}：
+                  {winners.map((id) => room.players[id]?.nickname ?? "玩家").join("、")}
+                </p>
+              )
+            ) : (
+              <p className="mb-3 text-sm leading-relaxed text-amber-100" role="status">
+                第 {Math.min((plan?.played.length ?? 0) + 1, BATTLE_GAME_COUNT)} / {BATTLE_GAME_COUNT} 款已完成；
+                全部完成後才會公布累積總排名。
+              </p>
+            )
+          ) : (
+            <>
+              {winners.length > 0 && (
+                <p className="mb-3 text-sm leading-relaxed text-yellow-200" role="status">
+                  {teamVictory ? "獲勝隊伍" : winners.length > 1 ? "並列冠軍" : "本場冠軍"}：
+                  {winners.map((id) => room.players[id]?.nickname ?? "玩家").join("、")}
+                </p>
+              )}
+              {!winners.length && <p className="mb-3 text-sm text-white/65">本場尚無得分冠軍，再挑戰一次吧！</p>}
+            </>
           )}
-          {!winners.length && <p className="mb-3 text-sm text-white/65">本場尚無得分冠軍，再挑戰一次吧！</p>}
           {game && (
             <p className="text-sm text-white/50">
               <span aria-hidden="true">{game.icon}</span> {game.name}
@@ -253,14 +346,22 @@ export default function ResultsClient({ roomCode }: Props) {
           )}
         </header>
 
-        {ranked.length > 0 && (
-          <section className="mb-6 grid grid-cols-4 gap-2" aria-label="本局回顧">
-            {[
-              { value: String(ranked.length), label: "位玩家" },
-              { value: String(state?.totalRounds ?? "—"), label: "回合" },
-              { value: String(leader?.score ?? 0), label: "最高分" },
-              { value: String(totalScore), label: "總得分" },
-            ].map((stat) => (
+        {showRankings && ranked.length > 0 && (
+          <section className="mb-6 grid grid-cols-4 gap-2" aria-label={battleMode ? "決戰總成績" : "本局回顧"}>
+            {(battleMode
+              ? [
+                  { value: String(BATTLE_GAME_COUNT), label: "完成遊戲" },
+                  { value: String(ranked.length), label: "位玩家" },
+                  { value: String(leader?.score ?? 0), label: "最高積分" },
+                  { value: String(totalScore), label: "總積分" },
+                ]
+              : [
+                  { value: String(ranked.length), label: "位玩家" },
+                  { value: String(state?.totalRounds ?? "—"), label: "回合" },
+                  { value: String(leader?.score ?? 0), label: "最高分" },
+                  { value: String(totalScore), label: "總得分" },
+                ]
+            ).map((stat) => (
               <div key={stat.label} className="glass rounded-xl border border-white/10 p-3 text-center">
                 <p className="text-lg font-bold tabular-nums">{stat.value}</p>
                 <p className="text-[11px] text-white/50">{stat.label}</p>
@@ -305,7 +406,7 @@ export default function ResultsClient({ roomCode }: Props) {
         )}
 
         {/* Podium Display */}
-        {ranked.length > 0 && winners.length > 0 && !teamVictory && (
+        {showRankings && ranked.length > 0 && winners.length > 0 && !teamVictory && (
           <section className="mb-8 flex h-48 items-end justify-center gap-3" aria-label="前三名領獎台">
             {podium.map(({ entry }) => {
               const place = rankOf(entry);
@@ -352,14 +453,14 @@ export default function ResultsClient({ roomCode }: Props) {
         )}
 
         {/* Full Rankings */}
-        {ranked.length > 0 && (
+        {showRankings && ranked.length > 0 && (
           <section
             className="glass mb-6 rounded-2xl border border-white/10 p-4 shadow-lg"
             aria-labelledby="rankings-heading"
           >
             <div className="mb-3 flex items-center justify-between">
               <h2 id="rankings-heading" className="flex items-center gap-2 text-base font-semibold">
-                <span aria-hidden="true">⭐</span> 完整排行榜
+                <span aria-hidden="true">⭐</span> {battleMode ? "決戰總排行榜" : "完整排行榜"}
               </h2>
               <Button variant="ghost" size="sm" onClick={() => void handleCopyScores()} className="text-xs">
                 <Copy className="h-3.5 w-3.5 mr-1" />
@@ -395,7 +496,7 @@ export default function ResultsClient({ roomCode }: Props) {
           </section>
         )}
 
-        {achievements.length > 0 && (
+        {showRankings && achievements.length > 0 && (
           <section
             className="glass mb-6 rounded-2xl border border-white/10 p-4 shadow-lg"
             aria-labelledby="achievements-heading"
@@ -424,25 +525,27 @@ export default function ResultsClient({ roomCode }: Props) {
         )}
 
         {/* Reaction Bar for celebrating */}
-        <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
-          <p className="text-xs text-white/50 mb-2 flex items-center justify-center gap-1">
-            <Sparkles className="h-3.5 w-3.5 text-yellow-400" />
-            點擊表情為獲勝者喝采！
-          </p>
-          <div className="flex justify-center gap-2">
-            {REACTIONS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => void handleReaction(emoji)}
-                className="glass rounded-xl px-3 py-2 text-2xl transition-all hover:bg-white/15 active:scale-90"
-                aria-label={`發送 ${emoji}`}
-              >
-                {emoji}
-              </button>
-            ))}
+        {showRankings && (
+          <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
+            <p className="text-xs text-white/50 mb-2 flex items-center justify-center gap-1">
+              <Sparkles className="h-3.5 w-3.5 text-yellow-400" />
+              {battleMode ? "點擊表情為決戰冠軍喝采！" : "點擊表情為獲勝者喝采！"}
+            </p>
+            <div className="flex justify-center gap-2">
+              {REACTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => void handleReaction(emoji)}
+                  className="glass rounded-xl px-3 py-2 text-2xl transition-all hover:bg-white/15 active:scale-90"
+                  aria-label={`發送 ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <ErrorNote className="mb-4">{error}</ErrorNote>
 
@@ -450,10 +553,97 @@ export default function ResultsClient({ roomCode }: Props) {
         {plan && (
           <section className="mb-6" aria-labelledby="session-heading">
             <h2 id="session-heading" className="sr-only">
-              隨機時段進度
+              {battleMode ? "決戰模式進度" : "隨機時段進度"}
             </h2>
-            <SessionPlanPanel plan={plan} showSettings />
-            {isHost ? (
+            <SessionPlanPanel plan={plan} showSettings currentCompleted={room.status === "RESULTS"} />
+            {battleMode ? (
+              tournamentFinished ? (
+                <div className="mt-3 rounded-2xl border border-yellow-400/30 bg-yellow-500/10 p-4">
+                  <p className="mb-1 text-sm font-bold text-yellow-100">
+                    🎉 8 款遊戲全部完成，決戰總排名已公布！
+                  </p>
+                  <p className="mb-1 text-xs leading-relaxed text-yellow-100/80">
+                    總積分以各局原始分數直接相加。
+                  </p>
+                  <p className="mb-3 text-xs leading-relaxed text-yellow-100/80">
+                    完整比賽：{tournamentGameIds.map((id) => GAMES.find((g) => g.id === id)?.name ?? id).join("、")}
+                  </p>
+                  {isHost && (
+                    <Button
+                      variant="accent"
+                      size="md"
+                      className="w-full font-bold"
+                      onClick={() => {
+                        setSessionMode("battle");
+                        setShowSessionModal(true);
+                      }}
+                    >
+                      <Dices className="h-4 w-4" aria-hidden="true" /> 再抽 8 款，開啟新決戰
+                    </Button>
+                  )}
+                </div>
+              ) : nextEntry ? (
+                isHost ? (
+                  <div className="mt-3 rounded-2xl border border-cyan-400/30 bg-cyan-500/10 p-4">
+                    <p className="mb-1 flex items-center gap-2 text-sm font-bold text-white">
+                      <span aria-hidden="true">{nextGame?.icon ?? "🎲"}</span>
+                      下一局：{nextGame?.name ?? nextEntry.gameId}
+                    </p>
+                    <p className="mb-3 text-xs leading-relaxed text-cyan-100/80" role="status">
+                      {autoCountdown === null
+                        ? "自動前往已暫停，準備好再按下方按鈕。"
+                        : `第 ${plan.played.length + 1} 款完成 · ${autoCountdown} 秒後前往下一款`}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="accent"
+                        size="md"
+                        className="flex-1 font-bold"
+                        loading={advancing}
+                        onClick={() => void handleAdvance()}
+                      >
+                        <Play className="h-4 w-4" aria-hidden="true" /> 立刻前往下一款
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="md"
+                        onClick={() => setAutoCountdown((seconds) => (seconds === null ? AUTO_ADVANCE_SECONDS : null))}
+                      >
+                        {autoCountdown === null ? (
+                          <>
+                            <Timer className="h-4 w-4" aria-hidden="true" /> 恢復自動
+                          </>
+                        ) : (
+                          <>
+                            <Pause className="h-4 w-4" aria-hidden="true" /> 先停一下
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-center text-sm text-white/60" role="status">
+                    第 {plan.played.length + 1} / {BATTLE_GAME_COUNT} 款已完成；房主即將開始 {nextGame?.icon ?? "🎲"} {nextGame?.name ?? "下一款"}。
+                    最終排名會在全部完成後揭曉。
+                  </p>
+                )
+              ) : (
+                <div className="mt-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4" role="status">
+                  <p className="text-sm font-bold text-amber-100">第 8 款遊戲已完成，正在整理決戰總分…</p>
+                  {isHost && (
+                    <Button
+                      variant="accent"
+                      size="sm"
+                      className="mt-3 w-full font-bold"
+                      loading={finalizingBattle}
+                      onClick={() => void finalizeBattle()}
+                    >
+                      {finalizingBattle ? "整理中…" : "公布最終排名"}
+                    </Button>
+                  )}
+                </div>
+              )
+            ) : isHost ? (
               nextEntry ? (
                 <div className="mt-3 rounded-2xl border border-cyan-400/30 bg-cyan-500/10 p-4">
                   <p className="mb-1 flex items-center gap-2 text-sm font-bold text-white">
@@ -617,7 +807,11 @@ export default function ResultsClient({ roomCode }: Props) {
                 onClick={() => setShowSessionModal(true)}
               >
                 <Dices className="h-4 w-4" aria-hidden="true" />
-                {sessionActive ? "重抽隨機時段" : "🎲 抽一個隨機時段"}
+                {sessionActive
+                  ? "重抽隨機模式"
+                  : battleMode
+                    ? "⚔️ 再抽一場決戰"
+                    : "🎲 抽一個隨機模式"}
               </Button>
 
               <Button variant="danger" size="md" className="w-full" onClick={() => setConfirmingEnd(true)}>
@@ -644,13 +838,17 @@ export default function ResultsClient({ roomCode }: Props) {
       <Modal
         open={showSessionModal}
         onClose={() => setShowSessionModal(false)}
-        title="抽一個隨機時段"
+        title="抽一個隨機派對模式"
       >
         <p className="mb-4 text-xs leading-relaxed text-white/55">
-          選一段時間，系統會抽出塞得進去的遊戲清單（同一個時段不重複），並把回合數與秒數調成剛好的建議值。
-          抽完直接從第一款開始，玩完自動接下一款。
+          選擇時間盒，或抽 8 款不同遊戲進行決戰。每款套用建議設定，玩完自動接下一款；決戰總排名只在八款全部完成後公布。
         </p>
         <PlayModePicker value={sessionMode} onChange={(next) => setSessionMode(next.id)} />
+        {sessionMode === "battle" && sessionPlayerCount < BATTLE_MIN_PLAYERS && (
+          <p className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100" role="status">
+            目前只有 {sessionPlayerCount} 位玩家，決戰模式至少需要 {BATTLE_MIN_PLAYERS} 人。
+          </p>
+        )}
         <div className="mt-5 flex gap-2">
           <Button variant="ghost" size="md" className="flex-1" onClick={() => setShowSessionModal(false)}>
             取消
@@ -662,11 +860,13 @@ export default function ResultsClient({ roomCode }: Props) {
             loading={drawing}
             onClick={() => void handleDrawSession()}
           >
-            <Dices className="h-4 w-4" aria-hidden="true" /> 開始抽
+            <Dices className="h-4 w-4" aria-hidden="true" /> {sessionMode === "battle" ? "抽 8 款決戰遊戲" : "開始抽"}
           </Button>
         </div>
         <p className="mt-3 text-[11px] leading-relaxed text-white/40">
-          會優先避開這台裝置最近玩過的遊戲{sessionActive ? "；抽新的時段會取代目前這份清單" : ""}。
+          {sessionMode === "battle"
+            ? `決戰模式需至少 ${BATTLE_MIN_PLAYERS} 位玩家；抽新的清單會取代目前這份模式。`
+            : `會優先避開這台裝置最近玩過的遊戲${sessionActive ? "；抽新的時段會取代目前這份清單" : ""}。`}
         </p>
       </Modal>
 

@@ -7,10 +7,10 @@ import { PlayModePicker } from "./PlayModePicker";
 afterEach(cleanup);
 
 describe("PlayModePicker", () => {
-  it("offers the three time boxes as a labelled radio group", () => {
+  it("offers every random party mode as a labelled radio group", () => {
     render(<PlayModePicker value="standard" onChange={() => {}} />);
-    expect(screen.getByRole("radiogroup", { name: "時段長度" })).toBeTruthy();
-    expect(screen.getAllByRole("radio")).toHaveLength(3);
+    expect(screen.getByRole("radiogroup", { name: "派對模式" })).toBeTruthy();
+    expect(screen.getAllByRole("radio")).toHaveLength(4);
     for (const mode of PLAY_MODES) {
       expect(screen.getByRole("radio", { name: new RegExp(mode.label) })).toHaveProperty(
         "ariaChecked",
@@ -24,6 +24,13 @@ describe("PlayModePicker", () => {
     render(<PlayModePicker value="standard" onChange={onChange} />);
     screen.getByRole("radio", { name: /10分鐘最久/ }).click();
     expect(onChange).toHaveBeenCalledWith(PLAY_MODES[2]);
+  });
+
+  it("selects the 8-game battle mode", () => {
+    const onChange = vi.fn();
+    render(<PlayModePicker value="standard" onChange={onChange} />);
+    screen.getByRole("radio", { name: /決戰模式/ }).click();
+    expect(onChange).toHaveBeenCalledWith(PLAY_MODES[3]);
   });
 
   it("moves the selection with the arrow keys", () => {
