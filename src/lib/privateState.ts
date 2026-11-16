@@ -17,6 +17,7 @@ import { lyricMask } from "@/engine/song3Seconds";
 /** Fields that must never sit on the public gameState blob. */
 export const SECRET_FIELDS_BY_GAME: Record<string, string[]> = {
   whoisundercoveragent: ["playerWords", "undercoverPlayerId", "undercoverWord", "civilianWord"],
+  werewolf: ["roles", "wolfVotes", "nightVictimId", "witchSaveUsed", "witchPoisonTargetId", "seerChecks"],
   drawandguess: ["prompt"],
   mysteryroom: ["correctCode", "playerClues"],
 };
@@ -37,8 +38,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-/** Quiz games hide nested answer fields rather than whole top-level keys. */
-const QUIZ_SECRET_GAMES = new Set(["brainteaser", "song3seconds", "aibullshit"]);
+/** Quiz/mystery-box games hide nested answer fields rather than whole top-level keys. */
+const QUIZ_SECRET_GAMES = new Set(["brainteaser", "song3seconds", "aibullshit", "christmasgift"]);
 
 function answerRevealed(phase: unknown): boolean {
   return phase === "reveal" || phase === "result";
@@ -65,6 +66,34 @@ export function splitSecrets(gameId: string, fullState: Record<string, unknown>)
     const words = (hostSecrets.playerWords ?? {}) as Record<string, string>;
     for (const [id, word] of Object.entries(words)) {
       playerSecrets[id] = { ...(playerSecrets[id] ?? {}), myWord: word };
+    }
+  }
+
+  if (gameId === "werewolf") {
+    const roles = (hostSecrets.roles ?? {}) as Record<string, string>;
+    const wolves = Object.entries(roles)
+      .filter(([, role]) => role === "werewolf")
+      .map(([id]) => id);
+    for (const [id, role] of Object.entries(roles)) {
+      const secret: PlayerPrivate = { ...(playerSecrets[id] ?? {}), myRole: role };
+      if (role === "werewolf") {
+        secret.fellowWolves = wolves;
+        if (fullState.phase === "night_werewolf" && isPlainObject(hostSecrets.wolfVotes)) {
+          secret.wolfVotes = hostSecrets.wolfVotes;
+        }
+      }
+      if (role === "seer" && isPlainObject(hostSecrets.seerChecks)) {
+        secret.mySeerResults = hostSecrets.seerChecks;
+      }
+      if (
+        role === "witch" &&
+        fullState.phase === "night_witch" &&
+        fullState.witchAntidoteLeft &&
+        typeof hostSecrets.nightVictimId === "string"
+      ) {
+        secret.nightVictimId = hostSecrets.nightVictimId;
+      }
+      playerSecrets[id] = secret;
     }
   }
 
@@ -148,6 +177,17 @@ export function splitSecrets(gameId: string, fullState: Record<string, unknown>)
         });
       }
     }
+
+    if (gameId === "christmasgift") {
+      const boxes = fullState.boxes;
+      if (Array.isArray(boxes)) {
+        hostSecrets.boxes = boxes;
+        publicState.boxes = boxes.map((box) => {
+          const b = (box ?? {}) as Record<string, unknown>;
+          return { id: b.id, title: b.title, icon: b.icon, color: b.color };
+        });
+      }
+    }
   }
 
   return { publicState, hostSecrets, playerSecrets };
@@ -192,6 +232,23 @@ export function viewGameState(
     if (playerId) {
       view.playerWords = { [playerId]: mine.myWord };
     }
+  }
+
+  // Werewolf: only my role, teammates (if wolf), seer results (if seer), victim (if witch).
+  if (typeof mine.myRole === "string") {
+    view.myRole = mine.myRole;
+  }
+  if (Array.isArray(mine.fellowWolves)) {
+    view.fellowWolves = mine.fellowWolves;
+  }
+  if (isPlainObject(mine.wolfVotes)) {
+    view.wolfVotes = mine.wolfVotes;
+  }
+  if (isPlainObject(mine.mySeerResults)) {
+    view.mySeerResults = mine.mySeerResults;
+  }
+  if (typeof mine.nightVictimId === "string") {
+    view.nightVictimId = mine.nightVictimId;
   }
 
   // Draw: drawer-only prompt; guessers get category + length only.

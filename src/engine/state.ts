@@ -1,7 +1,14 @@
 /** RTDB removes empty arrays, empty maps, and nulls on a write/read round trip. */
 const COLLECTIONS: Record<string, { arrays: string[]; maps: string[] }> = {
   bombcountdown: { arrays: ["eliminatedPlayers"], maps: ["correctAnswers", "roundWins"] },
-  everybodyknows: { arrays: ["mostVotedPlayerIds"], maps: ["votes", "voteCounts"] },
+  werewolf: {
+    arrays: ["eliminatedPlayerIds", "lastNightDeaths"],
+    maps: ["roles", "wolfVotes", "seerChecks", "votes", "readyToVote"],
+  },
+  christmasgift: {
+    arrays: ["boxes"],
+    maps: ["picks", "roundDeltas", "soloWins", "coalHits"],
+  },
   aibullshit: { arrays: ["options", "usedPromptIds"], maps: ["submissions", "votes", "doneIds"] },
   whoisundercoveragent: { arrays: ["eliminatedPlayerIds"], maps: ["playerWords", "votes"] },
   song3seconds: { arrays: ["songOrder", "usedPromptIds"], maps: ["playerAnswers", "answerTimes"] },
@@ -62,6 +69,9 @@ export function normalizeGameState(gameId: string, value: unknown): Record<strin
   }
   if (gameId === "whackmoles") {
     state.spawns = (state.spawns as unknown[]).filter((s) => s && typeof s === "object");
+  }
+  if (gameId === "christmasgift") {
+    state.boxes = (state.boxes as unknown[]).filter((b) => b && typeof b === "object");
   }
   return state;
 }

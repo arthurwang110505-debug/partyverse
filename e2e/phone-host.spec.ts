@@ -97,7 +97,7 @@ test.describe("phone-host stage", () => {
   }
 
   test("a legacy room without hostMode keeps the big-screen host", async ({ page }) => {
-    const room = databaseRoundTrip(startPlayingRoom(testRoom("everybodyknows"), Date.now()));
+    const room = databaseRoundTrip(startPlayingRoom(testRoom("christmasgift"), Date.now()));
     expect(room.hostMode).toBeUndefined();
     await seed(page, room, "tv");
     await page.goto(`/room/${room.id}/host`);

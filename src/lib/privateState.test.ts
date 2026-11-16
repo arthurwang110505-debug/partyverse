@@ -154,4 +154,46 @@ describe("quiz answers stay hidden until reveal", () => {
     expect((revealed.publicState.prompt as { realAnswer?: string }).realAnswer).toBe("R");
     expect((revealed.publicState.options as Array<{ isReal?: boolean }>)[0].isReal).toBe(true);
   });
+
+  it("werewolf isolates roles, fellow wolves, seer checks, and witch victim per player", () => {
+    const full = {
+      phase: "night_witch",
+      roles: { p1: "werewolf", p2: "seer", p3: "witch", p4: "villager" },
+      wolfVotes: { p1: "p4" },
+      nightVictimId: "p4",
+      witchAntidoteLeft: true,
+      seerChecks: { p1: "werewolf" },
+    };
+    const { publicState, hostSecrets, playerSecrets } = splitSecrets("werewolf", full);
+    expect(publicState.roles).toBeUndefined();
+    expect(publicState.nightVictimId).toBeUndefined();
+    expect(hostSecrets.roles).toEqual(full.roles);
+    expect(playerSecrets.p1).toEqual({ myRole: "werewolf", fellowWolves: ["p1"] });
+    expect(playerSecrets.p2).toEqual({ myRole: "seer", mySeerResults: { p1: "werewolf" } });
+    expect(playerSecrets.p3).toEqual({ myRole: "witch", nightVictimId: "p4" });
+    expect(playerSecrets.p4).toEqual({ myRole: "villager" });
+
+    const room = testRoom("werewolf", 4);
+    room.gameState = publicState;
+    const villagerView = viewGameState(room, "p4", { myPrivate: playerSecrets.p4, hostSecrets });
+    expect(villagerView.myRole).toBe("villager");
+    expect(villagerView.roles).toBeUndefined();
+    expect(villagerView.nightVictimId).toBeUndefined();
+  });
+
+  it("christmasgift hides box points and kind during picking and reveals them on reveal", () => {
+    const full = {
+      phase: "picking",
+      boxes: [{ id: "b1", title: "紅盒", icon: "🎁", color: "#ef4444", kind: "coal", points: -15 }],
+    };
+    const { publicState, hostSecrets } = splitSecrets("christmasgift", full);
+    const pubBox = (publicState.boxes as Array<Record<string, unknown>>)[0];
+    expect(pubBox.points).toBeUndefined();
+    expect(pubBox.kind).toBeUndefined();
+    expect(pubBox.title).toBe("紅盒");
+    expect((hostSecrets.boxes as Array<Record<string, unknown>>)[0].points).toBe(-15);
+
+    const revealed = splitSecrets("christmasgift", { ...full, phase: "reveal" });
+    expect((revealed.publicState.boxes as Array<Record<string, unknown>>)[0].points).toBe(-15);
+  });
 });

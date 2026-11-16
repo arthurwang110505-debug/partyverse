@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Gamepad2, Menu, X } from "lucide-react";
+import { Gamepad2, Menu, Snowflake, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // One action per destination, shared by both layouts.
@@ -72,12 +72,21 @@ export default function Navbar() {
             <Gamepad2 className="h-5 w-5 text-white" />
           </span>
           <span lang="en" className="text-base font-black tracking-wider sm:text-lg">
-            <span className="text-cyan-400">PARTY</span>
-            <span className="text-rose-400">VERSE</span>
+            <span className="text-emerald-300">PARTY</span>
+            <span className="text-red-400">VERSE</span>
+            <span className="ml-1.5 text-xs" aria-hidden="true">
+              🎄
+            </span>
           </span>
         </Link>
 
-        <div className="hidden items-center gap-2 md:flex">{links}</div>
+        <div className="hidden items-center gap-2 md:flex">
+          <span className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-200">
+            <Snowflake className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>🎄 聖誕特企中</span>
+          </span>
+          {links}
+        </div>
         <button
           ref={menuButton}
           type="button"

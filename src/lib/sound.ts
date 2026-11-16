@@ -233,6 +233,40 @@ class SoundEffects {
       // Audio failed
     }
   }
+
+  /** Festive Christmas jingle-bell motif for special holiday reveals & gift swaps. */
+  playJingle() {
+    if (muted) return;
+    try {
+      this.init();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      // E5-E5-E5, E5-E5-E5, E5-G5-C5-D5-E5
+      const notes: Array<[number, number, number]> = [
+        [659.25, 0, 0.14],
+        [659.25, 0.16, 0.14],
+        [659.25, 0.32, 0.26],
+        [783.99, 0.62, 0.14],
+        [523.25, 0.78, 0.14],
+        [587.33, 0.94, 0.14],
+        [659.25, 1.1, 0.38],
+      ];
+      for (const [freq, offset, dur] of notes) {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(freq, now + offset);
+        gain.gain.setValueAtTime(0.16, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + dur);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now + offset);
+        osc.stop(now + offset + dur);
+      }
+    } catch {
+      // Audio failed
+    }
+  }
 }
 
 export const sfx = new SoundEffects();

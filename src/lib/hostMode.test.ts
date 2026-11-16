@@ -58,13 +58,13 @@ describe("host seat", () => {
 });
 
 describe("phone-host room behaviour", () => {
-  const phoneRoom = () => ({ ...testRoom("everybodyknows", 3), hostMode: "phone" as const });
+  const phoneRoom = () => ({ ...testRoom("christmasgift", 3), hostMode: "phone" as const });
 
   it("counts a playing host toward the match roster and the player minimum", () => {
     const room = phoneRoom();
     room.players.tv = { ...room.players.tv, role: "player" };
     expect(hostIsPlaying(room)).toBe(true);
-    // Everybody Knows needs 4 players; host + 3 phones is enough without a TV.
+    // Christmas Gift needs 4 players; host + 3 phones is enough without a TV.
     expect(participantIds(room)).toHaveLength(4);
     expect(connectedParticipantIds(room)).toHaveLength(4);
     const started = startRoomGame(room, 1000);
@@ -79,13 +79,13 @@ describe("phone-host room behaviour", () => {
   });
 
   it("still refuses to start when only the display host is present", () => {
-    const solo = { ...testRoom("everybodyknows", 0), hostMode: "phone" as const };
+    const solo = { ...testRoom("christmasgift", 0), hostMode: "phone" as const };
     // The host phone is a screen here, not a player, and the copy says so.
     expect(() => startRoomGame(solo, 1000)).toThrow(/至少需要 4 位玩家才能開始（主持手機不計入）/);
   });
 
   it("blames the TV only in big-screen rooms", () => {
-    expect(() => startRoomGame(testRoom("everybodyknows", 0), 1000)).toThrow(/電視不計入/);
+    expect(() => startRoomGame(testRoom("christmasgift", 0), 1000)).toThrow(/電視不計入/);
   });
 
   it("opens the briefing on the host's own controller, then the stage", () => {

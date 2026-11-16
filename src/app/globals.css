@@ -410,7 +410,41 @@
 .phone-stage .p-6 {
   padding: 0.875rem;
 }
-/* Reveal cards hard-code a 200px minimum so they line up on a TV. */
+/* Phone-stage end */
 .phone-stage [class~="min-w-[200px]"] {
   min-width: 0;
+}
+
+/* Christmas Special Offer Theme (2026-11-16) */
+@keyframes snow-fall {
+  0% {
+    transform: translate3d(0, -5vh, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(14px, 50vh, 0) rotate(180deg);
+  }
+  100% {
+    transform: translate3d(-10px, 108vh, 0) rotate(360deg);
+  }
+}
+
+.christmas-snowflake {
+  animation-name: snow-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.christmas-mode .landing-ambient {
+  background:
+    radial-gradient(ellipse at 0% 15%, rgba(239, 68, 68, 0.18), transparent 55%),
+    radial-gradient(ellipse at 100% 35%, rgba(16, 185, 129, 0.18), transparent 55%),
+    radial-gradient(ellipse at 50% 0%, rgba(250, 204, 21, 0.14), transparent 60%);
+}
+
+.christmas-mode .nav-surface {
+  border-color: rgba(16, 185, 129, 0.28);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.3),
+    0 0 18px rgba(239, 68, 68, 0.12);
 }

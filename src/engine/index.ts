@@ -2,7 +2,8 @@ import type { GameEngine, Room } from "@/types";
 import { engineRoom } from "./participants";
 import { normalizeGameState } from "./state";
 import { BOMB_GAME_ID, BombEngine } from "./bombCountdown";
-import { EVERYBODY_GAME_ID, EverybodyKnowsEngine } from "./everybodyKnows";
+import { WEREWOLF_GAME_ID, WerewolfEngine } from "./werewolf";
+import { CHRISTMAS_GAME_ID, ChristmasGiftEngine } from "./christmasGift";
 import { AIBULLSHIT_GAME_ID, AIBullshitEngine } from "./aiBullshit";
 import { UNDERCOVER_GAME_ID, WhoIsUndercoverEngine } from "./whoIsUndercover";
 import { SONG_GAME_ID, Song3SecondsEngine } from "./song3Seconds";
@@ -25,7 +26,8 @@ import { RULES_PHASE, withRulesPhase } from "./rulesTour";
  */
 const engines: Record<string, GameEngine<any>> = {
   [BOMB_GAME_ID]: BombEngine as GameEngine<any>,
-  [EVERYBODY_GAME_ID]: EverybodyKnowsEngine as GameEngine<any>,
+  [WEREWOLF_GAME_ID]: WerewolfEngine as GameEngine<any>,
+  [CHRISTMAS_GAME_ID]: ChristmasGiftEngine as GameEngine<any>,
   [AIBULLSHIT_GAME_ID]: AIBullshitEngine as GameEngine<any>,
   [UNDERCOVER_GAME_ID]: WhoIsUndercoverEngine as GameEngine<any>,
   [SONG_GAME_ID]: Song3SecondsEngine as GameEngine<any>,

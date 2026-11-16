@@ -4,7 +4,26 @@ import type { RoomSettings } from "@/types";
 export const ROOM_CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 export const ROOM_CODE_LENGTH = 5;
 
-export const AVATARS = ["🦊", "🐻", "🦁", "🐼", "🐨", "🦄", "🐙", "🦋", "🐸", "🦈", "🐯", "🦉"];
+export const AVATARS = [
+  "🦊",
+  "🐻",
+  "🦁",
+  "🐼",
+  "🐨",
+  "🦄",
+  "🐙",
+  "🦋",
+  "🐸",
+  "🦈",
+  "🐯",
+  "🦉",
+  "🎅",
+  "🤶",
+  "🦌",
+  "⛄",
+  "🎄",
+  "🎁",
+];
 
 export const SESSION_KEY = "partyverse_session";
 export const NICKNAME_KEY = "partyverse_nickname";

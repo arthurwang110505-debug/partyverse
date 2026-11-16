@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import type { Room } from "@/types";
 import { getGameEngine, isPlayable, playableGameIds } from "./index";
-import { EverybodyKnowsEngine, EVERYBODY_GAME_ID } from "./everybodyKnows";
+import { WerewolfEngine, WEREWOLF_GAME_ID } from "./werewolf";
+import { ChristmasGiftEngine, CHRISTMAS_GAME_ID } from "./christmasGift";
 import { AIBullshitEngine, AIBULLSHIT_GAME_ID } from "./aiBullshit";
 import { WhoIsUndercoverEngine, UNDERCOVER_GAME_ID } from "./whoIsUndercover";
 import { Song3SecondsEngine, SONG_GAME_ID } from "./song3Seconds";
@@ -40,12 +41,13 @@ function createMockRoom(gameId: string): Room<any> {
   };
 }
 
-describe("All 16 Games Engine Registry", () => {
-  it("registers all 16 games as playable", () => {
-    expect(playableGameIds()).toHaveLength(16);
+describe("All 17 Games Engine Registry", () => {
+  it("registers all 17 games as playable", () => {
+    expect(playableGameIds()).toHaveLength(17);
     const ids = [
       "bombcountdown",
-      EVERYBODY_GAME_ID,
+      WEREWOLF_GAME_ID,
+      CHRISTMAS_GAME_ID,
       AIBULLSHIT_GAME_ID,
       UNDERCOVER_GAME_ID,
       SONG_GAME_ID,
@@ -68,26 +70,43 @@ describe("All 16 Games Engine Registry", () => {
   });
 });
 
-describe("Everybody Knows Engine", () => {
-  it("creates game, votes, and tallies correctly", () => {
-    const room = createMockRoom(EVERYBODY_GAME_ID);
-    const state = EverybodyKnowsEngine.createGame(room);
-    expect(state.phase).toBe("voting");
-    expect(state.question.question).toBeDefined();
+describe("Werewolf Engine", () => {
+  it("assigns roles and lets good team win when werewolf is exiled", () => {
+    const room = createMockRoom(WEREWOLF_GAME_ID);
+    const state = WerewolfEngine.createGame(room);
+    expect(state.phase).toBe("role_reveal");
+    const wolfId = Object.entries(state.roles).find(([, r]) => r === "werewolf")![0];
+    const goodIds = Object.keys(room.players).filter((id) => id !== wolfId);
+
+    room.gameState = { ...state, phase: "day_voting", timeLeft: 20, votes: {} };
+    let next = room.gameState;
+    for (const id of Object.keys(room.players)) {
+      next = WerewolfEngine.handlePlayerAction(room, id, { type: "vote", targetPlayerId: wolfId });
+      room.gameState = next;
+    }
+
+    expect(next.phase).toBe("result");
+    expect(next.winnerTeam).toBe("good");
+    expect(next.currentScores[goodIds[0]]).toBeGreaterThanOrEqual(30);
+  });
+});
+
+describe("Christmas Gift Engine", () => {
+  it("creates gift boxes, records picks, and scores reveal", () => {
+    const room = createMockRoom(CHRISTMAS_GAME_ID);
+    const state = ChristmasGiftEngine.createGame(room);
+    expect(state.phase).toBe("picking");
+    expect(state.boxes).toHaveLength(5);
 
     room.gameState = state;
-    // Vote p1 -> p2, p2 -> p2, p3 -> p1
-    let next = EverybodyKnowsEngine.handlePlayerAction(room, "p1", { type: "vote", targetPlayerId: "p2" });
+    let next = ChristmasGiftEngine.handlePlayerAction(room, "p1", { type: "pickBox", boxId: state.boxes[0].id });
     room.gameState = next;
-    next = EverybodyKnowsEngine.handlePlayerAction(room, "p2", { type: "vote", targetPlayerId: "p2" });
+    next = ChristmasGiftEngine.handlePlayerAction(room, "p2", { type: "pickBox", boxId: state.boxes[1].id });
     room.gameState = next;
-    next = EverybodyKnowsEngine.handlePlayerAction(room, "p3", { type: "vote", targetPlayerId: "p1" });
+    next = ChristmasGiftEngine.handlePlayerAction(room, "p3", { type: "pickBox", boxId: state.boxes[2].id });
 
     expect(next.phase).toBe("reveal");
-    expect(next.mostVotedPlayerIds).toContain("p2");
-    expect(next.currentScores["p1"]).toBe(10);
-    expect(next.currentScores["p2"]).toBe(10);
-    expect(next.currentScores["p3"]).toBe(0);
+    expect(Object.values(next.currentScores).some((v) => v > 0)).toBe(true);
   });
 });
 

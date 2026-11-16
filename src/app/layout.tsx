@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { ChristmasProvider } from "@/providers/ChristmasContext";
 import "./globals.css";
 
 /**
@@ -18,9 +19,9 @@ const inter = localFont({
 });
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-const title = "PARTYVERSE — 一間房，16 款遊戲，無限混亂";
+const title = "PARTYVERSE — 一間房，17 款遊戲，聖誕派對開玩";
 const description =
-  "多人派對遊戲平台。一支手機就能開場：電視當主畫面，或直接用手機主持，和朋友即時同樂。16 款派對遊戲全部可玩，掃 QR 立刻開局。";
+  "多人派對遊戲平台。一支手機就能開場：電視當主畫面，或直接用手機主持，和朋友即時同樂。17 款派對遊戲（含全新狼人殺與聖誕限定特企）全部可玩，掃 QR 立刻開局。";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -63,8 +64,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-Hant" className={inter.variable}>
-      <body className="min-h-screen bg-ink text-white antialiased">{children}</body>
+    <html lang="zh-Hant" className={`${inter.variable} christmas-mode`}>
+      <body className="min-h-screen bg-ink text-white antialiased">
+        <ChristmasProvider>{children}</ChristmasProvider>
+      </body>
     </html>
   );
 }

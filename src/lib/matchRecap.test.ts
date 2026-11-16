@@ -4,7 +4,7 @@ import { buildMatchRecap, formatMatchReport, formatTournamentReport } from "./ma
 
 describe("matchRecap", () => {
   it("surfaces MVP and duration facts from scores", () => {
-    const room = testRoom("everybodyknows", 4);
+    const room = testRoom("christmasgift", 4);
     room.status = "RESULTS";
     room.startedAt = 1_000_000;
     room.finishedAt = 1_000_000 + 125_000;

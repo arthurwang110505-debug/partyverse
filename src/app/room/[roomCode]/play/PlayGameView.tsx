@@ -7,7 +7,8 @@ import { RULES_PHASE } from "@/engine/rulesTour";
 import { PlayShell } from "@/components/game/PlayShell";
 import { RulesTour } from "@/components/game/RulesTour";
 import PlayBombCountdown from "./views/PlayBombCountdown";
-import PlayEverybodyKnows from "./views/PlayEverybodyKnows";
+import PlayWerewolf from "./views/PlayWerewolf";
+import PlayChristmasGift from "./views/PlayChristmasGift";
 import PlayAiBullshit from "./views/PlayAiBullshit";
 import PlayUndercover from "./views/PlayUndercover";
 import PlaySong3Seconds from "./views/PlaySong3Seconds";
@@ -25,7 +26,8 @@ import PlayFollowMe from "./views/PlayFollowMe";
 
 const VIEWS: Record<string, ComponentType> = {
   bombcountdown: PlayBombCountdown,
-  everybodyknows: PlayEverybodyKnows,
+  werewolf: PlayWerewolf,
+  christmasgift: PlayChristmasGift,
   aibullshit: PlayAiBullshit,
   whoisundercoveragent: PlayUndercover,
   song3seconds: PlaySong3Seconds,

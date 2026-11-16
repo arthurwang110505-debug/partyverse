@@ -172,6 +172,10 @@ export interface GameDefinition {
    * The shared briefing uses constants/gameGuides.ts.
    */
   rules?: string[];
+  /** Optional seasonal tag, e.g. "christmas" for limited-time festive offers. */
+  seasonal?: "christmas";
+  /** Optional short badge label shown on game cards. */
+  badge?: string;
 }
 
 export interface Achievement {
