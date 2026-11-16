@@ -6,7 +6,8 @@ import { useRoom } from "@/providers/RoomContext";
 import { HostShell } from "@/components/game/HostShell";
 import { RulesTour } from "@/components/game/RulesTour";
 import HostBombCountdown from "./views/HostBombCountdown";
-import HostEverybodyKnows from "./views/HostEverybodyKnows";
+import HostWerewolf from "./views/HostWerewolf";
+import HostChristmasGift from "./views/HostChristmasGift";
 import HostAiBullshit from "./views/HostAiBullshit";
 import HostUndercover from "./views/HostUndercover";
 import HostSong3Seconds from "./views/HostSong3Seconds";
@@ -24,7 +25,8 @@ import HostFollowMe from "./views/HostFollowMe";
 
 const VIEWS: Record<string, ComponentType> = {
   bombcountdown: HostBombCountdown,
-  everybodyknows: HostEverybodyKnows,
+  werewolf: HostWerewolf,
+  christmasgift: HostChristmasGift,
   aibullshit: HostAiBullshit,
   whoisundercoveragent: HostUndercover,
   song3seconds: HostSong3Seconds,

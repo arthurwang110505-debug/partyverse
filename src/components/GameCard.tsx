@@ -43,6 +43,18 @@ export default function GameCard({ game, compact = false }: GameCardProps) {
             {game.icon}
           </span>
           <span className="flex flex-col items-end gap-1">
+            {game.badge && (
+              <span
+                className={cn(
+                  "rounded-full border px-2 py-0.5 text-[10px] font-bold",
+                  game.seasonal === "christmas"
+                    ? "border-amber-400/50 bg-gradient-to-r from-red-500/25 to-emerald-500/25 text-amber-200"
+                    : "border-rose-400/50 bg-rose-500/20 text-rose-200",
+                )}
+              >
+                {game.badge}
+              </span>
+            )}
             <span
               className={cn(
                 "rounded-full border px-2 py-0.5 text-[10px] font-semibold",

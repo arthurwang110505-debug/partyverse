@@ -44,36 +44,36 @@ describe("shared readiness briefing", () => {
   });
 
   it("freezes gameplay and excludes spectators, display seats, and offline readiness", () => {
-    let room = startRoomGame(testRoom("everybodyknows"), NOW);
+    let room = startRoomGame(testRoom("christmasgift"), NOW);
     room.players.late = { ...room.players.p1, id: "late" };
     for (const id of ["late", "tv"]) room = act(room, id, "readyRules");
-    room = act(room, "p1", "vote");
-    expect(room.gameState.votes).toEqual({});
+    room = act(room, "p1", "pickBox");
+    expect(room.gameState.picks).toEqual({});
     expect(room.gameState.rulesReady).toEqual({});
     room.players.p4.isConnected = false;
     room = act(room, "p4", "readyRules");
     expect(room.gameState.rulesReady).toEqual({});
     for (const id of ["p1", "p2", "p3"]) room = act(room, id, "readyRules");
-    expect(room.gameState.phase).toBe("voting");
+    expect(room.gameState.phase).toBe("picking");
   });
 
   it("starts after the only unready player disconnects, but not with zero connected players", () => {
-    let room = startRoomGame(testRoom("everybodyknows"), NOW);
+    let room = startRoomGame(testRoom("christmasgift"), NOW);
     for (const id of ["p1", "p2", "p3"]) room = act(room, id, "readyRules");
     room.players.p4.isConnected = false;
-    expect(advanceRoomGame(room, NOW + 1000).gameState.phase).toBe("voting");
+    expect(advanceRoomGame(room, NOW + 1000).gameState.phase).toBe("picking");
     for (const id of room.participantIds!) room.players[id].isConnected = false;
     expect(advanceRoomGame(room, NOW + 1000).gameState.phase).toBe("rules");
   });
 
   it("only the current connected host can start early, including a recovered phone host", () => {
-    let room = startRoomGame(testRoom("everybodyknows"), NOW);
-    expect(act(room, "tv", "skipRules").gameState.phase).toBe("voting");
+    let room = startRoomGame(testRoom("christmasgift"), NOW);
+    expect(act(room, "tv", "skipRules").gameState.phase).toBe("picking");
     room.players.tv.isConnected = false;
     expect(act(room, "tv", "skipRules").gameState.phase).toBe("rules");
     room = claimRoomHost(room, "p2", "tv", NOW + 1000)!;
     expect(act(room, "p1", "skipRules", NOW + 1000).gameState.phase).toBe("rules");
-    expect(act(room, "p2", "skipRules", NOW + 1000).gameState.phase).toBe("voting");
+    expect(act(room, "p2", "skipRules", NOW + 1000).gameState.phase).toBe("picking");
   });
 
   it("does not age time-sensitive game state while reading", () => {

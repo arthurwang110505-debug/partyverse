@@ -4,11 +4,11 @@ import { submissionProgress } from "./gameplayFeedback";
 
 describe("safe submission feedback", () => {
   it("counts only connected frozen participants and never returns their choices", () => {
-    const room = testRoom("everybodyknows");
+    const room = testRoom("werewolf");
     room.participantIds = ["p1", "p2", "p3", "p4"];
     room.players.p4.isConnected = false;
     room.players.late = { ...room.players.p1, id: "late" };
-    room.gameState = { phase: "voting", votes: { p1: "secret", p4: "secret", late: "secret" } };
+    room.gameState = { phase: "day_voting", eliminatedPlayerIds: [], votes: { p1: "secret", p4: "secret", late: "secret" } };
     expect(submissionProgress(room, "p1")).toEqual({ completed: 1, total: 3, message: "已收到！等待其他玩家完成" });
     expect(submissionProgress(room, "p2")?.message).toBe("請在手機投票");
     expect(submissionProgress(room, "late")?.message).toContain("觀戰");

@@ -39,7 +39,7 @@ interface RankedPlayer {
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 const PODIUM_ORDER = [1, 0, 2];
-const REACTIONS = ["🎉", "👑", "🔥", "💩", "👏", "❤️"];
+const REACTIONS = ["🎉", "👑", "🔥", "🎄", "🎁", "❤️"];
 /** Grace period before a random session rolls into the next game on its own. */
 const AUTO_ADVANCE_SECONDS = 20;
 

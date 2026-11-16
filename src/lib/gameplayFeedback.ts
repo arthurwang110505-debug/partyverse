@@ -8,12 +8,13 @@ export function submissionProgress(room: Room, playerId?: string) {
   let key: string | undefined;
   let prompt = "";
   if (
-    state.phase === "voting" &&
-    ["everybodyknows", "aibullshit", "fireworkmaster", "whoisundercoveragent", "wordchain"].includes(room.gameId)
+    (state.phase === "voting" &&
+      ["aibullshit", "fireworkmaster", "whoisundercoveragent", "wordchain"].includes(room.gameId)) ||
+    (room.gameId === "werewolf" && state.phase === "day_voting")
   ) {
     key = "votes";
     prompt = "請在手機投票";
-    if (room.gameId === "whoisundercoveragent") {
+    if (room.gameId === "whoisundercoveragent" || room.gameId === "werewolf") {
       const eliminated = (state.eliminatedPlayerIds ?? []) as string[];
       ids = ids.filter((id) => !eliminated.includes(id));
     }
@@ -21,6 +22,9 @@ export function submissionProgress(room: Room, playerId?: string) {
       const author = (state.pending as { playerId?: string } | null)?.playerId;
       ids = ids.filter((id) => id !== author);
     }
+  } else if (room.gameId === "christmasgift" && state.phase === "picking") {
+    key = "picks";
+    prompt = "請在手機選擇一個聖誕禮盒";
   } else if (room.gameId === "aibullshit" && state.phase === "submitting") {
     key = "doneIds";
     prompt = "寫下假答案（最多 2 個），寫完按「完成」";

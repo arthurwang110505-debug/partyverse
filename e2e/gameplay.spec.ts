@@ -48,9 +48,9 @@ test("one TV and four independent demo tabs join, play, refresh, rematch and swi
   page: tv,
   context,
 }) => {
-  await tv.goto("/create/everybodyknows");
+  await tv.goto("/create/christmasgift");
   await tv.getByLabel("房主暱稱（顯示在電視上）").fill("客廳電視");
-  await tv.getByLabel("回合數", { exact: true }).selectOption("1");
+  await tv.getByLabel("拆禮回合數", { exact: true }).selectOption("1");
   await tv.getByRole("button", { name: "建立房間", exact: true }).click();
   await tv.waitForURL(/\/room\/[^/]+\/host$/);
   const code = tv.url().split("/").at(-2)!;
@@ -84,10 +84,10 @@ test("one TV and four independent demo tabs join, play, refresh, rematch and swi
   await Promise.all(
     phones.slice(1).map((phone) => phone.getByRole("button", { name: "我看懂了，準備好了", exact: true }).click()),
   );
-  // All phones vote for the same actual player; the TV must not be required.
+  // Two pairs pick two distinct boxes so at least one pair shares a positive prize (guaranteed co-winners).
   await Promise.all(
-    phones.map(async (phone) => {
-      await phone.getByRole("button", { name: /好友1/ }).click();
+    phones.map(async (phone, i) => {
+      await phone.getByRole("button", { name: /點擊秘密預訂/ }).nth(i < 2 ? 0 : 1).click();
     }),
   );
   await expect.poll(async () => (await readRoom(tv, code)).gameState.phase).toBe("reveal");
@@ -180,7 +180,7 @@ test("late joiner sees a spectator controller instead of being assigned a turn",
 });
 
 test("a phone can take over a stale host and keep its controller", async ({ page }) => {
-  const room = startPlayingRoom(testRoom("everybodyknows"), Date.now() - 21000);
+  const room = startPlayingRoom(testRoom("christmasgift"), Date.now() - 21000);
   await seed(page, room, "p1");
   await page.goto(`/room/${room.id}/play`);
   await page.getByRole("button", { name: "由我接管房主" }).click();

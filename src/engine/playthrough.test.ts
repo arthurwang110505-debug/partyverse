@@ -72,17 +72,65 @@ function fullState<T = Record<string, unknown>>(room: Room): T {
 
 
 describe("full match playthroughs (all games reach results)", () => {
-  it("everybodyknows: everyone votes each round until the final reveal", () => {
+  it("werewolf: night actions complete and village exiles the wolf", () => {
     const room = playMatch(
-      "everybodyknows",
+      "werewolf",
       (r, runner) => {
-        const s = r.gameState as { phase: string; votes: Record<string, string> };
-        if (s.phase !== "voting") return;
-        for (const id of playerIds(r)) {
-          if (!s.votes[id]) runner.submit(id, { type: "vote", targetPlayerId: playerIds(r)[0] });
+        const s = fullState<{
+          phase: string;
+          roles: Record<string, string>;
+          eliminatedPlayerIds: string[];
+          wolfVotes: Record<string, string>;
+          votes: Record<string, string>;
+          seerCheckedThisNight: boolean;
+          witchAntidoteLeft: boolean;
+          nightVictimId: string | null;
+        }>(r);
+        const living = playerIds(r).filter((id) => !s.eliminatedPlayerIds.includes(id));
+        const wolfId = Object.entries(s.roles).find(([, role]) => role === "werewolf")![0];
+        const goodTarget = living.find((id) => id !== wolfId)!;
+
+        if (s.phase === "night_werewolf" && !s.wolfVotes[wolfId]) {
+          runner.submit(wolfId, { type: "wolfVote", targetPlayerId: goodTarget });
+        }
+        if (s.phase === "night_seer" && !s.seerCheckedThisNight) {
+          const seerId = living.find((id) => s.roles[id] === "seer");
+          if (seerId) runner.submit(seerId, { type: "seerCheck", targetPlayerId: wolfId });
+        }
+        if (s.phase === "night_witch") {
+          const witchId = living.find((id) => s.roles[id] === "witch");
+          if (witchId) runner.submit(witchId, { type: "witchAction", choice: s.nightVictimId && s.witchAntidoteLeft ? "save" : "skip" });
+        }
+        if (s.phase === "day_discussion") {
+          for (const id of living) runner.submit(id, { type: "readyVote" });
+        }
+        if (s.phase === "day_voting") {
+          for (const id of living) {
+            if (!s.votes[id]) runner.submit(id, { type: "vote", targetPlayerId: wolfId });
+          }
         }
       },
-      { settings: { rounds: 2 } },
+      { maxSeconds: 200 },
+    );
+    expect((room.gameState as { winnerTeam: string }).winnerTeam).toBe("good");
+    expect((room.gameState as { phase: string }).phase).toBe("result");
+  });
+
+  it("christmasgift: players pick boxes across rounds until final results", () => {
+    const room = playMatch(
+      "christmasgift",
+      (r, runner) => {
+        const s = r.gameState as {
+          phase: string;
+          boxes: Array<{ id: string }>;
+          picks: Record<string, string>;
+        };
+        if (s.phase !== "picking") return;
+        playerIds(r).forEach((id, idx) => {
+          if (!s.picks[id]) runner.submit(id, { type: "pickBox", boxId: s.boxes[idx % s.boxes.length].id });
+        });
+      },
+      { settings: { rounds: 2, timer: 8 } },
     );
     const scores = (room.gameState as { currentScores: Record<string, number> }).currentScores;
     expect(Object.values(scores).some((v) => v > 0)).toBe(true);
@@ -508,18 +556,19 @@ describe("full match playthroughs (all games reach results)", () => {
     expect(s.winnerId).toBe("p1");
   });
 
-  it("registers exactly the sixteen games", () => {
+  it("registers exactly the seventeen games", () => {
     expect(playableGameIds().sort()).toEqual(
       [
         "aibullshit",
         "bombcountdown",
+        "christmasgift",
         "drawandguess",
-        "everybodyknows",
         "fireworkmaster",
         "kingtonight",
         "mysteryroom",
         "realbattle",
         "song3seconds",
+        "werewolf",
         "whoisundercoveragent",
         "musicalchairs",
         "whackmoles",

@@ -17,9 +17,9 @@ import { expect, test } from "@playwright/test";
  */
 test("a host can create a room again after closing the first one", async ({ page }) => {
   const createRoom = async () => {
-    await page.goto("/games/everybodyknows");
+    await page.goto("/games/werewolf");
     await page.getByRole("link", { name: "建立房間", exact: true }).click();
-    await page.waitForURL(/\/create\/everybodyknows$/);
+    await page.waitForURL(/\/create\/werewolf$/);
     await page.getByLabel("房主暱稱（顯示在電視上）").fill("客廳電視");
     await page.getByRole("button", { name: "建立房間", exact: true }).click();
     await page.waitForURL(/\/room\/[^/]+\/host$/);

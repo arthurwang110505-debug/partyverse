@@ -5,13 +5,14 @@ import { Search } from "lucide-react";
 import { GAMES } from "@/constants/games";
 import GameCard from "@/components/GameCard";
 import Navbar from "@/components/Navbar";
+import { ChristmasBanner } from "@/components/ChristmasBanner";
 import { CATEGORIES, type Category } from "@/types";
 import { isPlayable } from "@/engine";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 
 export default function GamesPage() {
-  const [filter, setFilter] = useState<Category | "ALL">("ALL");
+  const [filter, setFilter] = useState<Category | "ALL" | "CHRISTMAS">("ALL");
   const [search, setSearch] = useState("");
   const [showPlayableOnly, setShowPlayableOnly] = useState(false);
   const debouncedSearch = useDebounce(search, 150);
@@ -19,7 +20,8 @@ export default function GamesPage() {
   const filtered = useMemo(() => {
     const needle = typeof debouncedSearch === "string" ? debouncedSearch.trim().toLowerCase() : "";
     return GAMES.filter((g) => {
-      if (filter !== "ALL" && g.category !== filter) return false;
+      if (filter === "CHRISTMAS" && g.seasonal !== "christmas") return false;
+      if (filter !== "ALL" && filter !== "CHRISTMAS" && g.category !== filter) return false;
       if (showPlayableOnly && !isPlayable(g.id)) return false;
       if (!needle) return true;
       return (
@@ -34,10 +36,14 @@ export default function GamesPage() {
     <div className="min-h-screen bg-ink text-white">
       <Navbar />
       <div className="mx-auto max-w-7xl px-4 pb-24 pt-32">
-        <header className="mb-10">
+        <header className="mb-8">
           <h1 className="mb-3 text-4xl font-bold md:text-5xl">全部遊戲</h1>
-          <p className="text-base text-white/40">挑一款遊戲，和朋友開房同樂</p>
+          <p className="text-base text-white/40">挑一款遊戲，和朋友開房同樂（共 {GAMES.length} 款，含聖誕限定與狼人殺）</p>
         </header>
+
+        <div className="mb-8">
+          <ChristmasBanner compact />
+        </div>
 
         <div className="mb-8 flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
@@ -75,7 +81,7 @@ export default function GamesPage() {
           role="group"
           aria-label="依分類篩選"
         >
-          {(["ALL", ...Object.values(CATEGORIES)] as const).map((cat) => (
+          {(["ALL", "CHRISTMAS", ...Object.values(CATEGORIES)] as const).map((cat) => (
             <button
               key={cat}
               type="button"
@@ -84,11 +90,15 @@ export default function GamesPage() {
               className={cn(
                 "whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium transition-all",
                 filter === cat
-                  ? "bg-white text-black"
-                  : "border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white",
+                  ? cat === "CHRISTMAS"
+                    ? "bg-gradient-to-r from-red-500 to-emerald-500 text-white font-bold"
+                    : "bg-white text-black"
+                  : cat === "CHRISTMAS"
+                    ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20"
+                    : "border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white",
               )}
             >
-              {cat === "ALL" ? "全部" : cat}
+              {cat === "ALL" ? "全部" : cat === "CHRISTMAS" ? "🎄 聖誕限定" : cat}
             </button>
           ))}
         </div>

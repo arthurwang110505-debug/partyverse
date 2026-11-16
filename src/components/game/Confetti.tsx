@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { useChristmas } from "@/providers/ChristmasContext";
 
 /** Deterministic pseudo-random so server/client/renders agree per index. */
 function pseudoRandom(seed: number): number {
@@ -11,6 +12,7 @@ function pseudoRandom(seed: number): number {
 
 const PIECES = 28;
 const COLORS = ["#a855f7", "#00f0ff", "#ff2d95", "#facc15", "#ffffff"];
+const CHRISTMAS_COLORS = ["#ef4444", "#10b981", "#facc15", "#ffffff", "#38bdf8"];
 
 /**
  * A ~1-second celebration burst for the results screen, zero dependencies.
@@ -18,7 +20,9 @@ const COLORS = ["#a855f7", "#00f0ff", "#ff2d95", "#facc15", "#ffffff"];
  */
 export function Confetti() {
   const reduceMotion = useReducedMotion();
+  const { christmasMode } = useChristmas();
   const [done, setDone] = useState(false);
+  const palette = christmasMode ? CHRISTMAS_COLORS : COLORS;
 
   useEffect(() => {
     const t = window.setTimeout(() => setDone(true), 2600);
@@ -33,11 +37,11 @@ export function Confetti() {
         size: 6 + pseudoRandom(i + 11) * 8,
         delay: pseudoRandom(i + 21) * 0.5,
         duration: 1.4 + pseudoRandom(i + 31) * 0.9,
-        color: COLORS[i % COLORS.length],
+        color: palette[i % palette.length],
         rotate: pseudoRandom(i + 41) * 720 - 360,
         drift: pseudoRandom(i + 51) * 80 - 40,
       })),
-    [],
+    [palette],
   );
 
   if (reduceMotion || done) return null;
